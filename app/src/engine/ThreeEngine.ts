@@ -18,6 +18,7 @@ export class ThreeEngine implements RenderEngine {
   private controls?: OrbitControls;
   private raf = 0;
   private model?: THREE.Object3D;
+  private pointCloud?: THREE.Points;
   private config: ProductConfig = {};
   private clock = new THREE.Clock();
 
@@ -46,6 +47,38 @@ export class ThreeEngine implements RenderEngine {
     this.resize();
     window.addEventListener('resize', this.resize);
     this.loop();
+  }
+
+  async loadPointCloud(data: import('./RenderEngine').PointCloudData) {
+    if (!this.scene) throw new Error('Engine not initialized');
+    this.pointCloud?.removeFromParent();
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+    const mat = data.colors
+      ? new THREE.PointsMaterial({ size: 0.01, vertexColors: true, sizeAttenuation: true })
+      : new THREE.PointsMaterial({ size: 0.01, color: 0x9fd8ff, sizeAttenuation: true });
+    if (data.colors) {
+      const col = new Float32Array(data.colors.length);
+      for (let i = 0; i < data.colors.length; i++) col[i] = data.colors[i] / 255;
+      geom.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    }
+    this.pointCloud = new THREE.Points(geom, mat);
+    this.scene.add(this.pointCloud);
+    // kamera na bbox
+    const c = new THREE.Vector3(
+      (data.bboxMin[0] + data.bboxMax[0]) / 2,
+      (data.bboxMin[1] + data.bboxMax[1]) / 2,
+      (data.bboxMin[2] + data.bboxMax[2]) / 2,
+    );
+    const r = Math.max(
+      data.bboxMax[0] - data.bboxMin[0],
+      data.bboxMax[1] - data.bboxMin[1],
+      data.bboxMax[2] - data.bboxMin[2],
+    ) || 1;
+    this.camera!.position.set(c.x + r, c.y + r * 0.6, c.z + r);
+    this.controls!.target.copy(c);
+    this.controls!.update();
+    return () => this.pointCloud?.removeFromParent();
   }
 
   async loadModel(url: string) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createEngine } from './engine';
-import type { ProductConfig } from './engine/RenderEngine';
+import type { PointCloudData, ProductConfig } from './engine/RenderEngine';
+import E57Worker from './engine/e57Worker?worker';
 import './App.css';
 
 // Model demo (publiczny, darmowy glTF) — docelowo własne modele w assets/models/
@@ -14,6 +15,8 @@ export default function App() {
   const engineRef = useRef<ReturnType<typeof createEngine> | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [e57Progress, setE57Progress] = useState<{ loaded: number; total: number } | null>(null);
+  const [status, setStatus] = useState<string>('');
   const [config, setConfig] = useState<ProductConfig>({
     color: '#c9a227',
     metalness: 0.7,
@@ -50,6 +53,38 @@ export default function App() {
 
   const set = (patch: Partial<ProductConfig>) => setConfig((c) => ({ ...c, ...patch }));
 
+  const importE57 = async (file: File) => {
+    setError(null);
+    setStatus(`Czytam ${file.name} (${(file.size / 1e9).toFixed(2)} GB)…`);
+    try {
+      const buffer = await file.arrayBuffer();
+      setStatus('Parsowanie E57 w tle…');
+      const worker = new E57Worker();
+      worker.onmessage = (e: MessageEvent) => {
+        const d = e.data;
+        if (d.type === 'progress') {
+          setE57Progress({ loaded: d.loadedPoints, total: d.totalPoints });
+        } else if (d.type === 'error') {
+          setError(d.message);
+          setE57Progress(null);
+          setStatus('');
+          worker.terminate();
+        } else if (d.type === 'done') {
+          const data: PointCloudData = d;
+          engineRef.current?.loadPointCloud(data).then(() => {
+            setE57Progress(null);
+            setStatus(`Chmura: ${data.pointCount.toLocaleString('pl-PL')} pkt`);
+          });
+          worker.terminate();
+        }
+      };
+      worker.postMessage({ buffer }, [buffer]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setStatus('');
+    }
+  };
+
   return (
     <div className="app">
       <header>
@@ -61,6 +96,13 @@ export default function App() {
         <canvas ref={canvasRef} />
         {!ready && !error && <div className="loader">Ładowanie modelu…</div>}
         {error && <div className="loader error">⚠️ Błąd ładowania: {error}</div>}
+        {e57Progress && (
+          <div className="e57-overlay">
+            <div>Parsowanie E57: {e57Progress.loaded.toLocaleString('pl-PL')} / {e57Progress.total.toLocaleString('pl-PL')} pkt</div>
+            <div className="bar"><div className="fill" style={{ width: `${(e57Progress.loaded / Math.max(1, e57Progress.total)) * 100}%` }} /></div>
+          </div>
+        )}
+        {status && !error && <div className="status">{status}</div>}
         <p className="hint">Przeciągnij palcem / myszą, aby obrócić · uszczypnij, aby przybliżyć</p>
       </div>
 
@@ -101,6 +143,20 @@ export default function App() {
         <button className="toggle" onClick={() => set({ autoRotate: !config.autoRotate })}>
           Autoobrót: {config.autoRotate ? 'WŁ' : 'WYŁ'}
         </button>
+
+        <label className="import-btn">
+          📂 Importuj chmurę E57 (.e57)
+          <input
+            type="file"
+            accept=".e57"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) importE57(f);
+              e.target.value = '';
+            }}
+          />
+        </label>
       </div>
     </div>
   );

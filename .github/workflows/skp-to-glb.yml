@@ -1,0 +1,39 @@
+name: Convert SketchUp to GLB
+
+on:
+  push:
+    paths:
+      - 'assets/skp/*.skp'
+
+permissions:
+  contents: write
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Blender
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq blender
+
+      - name: Convert .skp files
+        run: |
+          mkdir -p assets/models
+          for skp in assets/skp/*.skp; do
+            [ -e "$skp" ] || continue
+            name=$(basename "$skp" .skp)
+            echo "Konwersja: $skp"
+            blender --background --python-expr "import bpy; bpy.ops.wm.read_homefile(use_empty=True); bpy.ops.import_scene.skp(filepath='$skp'); bpy.ops.export_scene.gltf(filepath='assets/models/$name.glb', export_format='GLB')" || echo "::warning::Import .skp nieudany dla $skp — Blender na Linuxie wymaga dodatkowego importera SketchUp; patrz docs/architektura-danych.md (sciezka B: reczny eksport z SketchUp)"
+          done
+          ls -la assets/models/
+
+      - name: Commit GLB
+        run: |
+          git config user.name "skp-converter"
+          git config user.email "actions@github.com"
+          git add assets/models/
+          git diff --cached --quiet || git commit -m "auto: convert SKP to GLB"
+          git push
