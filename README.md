@@ -1,25 +1,32 @@
-# Aplikacja sprzedażowa
+# Aplikacja sprzedażowa — konfigurator 3D na tablet
 
-System wspomagający proces sprzedaży — obsługa zamówień, ofert i klientów.
+Aplikacja na tablet (iPad / Android) do **interaktywnego projektowania produktów w 3D** oraz **bezpośredniej sprzedaży** — klient lub handlowiec konfiguruje produkt w 3D, a aplikacja generuje ofertę/zamówienie.
 
-## Status
+## Koncepcja
 
-Projekt w fazie startowej (szkielet repozytorium).
+- **Wizualizacja 3D w czasie rzeczywistym** — obracanie, przybliżanie, konfiguracja wymiarów, materiałów i kolorów na dotykowym ekranie tabletu.
+- **Konfigurator produktu** — wybór wariantów z natychmiastową aktualizacją modelu 3D i ceny.
+- **Moduł sprzedażowy** — kalkulacja ceny, generowanie oferty PDF, złożenie zamówienia, integracja z CRM/ERP.
+- **Tryb offline** — praca w terenie / na targach bez internetu, z synchronizacją po powrocie online.
 
-## Planowane funkcje
+## Planowany stack (propozycja do decyzji)
 
-- Katalog produktów i cenniki
-- Tworzenie ofert i zamówień
-- Baza klientów i historia transakcji
-- Raporty sprzedaży
+| Warstwa | Opcja A | Opcja B |
+|---|---|---|
+| Framework | React Native + expo-gl | Flutter + native 3D |
+| Silnik 3D | three.js (react-three-fiber) | Unity as a Library / filament |
+| Backend | Supabase (auth, DB, storage) | Node.js + Postgres |
+| Modele 3D | glTF/GLB (Draco, optymalizowane pod tablet) | glTF/GLB |
+| Oferty PDF | generator po stronie backendu | — |
 
-## Struktura repozytorium
+## Struktura repozytorium (docelowo)
 
 ```
 .
-├── README.md
-├── .gitignore
-└── docs/          # dokumentacja, wymagania, notatki
+├── docs/            # wymagania, makiety, decyzje architektoniczne
+├── app/             # kod aplikacji tabletowej
+├── server/          # backend (oferty, zamówienia, cenniki)
+└── assets/models/   # modele 3D produktów (glTF/GLB)
 ```
 
 ## Pierwsze kroki
@@ -28,12 +35,8 @@ Projekt w fazie startowej (szkielet repozytorium).
    ```bash
    git clone https://github.com/radoslaw-caban/aplikacja-sprzedazowa.git
    ```
-2. Uzupełnij sekcję "Stack technologiczny" po ustaleniu technologii.
-3. Dodaj wymagania w `docs/wymagania.md`.
-
-## Stack technologiczny
-
-Do ustalenia.
+2. Wymagania produktowe będą dokumentowane w `docs/wymagania.md`.
+3. Repo jest w fazie startowej — stack i architektura do ustalenia.
 
 ## Licencja
 
