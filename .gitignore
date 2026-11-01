@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# Edytory
+.vscode/
+.idea/
+*.swp
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Środowisko
+.env
+.env.local
+
+# Buildy
+dist/
+build/
+*.log
