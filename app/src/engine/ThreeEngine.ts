@@ -20,7 +20,6 @@ export class ThreeEngine implements RenderEngine {
   private model?: THREE.Object3D;
   private pointCloud?: THREE.Points;
   private config: ProductConfig = {};
-  private clock = new THREE.Clock();
 
   async init(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -52,29 +51,49 @@ export class ThreeEngine implements RenderEngine {
   async loadPointCloud(data: import('./RenderEngine').PointCloudData) {
     if (!this.scene) throw new Error('Engine not initialized');
     this.pointCloud?.removeFromParent();
+    // filtruj punkty z NaN/Inf (np. "invalid" z CloudCompare) — inaczej
+    // computeBoundingSphere zwraca NaN i frustum culling się wysypuje
+    let positions = data.positions;
+    let colors = data.colors;
+    let n = positions.length / 3;
+    let bad = 0;
+    for (let i = 0; i < n; i++) {
+      if (!Number.isFinite(positions[i * 3]) || !Number.isFinite(positions[i * 3 + 1]) || !Number.isFinite(positions[i * 3 + 2])) bad++;
+    }
+    if (bad > 0) {
+      const p2 = new Float32Array((n - bad) * 3);
+      const c2 = colors ? new Uint8Array((n - bad) * 3) : undefined;
+      let j = 0;
+      for (let i = 0; i < n; i++) {
+        const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+        p2[j * 3] = x; p2[j * 3 + 1] = y; p2[j * 3 + 2] = z;
+        if (c2 && colors) { c2[j * 3] = colors[i * 3]; c2[j * 3 + 1] = colors[i * 3 + 1]; c2[j * 3 + 2] = colors[i * 3 + 2]; }
+        j++;
+      }
+      positions = p2; colors = c2; n = j;
+    }
     const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const mat = data.colors
       ? new THREE.PointsMaterial({ size: 0.01, vertexColors: true, sizeAttenuation: true })
       : new THREE.PointsMaterial({ size: 0.01, color: 0x9fd8ff, sizeAttenuation: true });
-    if (data.colors) {
-      const col = new Float32Array(data.colors.length);
-      for (let i = 0; i < data.colors.length; i++) col[i] = data.colors[i] / 255;
+    if (colors) {
+      const col = new Float32Array(colors.length);
+      for (let i = 0; i < colors.length; i++) col[i] = colors[i] / 255;
       geom.setAttribute('color', new THREE.BufferAttribute(col, 3));
     }
     this.pointCloud = new THREE.Points(geom, mat);
     this.scene.add(this.pointCloud);
-    // kamera na bbox
-    const c = new THREE.Vector3(
-      (data.bboxMin[0] + data.bboxMax[0]) / 2,
-      (data.bboxMin[1] + data.bboxMax[1]) / 2,
-      (data.bboxMin[2] + data.bboxMax[2]) / 2,
-    );
-    const r = Math.max(
-      data.bboxMax[0] - data.bboxMin[0],
-      data.bboxMax[1] - data.bboxMin[1],
-      data.bboxMax[2] - data.bboxMin[2],
-    ) || 1;
+    // kamera na bbox — policzony z przefiltrowanych danych (bbox z pliku może być NaN)
+    let m0 = Infinity, m1 = Infinity, m2 = Infinity, M0 = -Infinity, M1 = -Infinity, M2 = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
+      if (x < m0) m0 = x; if (y < m1) m1 = y; if (z < m2) m2 = z;
+      if (x > M0) M0 = x; if (y > M1) M1 = y; if (z > M2) M2 = z;
+    }
+    const c = new THREE.Vector3((m0 + M0) / 2, (m1 + M1) / 2, (m2 + M2) / 2);
+    const r = Math.max(M0 - m0, M1 - m1, M2 - m2) || 1;
     this.camera!.position.set(c.x + r, c.y + r * 0.6, c.z + r);
     this.controls!.target.copy(c);
     this.controls!.update();
@@ -141,6 +160,5 @@ export class ThreeEngine implements RenderEngine {
       // obrót sceny realizuje OrbitControls.autoRotate
     }
     this.renderer?.render(this.scene!, this.camera!);
-    void this.clock.getDelta();
   };
 }
