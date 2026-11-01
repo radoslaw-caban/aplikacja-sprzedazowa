@@ -5,7 +5,7 @@ import './App.css';
 
 // Model demo (publiczny, darmowy glTF) — docelowo własne modele w assets/models/
 const MODEL_URL =
-  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glTF';
+  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb';
 
 const COLORS = ['#c9a227', '#b0bec5', '#8d6e63', '#e53935', '#1e88e5', '#43a047'];
 
@@ -13,6 +13,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<ReturnType<typeof createEngine> | null>(null);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<ProductConfig>({
     color: '#c9a227',
     metalness: 0.7,
@@ -32,7 +33,10 @@ export default function App() {
       if (disposed) return;
       engine.applyConfig(config);
       setReady(true);
-    })().catch(console.error);
+    })().catch((e) => {
+      console.error(e);
+      setError(e?.message ?? 'Nieznany błąd');
+    });
     return () => {
       disposed = true;
       engine.dispose();
@@ -55,7 +59,8 @@ export default function App() {
 
       <div className="stage">
         <canvas ref={canvasRef} />
-        {!ready && <div className="loader">Ładowanie modelu…</div>}
+        {!ready && !error && <div className="loader">Ładowanie modelu…</div>}
+        {error && <div className="loader error">⚠️ Błąd ładowania: {error}</div>}
         <p className="hint">Przeciągnij palcem / myszą, aby obrócić · uszczypnij, aby przybliżyć</p>
       </div>
 
