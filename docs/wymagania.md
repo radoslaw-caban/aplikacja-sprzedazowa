@@ -4,10 +4,20 @@
 
 ## 1. Cel produktu
 
-Aplikacja tabletowa umożliwiająca handlowcom i klientom interaktywne projektowanie
-produktu w 3D oraz natychmiastowe sfinalizowanie sprzedaży (wycena → oferta → zamówienie).
+Uniwersalna aplikacja webowa (PWA) działająca na **wszystkich urządzeniach** — laptopie,
+tablecie, macOS, Windows, Android, iOS — umożliwiająca handlowcom i klientom
+interaktywne projektowanie produktu w 3D oraz natychmiastowe sfinalizowanie sprzedaży
+(wycena → oferta → zamówienie).
 
-## 2. Grupy docelowe / użytkownicy
+## 2. Platformy i urządzenia
+
+| Platforma | Jak uruchamiana | Uwagi |
+|---|---|---|
+| Windows / macOS / Linux (laptop, PC) | przeglądarka (Chrome, Edge, Safari, Firefox) | pełny interfejs + mysz/klawiatura |
+| iPad / Android tablet | przeglądarka lub PWA „zainstalowana" | gesty dotykowe, pełny ekran, offline |
+| Telefon (Android/iOS) | PWA | uproszczony widok prezentacyjny |
+
+## 3. Grupy docelowe / użytkownici
 
 - Handlowiec (prezentacja u klienta, targi, showroom)
 - Klient końcowy (samodzielna konfiguracja, np. kiosk)
@@ -31,8 +41,8 @@ produktu w 3D oraz natychmiastowe sfinalizowanie sprzedaży (wycena → oferta �
 
 ## 5. Otwarte pytania
 
-- [ ] Która platforma priorytetowa: iPad, Android, obie?
 - [ ] Jaki asortyment / kategorie produktów w pierwszej wersji?
 - [ ] Integracja z istniejącym CRM/ERP (którym)?
 - [ ] Kto przygotowuje modele 3D (proces, format, budżet)?
 - [ ] Waluta, ceny, rabaty — skąd pochodzą dane cenowe?
+- [ ] Czy potrzebny dostęp na iOS Safari od pierwszego dnia (uwaga: iOS ma limity pamięci WebGL)?
