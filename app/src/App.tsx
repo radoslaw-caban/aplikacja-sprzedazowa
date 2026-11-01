@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { createEngine } from './engine';
 import type { PointCloudData, ProductConfig } from './engine/RenderEngine';
 import E57Worker from './engine/e57Worker?worker';
+import PlyWorker from './engine/plyWorker?worker';
 import './App.css';
+
+// Twój realny skan (X9 → CloudCompare → PLY) — demo domyślnie go ładuje
+const CLOUD_URL = `${import.meta.env.BASE_URL}dom-chmura.ply`;
 
 // Model demo (publiczny, darmowy glTF) — docelowo własne modele w assets/models/
 const MODEL_URL =
@@ -58,6 +62,7 @@ export default function App() {
     setStatus(`Czytam ${file.name} (${(file.size / 1e9).toFixed(2)} GB)…`);
     try {
       const buffer = await file.arrayBuffer();
+      if (file.name.toLowerCase().endsWith('.ply')) return importPlyBuffer(buffer, file.name);
       setStatus('Parsowanie E57 w tle…');
       const worker = new E57Worker();
       worker.onmessage = (e: MessageEvent) => {
@@ -84,6 +89,38 @@ export default function App() {
       setStatus('');
     }
   };
+
+  const importPlyBuffer = (buffer: ArrayBuffer, name: string) => {
+    setStatus(`Parsowanie ${name}…`);
+    const worker = new PlyWorker();
+    worker.onmessage = (e: MessageEvent) => {
+      const d = e.data;
+      if (d.type === 'error') {
+        setError(d.message);
+        setStatus('');
+      } else if (d.type === 'done') {
+        const data: PointCloudData = d;
+        engineRef.current?.loadPointCloud(data).then(() => {
+          setStatus(`Chmura: ${data.pointCount.toLocaleString('pl-PL')} pkt`);
+        });
+      }
+      worker.terminate();
+    };
+    worker.postMessage({ buffer }, [buffer]);
+  };
+
+  // demo: auto-ładowanie chmury domu po starcie
+  useEffect(() => {
+    if (!ready) return;
+    fetch(CLOUD_URL)
+      .then((r) => {
+        if (!r.ok) throw new Error(`PLY ${r.status}`);
+        return r.arrayBuffer();
+      })
+      .then((buf) => importPlyBuffer(buf, 'dom-chmura.ply'))
+      .catch((e) => console.warn('Auto-load PLY:', e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   return (
     <div className="app">
@@ -145,10 +182,10 @@ export default function App() {
         </button>
 
         <label className="import-btn">
-          📂 Importuj chmurę E57 (.e57)
+          📂 Importuj chmurę (.e57 / .ply)
           <input
             type="file"
-            accept=".e57"
+            accept=".e57,.ply"
             style={{ display: 'none' }}
             onChange={(e) => {
               const f = e.target.files?.[0];
