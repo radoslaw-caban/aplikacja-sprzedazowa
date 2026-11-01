@@ -5,4 +5,6 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   base: '/aplikacja-sprzedazowa/',
   plugins: [react()],
+  // worker jako ES module — pozwala na dynamic import() dekodera WASM wewnątrz workera
+  worker: { format: 'es' },
 })

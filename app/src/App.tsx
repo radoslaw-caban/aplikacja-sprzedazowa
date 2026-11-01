@@ -67,7 +67,12 @@ export default function App() {
       const worker = new E57Worker();
       worker.onmessage = (e: MessageEvent) => {
         const d = e.data;
-        if (d.type === 'progress') {
+        if (d.type === 'meta') {
+          setStatus(
+            `Skan: ${Number(d.totalPoints).toLocaleString('pl-PL')} pkt` +
+              (d.stride > 1 ? ` → pobieram ${Number(d.expected).toLocaleString('pl-PL')} (co ${d.stride}.)` : ''),
+          );
+        } else if (d.type === 'progress') {
           setE57Progress({ loaded: d.loadedPoints, total: d.totalPoints });
         } else if (d.type === 'error') {
           setError(d.message);
@@ -112,6 +117,14 @@ export default function App() {
   // demo: auto-ładowanie chmury domu po starcie
   useEffect(() => {
     if (!ready) return;
+    // test E57: ?e57=1 ładuje plik testowy (jeśli obecny na serwerze)
+    if (new URLSearchParams(location.search).get('e57') === '1') {
+      fetch(`${import.meta.env.BASE_URL}test.e57`)
+        .then((r) => { if (!r.ok) throw new Error(`E57 ${r.status}`); return r.blob(); })
+        .then((b) => importE57(new File([b], 'test.e57')))
+        .catch((e) => setError(`E57 test: ${e.message}`));
+      return;
+    }
     fetch(CLOUD_URL)
       .then((r) => {
         if (!r.ok) throw new Error(`PLY ${r.status}`);

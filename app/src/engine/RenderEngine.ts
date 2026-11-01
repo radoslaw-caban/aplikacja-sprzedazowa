@@ -28,6 +28,7 @@ export interface PointCloudData {
   positions: Float32Array; // xyz
   colors?: Uint8Array;     // rgb 0-255
   pointCount: number;
-  bboxMin: [number, number, number];
-  bboxMax: [number, number, number];
+  /** opcjonalne — silnik i tak liczy bbox z przefiltrowanych punktów */
+  bboxMin?: [number, number, number];
+  bboxMax?: [number, number, number];
 }
