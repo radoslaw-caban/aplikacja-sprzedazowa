@@ -104,8 +104,10 @@ self.onmessage = async (e: MessageEvent) => {
 
     if (out === 0) throw new Error('Nie udało się odczytać punktów z pliku');
 
-    const finalPositions = positions.subarray(0, out * 3);
-    const finalColors = colors ? colors.subarray(0, out * 3) : undefined;
+    // UWAGA: subarray() zwraca widok na CAŁY bufor (z nadmiarowymi zerami na końcu),
+    // co psuje bbox i frustum culling. Trzeba zrobić dokładną kopię.
+    const finalPositions = positions.slice(0, out * 3);
+    const finalColors = colors ? colors.slice(0, out * 3) : undefined;
     const transfer: Transferable[] = [finalPositions.buffer];
     if (finalColors) transfer.push(finalColors.buffer);
     post({ type: 'done', positions: finalPositions, colors: finalColors, pointCount: out }, transfer);

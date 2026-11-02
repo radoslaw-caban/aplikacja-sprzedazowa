@@ -8,11 +8,8 @@ import './App.css';
 // Twój realny skan (X9 → CloudCompare → PLY) — demo domyślnie go ładuje
 const CLOUD_URL = `${import.meta.env.BASE_URL}dom-chmura.ply`;
 
-// Model demo (publiczny, darmowy glTF) — docelowo własne modele w assets/models/
-const MODEL_URL =
-  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb';
-
 const COLORS = ['#c9a227', '#b0bec5', '#8d6e63', '#e53935', '#1e88e5', '#43a047'];
+type Mode = 'cloud' | 'model';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -21,22 +18,28 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [e57Progress, setE57Progress] = useState<{ loaded: number; total: number } | null>(null);
   const [status, setStatus] = useState<string>('');
+  const [mode, setMode] = useState<Mode>('cloud');
+  const [hasModel, setHasModel] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [config, setConfig] = useState<ProductConfig>({
-    color: '#c9a227',
-    metalness: 0.7,
-    roughness: 0.35,
-    autoRotate: true,
+    color: '#8d6e63',
+    metalness: 0.3,
+    roughness: 0.6,
+    autoRotate: false,
+    gizmoMode: 'translate',
+    showModel: true,
+    pointSize: 0.02,
   });
 
   useEffect(() => {
     const engine = createEngine();
     engineRef.current = engine;
+    // uchwyt diagnostyczny — pozwala sprawdzić stan sceny z konsoli przeglądarki
+    (window as unknown as { engine?: unknown }).engine = engine;
     const canvas = canvasRef.current!;
     let disposed = false;
     (async () => {
       await engine.init(canvas);
-      if (disposed) return;
-      await engine.loadModel(MODEL_URL);
       if (disposed) return;
       engine.applyConfig(config);
       setReady(true);
@@ -84,6 +87,7 @@ export default function App() {
           engineRef.current?.loadPointCloud(data).then(() => {
             setE57Progress(null);
             setStatus(`Chmura: ${data.pointCount.toLocaleString('pl-PL')} pkt`);
+            setMode('cloud');
           });
           worker.terminate();
         }
@@ -107,6 +111,7 @@ export default function App() {
         const data: PointCloudData = d;
         engineRef.current?.loadPointCloud(data).then(() => {
           setStatus(`Chmura: ${data.pointCount.toLocaleString('pl-PL')} pkt`);
+          setMode('cloud');
         });
       }
       worker.terminate();
@@ -114,10 +119,28 @@ export default function App() {
     worker.postMessage({ buffer }, [buffer]);
   };
 
+  /** Import modelu GLB/GLTF z dysku (np. eksport z CabinetSense przez SketchUp). */
+  const importModel = async (file: File) => {
+    setError(null);
+    setStatus(`Wczytuję model ${file.name}…`);
+    try {
+      const url = URL.createObjectURL(file);
+      await engineRef.current!.loadModel(url);
+      URL.revokeObjectURL(url);
+      setHasModel(true);
+      setStatus(`Model: ${file.name}`);
+      setMode('model');
+      // po pierwszym imporcie pokaż gizmo przesuwania
+      set({ gizmoMode: 'translate', showModel: true });
+    } catch (e) {
+      setError(`Model: ${e instanceof Error ? e.message : String(e)}`);
+      setStatus('');
+    }
+  };
+
   // demo: auto-ładowanie chmury domu po starcie
   useEffect(() => {
     if (!ready) return;
-    // test E57: ?e57=1 ładuje plik testowy (jeśli obecny na serwerze)
     if (new URLSearchParams(location.search).get('e57') === '1') {
       fetch(`${import.meta.env.BASE_URL}test.e57`)
         .then((r) => { if (!r.ok) throw new Error(`E57 ${r.status}`); return r.blob(); })
@@ -138,14 +161,29 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>Konfigurator 3D — demo</h1>
-        <span className={`badge ${ready ? 'ok' : ''}`}>{ready ? 'silnik: three.js' : 'ładowanie…'}</span>
+        <h1>Konfigurator 3D</h1>
+        <div className="header-right">
+          <div className="modes">
+            <button className={mode === 'cloud' ? 'on' : ''} onClick={() => setMode('cloud')}>
+              Chmura
+            </button>
+            <button
+              className={mode === 'model' ? 'on' : ''}
+              onClick={() => setMode('model')}
+            >
+              Model{hasModel ? '' : ' +'}
+            </button>
+          </div>
+          <button className="panel-toggle" onClick={() => setPanelOpen((o) => !o)}>
+            {panelOpen ? '▾' : '▸'}
+          </button>
+        </div>
       </header>
 
       <div className="stage">
         <canvas ref={canvasRef} />
-        {!ready && !error && <div className="loader">Ładowanie modelu…</div>}
-        {error && <div className="loader error">⚠️ Błąd ładowania: {error}</div>}
+        {!ready && !error && <div className="loader">Ładowanie…</div>}
+        {error && <div className="loader error">⚠️ {error}</div>}
         {e57Progress && (
           <div className="e57-overlay">
             <div>Parsowanie E57: {e57Progress.loaded.toLocaleString('pl-PL')} / {e57Progress.total.toLocaleString('pl-PL')} pkt</div>
@@ -153,61 +191,97 @@ export default function App() {
           </div>
         )}
         {status && !error && <div className="status">{status}</div>}
-        <p className="hint">Przeciągnij palcem / myszą, aby obrócić · uszczypnij, aby przybliżyć</p>
+        <p className="hint">Przeciągnij palcem / myszą · uszczypnij lub kółkiem, aby przybliżyć</p>
       </div>
 
-      <div className="panel">
-        <div className="row">
-          <span>Kolor</span>
-          <div className="swatches">
-            {COLORS.map((c) => (
-              <button
-                key={c}
-                aria-label={c}
-                className={`swatch ${config.color === c ? 'active' : ''}`}
-                style={{ background: c }}
-                onClick={() => set({ color: c })}
-              />
-            ))}
-          </div>
+      {panelOpen && (
+        <div className="panel">
+          {mode === 'cloud' && (
+            <>
+              <label className="row">
+                <span>Punkty</span>
+                <input
+                  type="range" min={0.002} max={0.08} step={0.002}
+                  value={config.pointSize}
+                  onChange={(e) => set({ pointSize: +e.target.value })}
+                />
+              </label>
+              <label className="import-btn">
+                📂 Chmura (.e57 / .ply)
+                <input
+                  type="file"
+                  accept=".e57,.ply"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) importE57(f);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </>
+          )}
+
+          {mode === 'model' && (
+            <>
+              <div className="row">
+                <span>Narzędzie</span>
+                <div className="modes">
+                  {(['translate', 'rotate', 'scale'] as const).map((m) => (
+                    <button
+                      key={m}
+                      className={config.gizmoMode === m ? 'on' : ''}
+                      onClick={() => set({ gizmoMode: m })}
+                    >
+                      {m === 'translate' ? 'Przesuń' : m === 'rotate' ? 'Obróć' : 'Skaluj'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="row">
+                <span>Widoczność</span>
+                <button className="toggle" onClick={() => set({ showModel: !config.showModel })}>
+                  Model: {config.showModel ? 'WIDOCZNY' : 'UKRYTY'}
+                </button>
+              </div>
+
+              <div className="row">
+                <span>Kolor</span>
+                <div className="swatches">
+                  {COLORS.map((c) => (
+                    <button
+                      key={c}
+                      aria-label={c}
+                      className={`swatch ${config.color === c ? 'active' : ''}`}
+                      style={{ background: c }}
+                      onClick={() => {
+                        const engine = engineRef.current as unknown as { forceColor?: boolean };
+                        if (engine) engine.forceColor = true;
+                        set({ color: c });
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <label className="import-btn model">
+                📦 Model GLB (.glb / .gltf)
+                <input
+                  type="file"
+                  accept=".glb,.gltf"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) importModel(f);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </>
+          )}
         </div>
-
-        <label className="row">
-          <span>Metaliczność</span>
-          <input
-            type="range" min={0} max={1} step={0.05}
-            value={config.metalness}
-            onChange={(e) => set({ metalness: +e.target.value })}
-          />
-        </label>
-
-        <label className="row">
-          <span>Chropowatość</span>
-          <input
-            type="range" min={0} max={1} step={0.05}
-            value={config.roughness}
-            onChange={(e) => set({ roughness: +e.target.value })}
-          />
-        </label>
-
-        <button className="toggle" onClick={() => set({ autoRotate: !config.autoRotate })}>
-          Autoobrót: {config.autoRotate ? 'WŁ' : 'WYŁ'}
-        </button>
-
-        <label className="import-btn">
-          📂 Importuj chmurę (.e57 / .ply)
-          <input
-            type="file"
-            accept=".e57,.ply"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) importE57(f);
-              e.target.value = '';
-            }}
-          />
-        </label>
-      </div>
+      )}
     </div>
   );
 }

@@ -10,8 +10,17 @@ body { background: #0b0d10; color: #e8eaed; }
 
 header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px; border-bottom: 1px solid #22262c;
+  padding: 10px 14px; border-bottom: 1px solid #22262c; gap: 10px;
 }
+.header-right { display: flex; align-items: center; gap: 8px; }
+.modes { display: flex; gap: 4px; }
+.modes button, .panel-toggle {
+  padding: 6px 12px; border-radius: 8px; font-size: .78rem;
+  background: #1c2128; color: #aab2bd; border: 1px solid #2a313a; cursor: pointer;
+}
+.modes button.on { background: #c9a227; color: #101317; border-color: #c9a227; font-weight: 600; }
+.modes button:disabled { opacity: .35; cursor: default; }
+.panel-toggle { padding: 6px 10px; }
 h1 { font-size: 1rem; margin: 0; font-weight: 600; }
 .badge { font-size: .75rem; color: #8a919c; }
 .badge.ok { color: #4ade80; }
@@ -55,6 +64,7 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
   background: #14251c; color: #4ade80; border: 1px solid #2a4a35;
   font-size: .85rem; cursor: pointer;
 }
+.import-btn.model { background: #1a1f2e; color: #8ab4f8; border-color: #2a3a55; }
 
 .e57-overlay {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);

@@ -13,18 +13,22 @@ export interface PlyCloud {
 
 export function parsePly(buffer: ArrayBuffer): PlyCloud {
   const bytes = new Uint8Array(buffer);
-  // nagłówek: tekst do "end_header\n"
-  let i = 0;
+  // nagłówek: tekst do końca linii "end_header" (włącznie z \n)
   let text = '';
-  for (; i < Math.min(bytes.length, 64 * 1024); i++) {
+  let found = false;
+  let nlAfter = -1;
+  for (let i = 0; i < Math.min(bytes.length, 64 * 1024); i++) {
     text += String.fromCharCode(bytes[i]);
-    const idx = text.indexOf('end_header');
-    if (idx >= 0) break;
+    if (!found && text.indexOf('end_header') >= 0) found = true;
+    // po znalezieniu end_header czytaj dalej, aż pojawi się kończący \n —
+    // przerwanie tuż po nagłówku gubiło ostatni bajt i przesuwało całą tablicę punktów
+    if (found) {
+      const nl = text.indexOf('\n', text.indexOf('end_header'));
+      if (nl >= 0) { nlAfter = nl; break; }
+    }
   }
-  if (!text.includes('end_header')) throw new Error('PLY: brak end_header');
-  // dopasuj dokładny koniec nagłówka (po end_header jest \n)
-  const nlAfter = text.indexOf('\n', text.indexOf('end_header'));
-  const dataStart = text.slice(0, nlAfter).length + 1;
+  if (nlAfter < 0) throw new Error('PLY: brak zakończenia nagłówka (end_header\\n)');
+  const dataStart = nlAfter + 1;
 
   const header = text.slice(0, nlAfter);
   const countMatch = /element vertex (\d+)/.exec(header);
@@ -60,26 +64,41 @@ export function parsePly(buffer: ArrayBuffer): PlyCloud {
     o += isFloat ? 4 : 1;
   }
   const recSize = o;
+  void recSize;
 
   const positions = new Float32Array(n * 3);
   let colors: Uint8Array | undefined = hasColor ? new Uint8Array(n * 3) : undefined;
   const dv = new DataView(buffer, dataStart);
   const bboxMin: [number, number, number] = [Infinity, Infinity, Infinity];
   const bboxMax: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  // sensowne granice chmury (skan pomieszczenia: |x| < 100 km) — odsiewa śmieciowe wartości
+  const LIMIT = 1e5;
+  let written = 0;
 
   for (let k = 0; k < n; k++) {
     const base = k * recSize;
     const x = dv.getFloat32(base + offsets[ix], true);
     const y = dv.getFloat32(base + offsets[iy], true);
     const z = dv.getFloat32(base + offsets[iz], true);
-    positions[k * 3] = x; positions[k * 3 + 1] = y; positions[k * 3 + 2] = z;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    if (Math.abs(x) > LIMIT || Math.abs(y) > LIMIT || Math.abs(z) > LIMIT) continue;
+    positions[written * 3] = x;
+    positions[written * 3 + 1] = y;
+    positions[written * 3 + 2] = z;
     if (x < bboxMin[0]) bboxMin[0] = x; if (y < bboxMin[1]) bboxMin[1] = y; if (z < bboxMin[2]) bboxMin[2] = z;
     if (x > bboxMax[0]) bboxMax[0] = x; if (y > bboxMax[1]) bboxMax[1] = y; if (z > bboxMax[2]) bboxMax[2] = z;
     if (colors && ir >= 0) {
-      colors[k * 3] = dv.getUint8(base + offsets[ir]);
-      colors[k * 3 + 1] = dv.getUint8(base + offsets[ig]);
-      colors[k * 3 + 2] = dv.getUint8(base + offsets[ib]);
+      colors[written * 3] = dv.getUint8(base + offsets[ir]);
+      colors[written * 3 + 1] = dv.getUint8(base + offsets[ig]);
+      colors[written * 3 + 2] = dv.getUint8(base + offsets[ib]);
     }
+    written++;
   }
-  return { positions, colors, pointCount: n, bboxMin, bboxMax };
+  return {
+    positions: positions.slice(0, written * 3),
+    colors: colors ? colors.slice(0, written * 3) : undefined,
+    pointCount: written,
+    bboxMin,
+    bboxMax,
+  };
 }

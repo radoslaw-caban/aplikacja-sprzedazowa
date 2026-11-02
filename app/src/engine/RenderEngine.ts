@@ -4,6 +4,11 @@ export interface ProductConfig {
   metalness?: number;
   roughness?: number;
   autoRotate?: boolean;
+  /** tryb gizma dla modelu GLB nakładanego na chmurę */
+  gizmoMode?: 'translate' | 'rotate' | 'scale';
+  showModel?: boolean;
+  /** rozmiar punktu chmury w metrach */
+  pointSize?: number;
 }
 
 export interface EngineCapabilities {
@@ -19,6 +24,8 @@ export interface RenderEngine {
   loadModel(url: string): Promise<() => void>;
   /** chmura punktów (np. ze skanu X9) */
   loadPointCloud(data: PointCloudData): Promise<() => void>;
+  /** włącza/wyłącza gizmo przesuwania modelu względem chmury */
+  setGizmoMode?(mode: 'translate' | 'rotate' | 'scale' | null): void;
   applyConfig(config: ProductConfig): void;
   screenshot(): Promise<Blob>;
   dispose(): void;
