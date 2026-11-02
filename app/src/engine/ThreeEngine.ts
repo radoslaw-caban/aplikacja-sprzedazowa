@@ -22,6 +22,7 @@ export class ThreeEngine implements RenderEngine {
   private modelHolder?: THREE.Group;
   private pointCloud?: THREE.Points;
   private gizmo?: TransformControls;
+  private designGroup = new THREE.Group();
   private config: ProductConfig = {};
   /** true, gdy użytkownik ręcznie nadpisuje materiał modelu (demo kolorów) */
   forceColor = false;
@@ -47,6 +48,7 @@ export class ThreeEngine implements RenderEngine {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
     this.controls.autoRotateSpeed = 2.0;
+    this.scene.add(this.designGroup);
 
     this.resize();
     window.addEventListener('resize', this.resize);
@@ -225,6 +227,103 @@ export class ThreeEngine implements RenderEngine {
       return fallback;
     }
     return box;
+  }
+
+  /** Ustawia kamerę na projekt (szafki), a nie na chmurę. */
+  frameDesign() {
+    if (!this.camera || !this.controls) return;
+    const box = new THREE.Box3().setFromObject(this.designGroup);
+    if (box.isEmpty()) return;
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(size.x, size.y, size.z) * 0.9 || 1;
+    this.camera.position.set(center.x + radius * 1.1, center.y + radius * 0.55, center.z + radius * 1.4);
+    this.controls.target.copy(center);
+    this.controls.update();
+  }
+
+  /** Buduje/podmienia całą scenę z listy brył (mm → metry). */
+  renderBoxes(boxes: import('./RenderEngine').SceneBox[], cabinetsOrigin: { x: number; z: number } = { x: 0, z: 0 }) {
+    if (!this.scene) throw new Error('Engine not initialized');
+    // usuń poprzednie bryły
+    for (const o of [...this.designGroup.children]) {
+      o.removeFromParent();
+      (o as THREE.Mesh).geometry?.dispose?.();
+    }
+    const mm = 0.001;
+    for (const b of boxes) {
+      const [sx, sy, sz] = b.size;
+      const geom =
+        b.shape === 'cylinder'
+          ? new THREE.CylinderGeometry((sx * mm) / 2, (sx * mm) / 2, sy * mm, 16)
+          : new THREE.BoxGeometry(sx * mm, sy * mm, sz * mm);
+      const baseColor = new THREE.Color(b.color ?? '#c9a06a');
+      const isPanel = b.kind === 'panel';
+      const mat = new THREE.MeshStandardMaterial({
+        color: baseColor,
+        roughness: isPanel ? 0.65 : 0.45,
+        metalness: b.kind === 'handle' ? 0.6 : 0.05,
+        transparent: (b.opacity ?? 1) < 1,
+        opacity: b.opacity ?? 1,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.set(
+        (b.position[0] + cabinetsOrigin.x) * mm,
+        b.position[1] * mm,
+        (b.position[2] + cabinetsOrigin.z) * mm,
+      );
+      if (b.rotationY) mesh.rotation.y = (b.rotationY * Math.PI) / 180;
+      mesh.userData = { cabinetId: b.cabinetId, elementId: b.elementId, kind: b.kind, boxId: b.id };
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      this.designGroup.add(mesh);
+    }
+    this.renderer!.render(this.scene, this.camera!);
+  }
+
+  /** Raycast: co kliknął użytkownik (cabinetId / elementId). */
+  pickAt(clientX: number, clientY: number) {
+    if (!this.renderer || !this.camera) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, this.camera);
+    const hits = ray.intersectObjects(this.designGroup.children, false);
+    if (!hits.length) return null;
+    const ud = hits[0].object.userData as {
+      cabinetId?: string;
+      elementId?: string;
+      kind?: string;
+    };
+    return {
+      cabinetId: ud.cabinetId,
+      elementId: ud.elementId,
+      kind: ud.kind,
+      screen: { x: clientX, y: clientY },
+      point: hits[0].point.toArray() as [number, number, number],
+    };
+  }
+
+  /** Podświetla wybrany element (emissive). */
+  highlightElement(elementId: string | null) {
+    for (const o of this.designGroup.children) {
+      const m = o as THREE.Mesh;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      if (!mat || !mat.emissive) continue;
+      const on = elementId !== null && m.userData.elementId === elementId;
+      mat.emissive.setHex(on ? 0x334466 : 0x000000);
+      mat.emissiveIntensity = on ? 1 : 0;
+    }
+  }
+
+  disposeDesign() {
+    for (const o of [...this.designGroup.children]) {
+      o.removeFromParent();
+      (o as THREE.Mesh).geometry?.dispose?.();
+    }
   }
 
   /** Diagnostyka: co jest aktualnie w scenie (używane też przy testach). */

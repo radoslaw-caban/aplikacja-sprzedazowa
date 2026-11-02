@@ -1,4 +1,6 @@
 // PORT — stały kontrakt silnika graficznego (wymienialny przez adaptery)
+import type { SceneBox } from '../design/types';
+
 export interface ProductConfig {
   color?: string;
   metalness?: number;
@@ -26,6 +28,21 @@ export interface RenderEngine {
   loadPointCloud(data: PointCloudData): Promise<() => void>;
   /** włącza/wyłącza gizmo przesuwania modelu względem chmury */
   setGizmoMode?(mode: 'translate' | 'rotate' | 'scale' | null): void;
+  /** render listy brył (projektanta szafek) */
+  renderBoxes?(boxes: SceneBox[], origin?: { x: number; z: number }): void;
+  /** kadrowanie kamery na projekt */
+  frameDesign?(): void;
+  /** raycast po bryłach projektu */
+  pickAt?(clientX: number, clientY: number): {
+    cabinetId?: string;
+    elementId?: string;
+    kind?: string;
+    screen: { x: number; y: number };
+    point: [number, number, number];
+  } | null;
+  highlightElement?(elementId: string | null): void;
+  disposeDesign?(): void;
+  getDebugInfo?(): Record<string, unknown>;
   applyConfig(config: ProductConfig): void;
   screenshot(): Promise<Blob>;
   dispose(): void;
@@ -39,3 +56,5 @@ export interface PointCloudData {
   bboxMin?: [number, number, number];
   bboxMax?: [number, number, number];
 }
+
+export type { SceneBox, ElementKind, CabinetElement, Cabinet } from '../design/types';

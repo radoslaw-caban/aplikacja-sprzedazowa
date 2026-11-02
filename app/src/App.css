@@ -80,3 +80,61 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
   font-size: .75rem; color: #8a919c; background: #101317cc;
   padding: 6px 10px; border-radius: 8px; pointer-events: none;
 }
+
+/* ---- biblioteka szafek/elementów ---- */
+.library {
+  position: relative; border-top: 1px solid #22262c; background: #0e1116;
+  display: flex; gap: 16px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  overflow-x: auto;
+}
+.lib-section { min-width: 0; }
+.lib-title { font-size: .7rem; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.lib-items { display: flex; gap: 8px; flex-wrap: wrap; }
+.lib-item {
+  padding: 8px 12px; border-radius: 9px; background: #171c22; border: 1px solid #262d36;
+  font-size: .78rem; color: #d3d8de; cursor: pointer; user-select: none; white-space: nowrap;
+}
+.lib-item:hover { border-color: #c9a227; color: #fff; }
+.lib-item.dim { opacity: .35; }
+.lib-toggle, .lib-open {
+  position: absolute; right: 12px; top: 8px; padding: 4px 10px; border-radius: 8px;
+  background: #1c2128; color: #aab2bd; border: 1px solid #2a313a; cursor: pointer; font-size: .75rem;
+}
+.lib-open { position: relative; align-self: center; margin: 8px auto; }
+
+/* ---- dymek kontekstowy ---- */
+.bubble {
+  position: fixed; transform: translate(-50%, -100%);
+  background: #12161cee; border: 1px solid #333c48; border-radius: 12px;
+  padding: 10px; display: flex; flex-direction: column; gap: 7px;
+  min-width: 190px; box-shadow: 0 10px 30px #0009; z-index: 20;
+  backdrop-filter: blur(8px);
+}
+.bubble::after {
+  content: ''; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%);
+  border-left: 7px solid transparent; border-right: 7px solid transparent;
+  border-top: 7px solid #333c48;
+}
+.bubble-title {
+  font-size: .78rem; font-weight: 600; color: #e8eaed; padding-bottom: 4px;
+  border-bottom: 1px solid #262d36;
+}
+.bubble button {
+  padding: 7px 10px; border-radius: 8px; background: #1c2128; color: #d3d8de;
+  border: 1px solid #2a313a; font-size: .76rem; cursor: pointer; text-align: left;
+}
+.bubble button:hover { border-color: #c9a227; }
+.bubble button.danger { color: #f87171; border-color: #4a2a2a; }
+.bubble-row { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: #9aa3ae; }
+.bubble-row input[type="range"] { flex: 1; accent-color: #c9a227; }
+.bubble-row .val { width: 34px; text-align: right; color: #e8eaed; }
+.bubble-row2 { display: flex; gap: 6px; }
+.bubble-row2 button { flex: 1; text-align: center; }
+.bubble-colors { display: flex; gap: 6px; justify-content: center; padding: 2px 0; }
+.dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.dot:hover { border-color: #fff; }
+.chip {
+  padding: 6px 12px; border-radius: 8px; font-size: .78rem;
+  background: #1c2128; color: #aab2bd; border: 1px solid #2a313a; cursor: pointer;
+}
+.chip.on { background: #14251c; color: #4ade80; border-color: #2a4a35; }
