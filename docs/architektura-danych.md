@@ -4,25 +4,42 @@ Status: ZATWIERDZONO (na podstawie realnych danych: pliki E57 ~5 GB, 20–50 mln
 
 ## 1. Chmura punktów — Trimble X9 (.e57)
 
-**Decyzja: import natywny .e57 w aplikacji, parsowanie w Web Workerze.**
+**Decyzja: import natywny .e57 w przeglądarce przez dekoder WASM `e57-js` (libE57).**
 
-- Rozmiar 5 GB / 20–50 mln pkt → mieszci się w przeglądarce po deymacji/LOD
-  (limit RAM iOS ~1–2 GB → chmura w Float32 = 20–50 mln × 12 B = 240–600 MB, OK).
-- Parser E57 (XML + binarne bloby) działa w Web Workerze — UI nie zamarza,
-  pasek postępu.
-- X9 zapisuje też pliki .fls/.e57 z podglądami — kamera/pozycje skanów ignorowane w MVP.
-- **Perspective pozostaje narzędziem przycinania** (usuwanie noise/sufit/obce obiekty),
-  ale konwersja do GLB/PLY nie jest wymagana — aplikacja czyta E57 bezpośrednio.
+- Działa w Web Workerze — UI nie zamarza, widoczny pasek postępu.
+- Odczyt porcjami po 200 tys. pkt + automatyczna decymacja do **8 mln pkt**
+  (powyżej tego limitu pamięć tabletu/iOS przestaje wystarczać).
+- Punkty z NaN/Inf są odfiltrowywane (CloudCompare zapisuje punkty "invalid").
 
-### Pipeline w aplikacji
+### Wymagania techniczne (krytyczne — nie oczywiste)
+
+1. **COOP/COEP → SharedArrayBuffer.** `libe57-js.wasm` jest zbudowany z pthreads
+   i wymaga `SharedArrayBuffer`, a ten istnieje tylko przy `crossOriginIsolated`.
+   GitHub Pages nie pozwala ustawić nagłówków HTTP, więc używamy
+   `coi-serviceworker.min.js` (skopiowany z npm `coi-serviceworker` do `public/`,
+   ładowany w `index.html`). Efekt: `window.crossOriginIsolated === true`.
+2. **`window` w Workerze.** `e57-js` wybiera ścieżkę Node (NODEFS) gdy `typeof window === 'undefined'`,
+   co w Workerze kończy się `Aborted(Assertion failed)`. Rozwiązanie: na początku
+   workera ustawić `self.window = self`.
+3. **Pliki dekodera kopiujemy z npm do `public/e57js/`** (`index.browser.mjs`,
+   `libe57-js.js`, `libe57-js.wasm`) i importujemy dynamicznie przez
+   `${import.meta.env.BASE_URL}e57js/index.browser.mjs` z `/* @vite-ignore */`.
+   Worker musi być ES module: `worker: { format: 'es' }` w `vite.config.ts`.
+
+### API dekodera (potwierdzone na pliku X9 491 953 pkt)
+```js
+await E57.Init();
+const reader = E57Reader.FromBuffer(uint8array);
+reader.GetData3DCount();                       // liczba skanów
+const scan = reader.GetScan(0);
+Number(scan.GetHeader().pointCount);           // 491953
+const pts = scan.ReadPointsSync(chunk, true);  // VectorPoint
+pts.size(); pts.get(i).cartesianX/.../colorRed;
 ```
-plik.e57 (z Perspective lub prosto z X9)
-  → Web Worker: parse E57 (XML index + binary buffer)
-  → decymacja opcjonalna (co N-ty punkt, jeśli > 30 mln)
-  → Float32Array xyz (+ rgb jeśli obecne)
-  → RenderEngine.loadPointCloud() → THREE.Points
-  → LOD: 3 poziomy (co 1 / co 4 / co 16 punktu) przełączane wg zoomu
-```
+
+### Fallback: konwersja offline
+`tools/e57_to_ply.py` (pye57) → binarny PLY → parser `plyParser.ts` w aplikacji.
+Przetestowany: 491 953 pkt, wynik identyczny bit-w-bit z ground truth.
 
 ### Rozszerzenie kontraktu RenderEngine
 ```ts
