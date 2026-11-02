@@ -1,33 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createEngine } from './engine';
 import type { PointCloudData } from './engine/RenderEngine';
-import E57Worker from './engine/e57Worker?worker';
 import PlyWorker from './engine/plyWorker?worker';
-import { buildCabinet } from './design/generator';
+import { buildCabinet, innerDepth, innerWidth } from './design/generator';
 import {
-  CABINET_TEMPLATES,
   ELEMENT_TEMPLATES,
+  LIBRARY_GROUPS,
   appendToRow,
+  byGroup,
   snapX,
+  summarize,
   type CabinetTemplate,
   type ElementTemplate,
 } from './design/library';
-import { baseCabinet, type Cabinet } from './design/types';
+import { baseCabinet, makeDoors, type Cabinet } from './design/types';
 import OrganizerPanel from './ui/OrganizerPanel';
 import { makeLayout } from './design/organizer';
 import './App.css';
 
 const CLOUD_URL = `${import.meta.env.BASE_URL}dom-chmura.ply`;
-const COLORS = ['#c9a06a', '#b08968', '#e8e2d8', '#2f3437', '#5b6b73', '#8d9b6a'];
+const COLORS = ['#e8e2d8', '#c9a06a', '#b08968', '#2f3437', '#5b6b73', '#8d9b6a'];
+
+type Tab = 'layout' | 'interior';
 
 interface Selection {
   cabinetId: string;
   elementId?: string;
+  frontId?: string;
   kind?: string;
   x: number;
   y: number;
 }
-type Mode = 'design' | 'scene';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -35,11 +38,13 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('');
-  const [mode, setMode] = useState<Mode>('design');
+  const [tab, setTab] = useState<Tab>('layout');
   const [cabinets, setCabinets] = useState<Cabinet[]>(() => [baseCabinet('cab1', 300, 0)]);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [libOpen, setLibOpen] = useState(true);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [orgFor, setOrgFor] = useState<string | null>(null);
+
+  const active = cabinets.find((c) => c.id === activeId) ?? cabinets[0];
 
   // ---- silnik ----
   useEffect(() => {
@@ -84,7 +89,7 @@ export default function App() {
       .catch((e) => setStatus(`Skan: ${e.message}`));
   }, [ready]);
 
-  // ---- render projektu ----
+  // ---- render ----
   const boxes = useCallback(
     () =>
       cabinets.flatMap((c) => {
@@ -99,7 +104,7 @@ export default function App() {
               b.position[1],
               -x * Math.sin(rad) + z * Math.cos(rad) + c.z,
             ] as [number, number, number],
-            rotationY: c.rotation,
+            rotationY: (b.rotationY ?? 0) + c.rotation,
           };
         });
       }),
@@ -111,17 +116,11 @@ export default function App() {
     engineRef.current?.renderBoxes?.(boxes());
   }, [ready, boxes]);
 
-  // pierwsze kadrowanie na projekt — także po wczytaniu chmury,
-  // bo loadPointCloud przestawia kamerę na skan
-  const framedRef = useRef(false);
   useEffect(() => {
     if (!ready) return;
-    const frame = () => {
-      engineRef.current?.frameDesign?.();
-      framedRef.current = true;
-    };
-    const t1 = setTimeout(frame, 300);
-    const t2 = setTimeout(frame, 2500);
+    const f = () => engineRef.current?.frameDesign?.();
+    const t1 = setTimeout(f, 300);
+    const t2 = setTimeout(f, 2500);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -144,9 +143,11 @@ export default function App() {
         engineRef.current?.highlightElement?.(null);
         return;
       }
+      setActiveId(hit.cabinetId);
       setSelection({
         cabinetId: hit.cabinetId,
         elementId: hit.elementId,
+        frontId: hit.frontId,
         kind: hit.kind,
         x: hit.screen.x,
         y: hit.screen.y,
@@ -162,22 +163,30 @@ export default function App() {
   }, [ready]);
 
   // ---- operacje ----
-  const addCabinet = (t: CabinetTemplate) => setCabinets((cs) => [...cs, appendToRow(cs, t, 0)]);
+  const patchCabinet = (id: string, patch: Partial<Cabinet>) =>
+    setCabinets((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
-  const addElement = (c: Cabinet, t: ElementTemplate) =>
+  const addCabinet = (t: CabinetTemplate) => {
+    const c = appendToRow(cabinets, t, 0);
+    setCabinets((cs) => [...cs, c]);
+    setActiveId(c.id);
+  };
+
+  const addElement = (t: ElementTemplate) => {
+    if (!active) return;
     setCabinets((cs) =>
-      cs.map((x) =>
-        x.id !== c.id
-          ? x
+      cs.map((c) =>
+        c.id !== active.id
+          ? c
           : {
-              ...x,
+              ...c,
               elements: [
-                ...x.elements,
+                ...c.elements,
                 {
-                  id: `${x.id}-${Math.random().toString(36).slice(2, 7)}`,
+                  id: `e${Math.random().toString(36).slice(2, 8)}`,
                   kind: t.kind,
                   variant: t.variant,
-                  y: 120 + x.elements.length * 160,
+                  y: 100 + c.elements.length * 180,
                   x0: 0,
                   x1: 0,
                 },
@@ -185,57 +194,42 @@ export default function App() {
             },
       ),
     );
+  };
 
-  const patchElement = (cabId: string, elId: string, patch: Record<string, unknown>) =>
+  const patchElement = (elId: string, patch: Record<string, unknown>) => {
+    if (!active) return;
     setCabinets((cs) =>
       cs.map((c) =>
-        c.id !== cabId
+        c.id !== active.id
           ? c
           : { ...c, elements: c.elements.map((e) => (e.id === elId ? { ...e, ...patch } : e)) },
       ),
     );
+  };
 
-  const patchCabinet = (id: string, patch: Partial<Cabinet>) =>
-    setCabinets((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-
-  const removeElement = (cabId: string, elId: string) => {
+  const removeElement = (elId: string) => {
+    if (!active) return;
     setCabinets((cs) =>
-      cs.map((c) => (c.id !== cabId ? c : { ...c, elements: c.elements.filter((e) => e.id !== elId) })),
+      cs.map((c) => (c.id !== active.id ? c : { ...c, elements: c.elements.filter((e) => e.id !== elId) })),
     );
     setSelection(null);
-    engineRef.current?.highlightElement?.(null);
   };
 
-  const importCloud = async (file: File) => {
-    setError(null);
-    setStatus(`Czytam ${file.name}…`);
-    try {
-      const buffer = await file.arrayBuffer();
-      const isPly = file.name.toLowerCase().endsWith('.ply');
-      const worker = isPly ? new PlyWorker() : new E57Worker();
-      worker.onmessage = (e: MessageEvent) => {
-        const d = e.data;
-        if (d.type === 'error') {
-          setError(d.message);
-          setStatus('');
-          worker.terminate();
-        } else if (d.type === 'done') {
-          engineRef.current?.loadPointCloud(d as PointCloudData).then(() => {
-            setStatus(`Skan: ${d.pointCount.toLocaleString('pl-PL')} pkt`);
-          });
-          worker.terminate();
-        } else if (d.type === 'progress') {
-          setStatus(`Parsowanie: ${Number(d.loadedPoints).toLocaleString('pl-PL')} pkt`);
-        }
-      };
-      worker.postMessage({ buffer }, [buffer]);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+  /** Wejście do wnętrza: otwórz fronty i ustaw kamerę (przed szafkę / do szuflady). */
+  const enterInterior = (cab: Cabinet, elementY?: number) => {
+    setActiveId(cab.id);
+    setTab('interior');
+    const opened = { ...cab, fronts: cab.fronts.map((f) => ({ ...f, open: 1 })) };
+    patchCabinet(cab.id, { fronts: opened.fronts });
+    setTimeout(
+      () => engineRef.current?.frameInterior?.(opened, elementY !== undefined ? 'drawer' : 'front', elementY),
+      130,
+    );
   };
 
-  const selCabinet = selection ? cabinets.find((c) => c.id === selection.cabinetId) : undefined;
-  const selElement = selCabinet?.elements.find((e) => e.id === selection?.elementId);
+  const selElement = active?.elements.find((e) => e.id === selection?.elementId);
+  const selFront = active?.fronts.find((f) => f.id === selection?.frontId);
+  const summary = active ? summarize(active) : null;
 
   return (
     <div className="app">
@@ -243,11 +237,14 @@ export default function App() {
         <h1>Projektant szafek</h1>
         <div className="header-right">
           <div className="modes">
-            <button className={mode === 'design' ? 'on' : ''} onClick={() => setMode('design')}>
-              Projekt
+            <button className={tab === 'layout' ? 'on' : ''} onClick={() => setTab('layout')}>
+              Układ
             </button>
-            <button className={mode === 'scene' ? 'on' : ''} onClick={() => setMode('scene')}>
-              Skan
+            <button
+              className={tab === 'interior' ? 'on' : ''}
+              onClick={() => active && enterInterior(active)}
+            >
+              Wnętrze
             </button>
           </div>
           <span className="badge ok">{status || (ready ? 'gotowe' : 'ładowanie…')}</span>
@@ -259,9 +256,36 @@ export default function App() {
         <canvas ref={canvasRef} />
         {!ready && !error && <div className="loader">Ładowanie…</div>}
         {error && <div className="loader error">⚠️ {error}</div>}
-        <p className="hint">Przeciągnij, aby obrócić · kliknij element, aby go edytować</p>
+        <p className="hint">
+          {tab === 'layout'
+            ? 'Układ: kliknij szafkę, aby wybrać · przeciągnij, aby obrócić'
+            : 'Wnętrze: fronty otwarte · kliknij element, aby go edytować'}
+        </p>
 
-        {selection && selCabinet && (
+        {tab === 'interior' && active && (
+          <div className="interior-bar">
+            <strong>{active.name}</strong>
+            <div className="modes">
+              <button onClick={() => engineRef.current?.frameInterior?.(active, 'front')}>Przed szafkę</button>
+              <button onClick={() => engineRef.current?.frameInterior?.(active, 'drawer')}>Do szuflady</button>
+              <button
+                onClick={() =>
+                  patchCabinet(active.id, { fronts: active.fronts.map((f) => ({ ...f, open: 0 })) })
+                }
+              >
+                Zamknij fronty
+              </button>
+            </div>
+            {summary && (
+              <span className="sum">
+                półki {summary.shelves} · szuflady {summary.drawers} · przegrody {summary.dividers} · płyta{' '}
+                {summary.panelArea.toFixed(2)} m²
+              </span>
+            )}
+          </div>
+        )}
+
+        {selection && active && (
           <div
             className="bubble"
             style={{
@@ -272,73 +296,96 @@ export default function App() {
             <div className="bubble-title">
               {selElement
                 ? ELEMENT_TEMPLATES.find((t) => t.kind === selElement.kind)?.label ?? selElement.kind
-                : selCabinet.name}
+                : selFront
+                  ? selFront.kind === 'door'
+                    ? 'Front (drzwi)'
+                    : 'Front szuflady'
+                  : active.name}
             </div>
 
-            {selElement ? (
+            {selFront && (
               <>
-                <button onClick={() => patchElement(selCabinet.id, selElement.id, { holes: !selElement.holes })}>
+                <button
+                  onClick={() =>
+                    patchCabinet(active.id, {
+                      fronts: active.fronts.map((f) =>
+                        f.id === selFront.id ? { ...f, open: f.open > 0.5 ? 0 : 1 } : f,
+                      ),
+                    })
+                  }
+                >
+                  {selFront.open > 0.5 ? 'Zamknij front' : 'Otwórz front'}
+                </button>
+                <button onClick={() => enterInterior(active)}>Wejdź do wnętrza →</button>
+              </>
+            )}
+
+            {selElement && (
+              <>
+                <button onClick={() => patchElement(selElement.id, { holes: !selElement.holes })}>
                   {selElement.holes ? 'Usuń otwory' : 'Wiercenie (32 mm)'}
                 </button>
                 <div className="bubble-row2">
-                  <button onClick={() => patchElement(selCabinet.id, selElement.id, { y: selElement.y + 32 })}>
-                    ↑ Wyżej
-                  </button>
-                  <button
-                    onClick={() =>
-                      patchElement(selCabinet.id, selElement.id, { y: Math.max(0, selElement.y - 32) })
-                    }
-                  >
+                  <button onClick={() => patchElement(selElement.id, { y: selElement.y + 32 })}>↑ Wyżej</button>
+                  <button onClick={() => patchElement(selElement.id, { y: Math.max(0, selElement.y - 32) })}>
                     ↓ Niżej
                   </button>
                 </div>
-                <div className="bubble-colors">
-                  {COLORS.map((col) => (
-                    <button
-                      key={col}
-                      className="dot"
-                      style={{ background: col }}
-                      onClick={() => patchElement(selCabinet.id, selElement.id, { color: col })}
-                    />
-                  ))}
-                </div>
+                <button onClick={() => enterInterior(active, selElement.y)}>Kamera do szuflady</button>
                 {(selElement.kind === 'drawer' ||
                   selElement.kind === 'innerDrawer' ||
                   selElement.kind === 'drawerSystem') && (
                   <button onClick={() => setOrgFor(selElement.id)}>🧩 Pojemniki…</button>
                 )}
-                <button className="danger" onClick={() => removeElement(selCabinet.id, selElement.id)}>
-                  Usuń element
-                </button>
+                <div className="bubble-colors">
+                  {COLORS.map((col) => (
+                    <button
+                      key={col}
+                      className="dot"
+                      style={{ background: col }}
+                      onClick={() => patchElement(selElement.id, { color: col })}
+                    />
+                  ))}
+                </div>
+                <button className="danger" onClick={() => removeElement(selElement.id)}>Usuń element</button>
               </>
-            ) : (
+            )}
+
+            {!selElement && !selFront && (
               <>
                 <div className="bubble-row">
                   <label>Szer.</label>
                   <input
                     type="range" min={300} max={1200} step={10}
-                    value={selCabinet.width}
-                    onChange={(e) => patchCabinet(selCabinet.id, { width: +e.target.value })}
+                    value={active.width}
+                    onChange={(e) => {
+                      const w = +e.target.value;
+                      const next = { ...active, width: w };
+                      patchCabinet(active.id, {
+                        width: w,
+                        fronts: active.fronts.length ? makeDoors(next, active.fronts.length) : [],
+                      });
+                    }}
                   />
-                  <span className="val">{selCabinet.width}</span>
+                  <span className="val">{active.width}</span>
                 </div>
                 <div className="bubble-row">
                   <label>Głęb.</label>
                   <input
                     type="range" min={300} max={650} step={10}
-                    value={selCabinet.depth}
-                    onChange={(e) => patchCabinet(selCabinet.id, { depth: +e.target.value })}
+                    value={active.depth}
+                    onChange={(e) => patchCabinet(active.id, { depth: +e.target.value })}
                   />
-                  <span className="val">{selCabinet.depth}</span>
+                  <span className="val">{active.depth}</span>
                 </div>
                 <div className="bubble-row">
                   <label>Fronty</label>
                   <input
                     type="range" min={0} max={3} step={1}
-                    value={selCabinet.doors}
-                    onChange={(e) => patchCabinet(selCabinet.id, { doors: +e.target.value })}
+                    value={active.fronts.length}
+                    onChange={(e) => patchCabinet(active.id, { fronts: makeDoors(active, +e.target.value) })}
                   />
-                  <span className="val">{selCabinet.doors}</span>
+                  <span className="val">{active.fronts.length}</span>
                 </div>
                 <div className="bubble-colors">
                   {COLORS.map((col) => (
@@ -346,14 +393,15 @@ export default function App() {
                       key={col}
                       className="dot"
                       style={{ background: col }}
-                      onClick={() => patchCabinet(selCabinet.id, { color: col })}
+                      onClick={() => patchCabinet(active.id, { color: col })}
                     />
                   ))}
                 </div>
+                <button onClick={() => enterInterior(active)}>Otwórz i wejdź do wnętrza</button>
                 <button
                   onClick={() =>
                     setCabinets((cs) => {
-                      const c = cs.find((x) => x.id === selCabinet.id);
+                      const c = cs.find((x) => x.id === active.id);
                       if (!c) return cs;
                       const nx = snapX(cs, c);
                       return cs.map((x) => (x.id === c.id ? { ...x, x: nx } : x));
@@ -365,7 +413,7 @@ export default function App() {
                 <button
                   className="danger"
                   onClick={() => {
-                    setCabinets((cs) => cs.filter((c) => c.id !== selCabinet.id));
+                    setCabinets((cs) => cs.filter((c) => c.id !== active.id));
                     setSelection(null);
                   }}
                 >
@@ -377,68 +425,56 @@ export default function App() {
         )}
       </div>
 
-      {mode === 'scene' && (
-        <div className="panel">
-          <label className="import-btn">
-            📂 Wczytaj skan (.e57 / .ply)
-            <input
-              type="file"
-              accept=".e57,.ply"
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) importCloud(f);
-                e.target.value = '';
-              }}
-            />
-          </label>
-        </div>
-      )}
-
-      {mode === 'design' && libOpen && (
+      {tab === 'layout' ? (
         <div className="library">
+          {LIBRARY_GROUPS.map((g) => (
+            <div className="lib-section" key={g}>
+              <div className="lib-title">{g}</div>
+              <div className="lib-items">
+                {byGroup(g).map((t) => (
+                  <div key={t.key} className="lib-item" onClick={() => addCabinet(t)}>
+                    {t.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="library">
+          <div className="lib-section">
+            <div className="lib-title">Elementy wnętrza → {active?.name}</div>
+            <div className="lib-items">
+              {ELEMENT_TEMPLATES.map((t) => (
+                <div key={t.key} className="lib-item" onClick={() => addElement(t)}>
+                  {t.label}
+                </div>
+              ))}
+            </div>
+          </div>
           <div className="lib-section">
             <div className="lib-title">Szafki</div>
             <div className="lib-items">
-              {CABINET_TEMPLATES.map((t) => (
-                <div key={t.key} className="lib-item" onClick={() => addCabinet(t)}>
-                  {t.label}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="lib-section">
-            <div className="lib-title">
-              Elementy {selCabinet ? `→ ${selCabinet.name}` : '(kliknij szafkę)'}
-            </div>
-            <div className="lib-items">
-              {ELEMENT_TEMPLATES.map((t) => (
+              {cabinets.map((c) => (
                 <div
-                  key={t.key}
-                  className={`lib-item ${selCabinet ? '' : 'dim'}`}
-                  onClick={() => selCabinet && addElement(selCabinet, t)}
+                  key={c.id}
+                  className={`lib-item ${c.id === active?.id ? 'sel' : ''}`}
+                  onClick={() => enterInterior(c)}
                 >
-                  {t.label}
+                  {c.name}
                 </div>
               ))}
             </div>
           </div>
-          <button className="lib-toggle" onClick={() => setLibOpen(false)}>▾</button>
         </div>
       )}
-      {mode === 'design' && !libOpen && (
-        <button className="lib-open" onClick={() => setLibOpen(true)}>Biblioteka ▴</button>
-      )}
 
-      {orgFor && selCabinet && selElement && (
+      {orgFor && active && selElement && (
         <OrganizerPanel
-          innerW={selCabinet.width - 40}
-          innerD={selCabinet.depth - 60}
-          layout={
-            selElement.organizer ??
-            makeLayout(selCabinet.width - 40, selCabinet.depth - 60, 50)
-          }
-          onChange={(l) => patchElement(selCabinet.id, selElement.id, { organizer: l })}
+          innerW={innerWidth(active) - 20}
+          innerD={innerDepth(active) - 30}
+          layout={selElement.organizer ?? makeLayout(innerWidth(active) - 20, innerDepth(active) - 30, 50)}
+          onChange={(l) => patchElement(selElement.id, { organizer: l })}
           onClose={() => setOrgFor(null)}
         />
       )}

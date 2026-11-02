@@ -1,6 +1,11 @@
 /**
  * Model danych projektanta szafek — wszystko w MILIMETRACH.
  * Renderer przelicza mm → metry (skala sceny = metry, zgodnie z chmurą X9).
+ *
+ * Wymiary bazowe wg standardu europejskiego (bezramowe):
+ *  - szafka dolna: korpus 720 mm, głębokość 560 mm, cokół 100–150 mm, blat 38 mm
+ *  - szafka górna: głębokość 350 mm, wysokość 360–864 mm
+ *  - słupek: głębokość 561 mm, wysokość 2016–2232 mm
  */
 
 export type CabinetType = 'base' | 'wall' | 'tall';
@@ -14,6 +19,22 @@ export type ElementKind =
   | 'cornerBasket'
   | 'cutlery';
 
+/** Front szafki: drzwi (skrzydłowe) albo front szuflady. */
+export interface Front {
+  id: string;
+  kind: 'door' | 'drawer';
+  /** mm w układzie korpusu */
+  x0: number;
+  x1: number;
+  /** dolna i górna krawędź (mm od podłogi) */
+  y0: number;
+  y1: number;
+  /** stopień otwarcia 0..1 (do animacji podglądu wnętrza) */
+  open: number;
+  /** powiązany element wnętrza (szuflada) */
+  elementId?: string;
+}
+
 export interface CabinetElement {
   id: string;
   kind: ElementKind;
@@ -22,13 +43,13 @@ export interface CabinetElement {
   /** Zakres poziomy w świetle korpusu (mm od lewej wewnętrznej ściany). */
   x0: number;
   x1: number;
-  /** kolor nadpisany przez użytkownika (hex) */
   color?: string;
-  /** wariant systemu szuflad / kosza itp. */
+  /** wariant systemu szuflad (2/3/4) lub wysokości Blum (N/M/K) */
   variant?: string;
-  /** wiercenie / otwory montażowe (rysowane jako walce) */
   holes?: boolean;
-  /** układ pojemników w szufladzie (tylko dla kind 'drawer' / 'innerDrawer' / 'drawerSystem') */
+  /** stopień wysunięcia szuflady 0..1 */
+  open?: number;
+  /** układ pojemników (tylko szuflady) */
   organizer?: import('./organizer').OrganizerLayout;
 }
 
@@ -46,9 +67,12 @@ export interface Cabinet {
   /** obrót w stopniach: 0 / 90 / 180 / 270 */
   rotation: number;
   elements: CabinetElement[];
+  fronts: Front[];
   color?: string;
-  /** liczba frontów (0 = otwarta, bez frontu) */
-  doors: number;
+  /** cokół (mm) — dolne i słupki */
+  plinth: number;
+  /** czy szafka ma blat */
+  worktop: boolean;
 }
 
 /** Neutralny opis bryły — renderer nie zna pojęcia „szafka". */
@@ -57,28 +81,31 @@ export interface SceneBox {
   kind: 'panel' | ElementKind | 'hole' | 'handle' | 'organizer' | 'front';
   cabinetId: string;
   elementId?: string;
+  frontId?: string;
   /** mm */
   size: [number, number, number];
   /** mm, względem środka szafki na podłodze */
   position: [number, number, number];
   rotationY?: number;
+  rotationZ?: number;
   color?: string;
   shape?: 'box' | 'cylinder';
-  /** przezroczystość 0..1 */
   opacity?: number;
+  /** rysuj kontur krawędzi */
+  outline?: boolean;
 }
 
 export const PANEL = 18;
-export const BACK_PANEL = 8;
+export const BACK_PANEL = 4;
 export const GAP = 3;
-export const PLINTH = 150;
+export const WORKTOP = 38;
 export const HOLE_STEP = 32;
 
 /** Domyślna szafka bazowa — punkt startowy projektu. */
 export function baseCabinet(id = 'cab1', x = 0, z = 0): Cabinet {
-  return {
+  const c: Cabinet = {
     id,
-    name: 'Szafka dolna',
+    name: 'Szafka dolna 600',
     type: 'base',
     width: 600,
     height: 720,
@@ -86,11 +113,62 @@ export function baseCabinet(id = 'cab1', x = 0, z = 0): Cabinet {
     x,
     z,
     rotation: 0,
-    doors: 1,
     elements: [],
+    fronts: [],
+    plinth: 150,
+    worktop: true,
   };
+  c.fronts = makeDoors(c, 1);
+  return c;
 }
 
-export function newElement(kind: ElementKind, id: string, y = 0, x0 = 0, x1 = 0): CabinetElement {
-  return { id, kind, y, x0, x1 };
+/** Dwa skrzydła / jedno skrzydło — liczone w świetle korpusu. */
+export function makeDoors(c: Cabinet, count: number): Front[] {
+  if (count <= 0) return [];
+  const y0 = c.type === 'base' ? c.plinth + GAP : GAP;
+  const y1 = c.type === 'base' ? c.plinth + c.height - GAP : c.height - GAP;
+  const w = (c.width - GAP * (count + 1)) / count;
+  const out: Front[] = [];
+  for (let i = 0; i < count; i++) {
+    const x0 = GAP + i * (w + GAP);
+    out.push({
+      id: `${c.id}-d${i}`,
+      kind: 'door',
+      x0,
+      x1: x0 + w,
+      y0,
+      y1,
+      open: 0,
+    });
+  }
+  return out;
+}
+
+/**
+ * Fronty szuflad — n frontów ułożonych od góry (typowy układ Blum).
+ * Wysokości dobierane wg systemu (LEGRABOX: M 90,5 / K 128,5 / C 177 mm).
+ */
+export function makeDrawerFronts(c: Cabinet, heights: number[], elementIds: string[] = []): Front[] {
+  const top = c.type === 'base' ? c.plinth + c.height - GAP : c.height - GAP;
+  const bottom = c.type === 'base' ? c.plinth + GAP : GAP;
+  const total = top - bottom;
+  const sum = heights.reduce((a, b) => a + b, 0) || total;
+  const scale = total / sum;
+  const out: Front[] = [];
+  let y = top;
+  heights.forEach((h, i) => {
+    const hh = h * scale;
+    out.push({
+      id: `${c.id}-f${i}`,
+      kind: 'drawer',
+      x0: GAP,
+      x1: c.width - GAP,
+      y0: y - hh,
+      y1: y,
+      open: 0,
+      elementId: elementIds[i],
+    });
+    y -= hh;
+  });
+  return out;
 }

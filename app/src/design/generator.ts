@@ -2,35 +2,41 @@ import {
   BACK_PANEL,
   GAP,
   PANEL,
-  PLINTH,
+  WORKTOP,
   type Cabinet,
   type CabinetElement,
+  type Front,
   type SceneBox,
 } from './types';
 import { organizerBoxes } from './organizer';
 
 /**
- * Generator geometrii: szafka + elementy → lista brył (mm).
- * Deterministyczny, bez zależności od silnika graficznego.
- * Wszystkie bryły opisane w układzie szafki; renderer dokłada pozycję szafki.
+ * Generator geometrii wg realnej konstrukcji bezramowej (EU):
+ * boki pełne (na całą wysokość korpusu), dno i wieniec między bokami,
+ * plecy 4 mm wpuszczone, blat 38 mm z nawisem, cokół wpuszczony.
+ * Wszystko w mm, deterministycznie, bez zależności od silnika.
  */
 
-const D = PANEL; // grubość płyty
+const D = PANEL;
 
-/** Wewnętrzna szerokość korpusu (światło) w mm. */
+export function bodyBottom(c: Cabinet) {
+  return c.type === 'base' ? c.plinth : 0;
+}
 export function innerWidth(c: Cabinet) {
   return c.width - 2 * D;
 }
-
-/** Wewnętrzna wysokość: dolna szafka ma cokół, górna nie. */
 export function innerHeight(c: Cabinet) {
-  const plinth = c.type === 'base' ? PLINTH : 0;
-  return c.height - plinth - 2 * D;
+  return c.height - 2 * D;
+}
+export function innerDepth(c: Cabinet) {
+  return c.depth - BACK_PANEL;
 }
 
-/** Dolna krawędź korpusu nad podłogą (cokół). */
-export function bodyBottom(c: Cabinet) {
-  return c.type === 'base' ? PLINTH : 0;
+/** Głębokość nominalna szuflady wg szeregu Blum (NL). */
+export function drawerNL(c: Cabinet) {
+  const nl = [270, 300, 350, 400, 450, 500, 550, 600, 650];
+  const usable = innerDepth(c) - 30;
+  return nl.filter((n) => n <= usable).pop() ?? 270;
 }
 
 export function buildCabinet(c: Cabinet): SceneBox[] {
@@ -38,7 +44,7 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
   const W = c.width;
   const H = c.height;
   const Dp = c.depth;
-  const plinth = c.type === 'base' ? PLINTH : 0;
+  const plinth = c.type === 'base' ? c.plinth : 0;
   const bodyH = H - plinth;
   const bodyY = plinth;
 
@@ -55,47 +61,33 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
       size,
       position,
       color: c.color,
+      outline: true,
       ...extra,
     });
   };
 
-  // --- cokół (wpuszczony o 40 mm z przodu) ---
+  // --- cokół (wpuszczony 50 mm) ---
   if (plinth > 0) {
-    push('panel', [W - 20, plinth, Dp - 40], [0, plinth / 2, -20]);
+    push('panel', [W - 20, plinth, Dp - 50], [0, plinth / 2, -25]);
   }
 
-  // --- boki ---
+  // --- boki: pełna wysokość i głębokość ---
   push('panel', [D, bodyH, Dp], [-(W - D) / 2, bodyY + bodyH / 2, 0]);
   push('panel', [D, bodyH, Dp], [(W - D) / 2, bodyY + bodyH / 2, 0]);
 
-  // --- spód i wieniec ---
+  // --- dno i wieniec między bokami ---
   push('panel', [W - 2 * D, D, Dp], [0, bodyY + D / 2, 0]);
   push('panel', [W - 2 * D, D, Dp], [0, bodyY + bodyH - D / 2, 0]);
 
-  // --- plecy (HDF) ---
+  // --- plecy 4 mm wpuszczone ---
   push('panel', [W - 2 * D, bodyH - 2 * D, BACK_PANEL], [0, bodyY + bodyH / 2, -(Dp - BACK_PANEL) / 2], {
-    opacity: 0.85,
+    opacity: 0.9,
+    outline: false,
   });
 
-  // --- blat (tylko dolne i słupki) ---
-  if (c.type !== 'wall') {
-    push('panel', [W + 20, 38, Dp + 20], [0, H + 19, 10]);
-  }
-
-  // --- fronty (drzwi) ---
-  if (c.doors > 0) {
-    const frontH = bodyH - 2 * GAP;
-    const frontW = (W - GAP * (c.doors + 1)) / c.doors;
-    for (let i = 0; i < c.doors; i++) {
-      const x = -(W - GAP) / 2 + GAP + frontW / 2 + i * (frontW + GAP);
-      push('front', [frontW, frontH, D], [x, bodyY + bodyH / 2, Dp / 2 + GAP + D / 2], {
-        color: c.color ?? '#b08968',
-      });
-      // uchwyt
-      push('handle', [128, 12, 12], [x, bodyY + bodyH - 70, Dp / 2 + GAP + D + 6], {
-        color: '#8a8f98',
-      });
-    }
+  // --- blat 38 mm z nawisem ---
+  if (c.worktop && c.type !== 'wall') {
+    push('panel', [W + 40, WORKTOP, Dp + 40], [0, H + WORKTOP / 2, 20]);
   }
 
   // --- elementy wnętrza ---
@@ -103,7 +95,65 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
     boxes.push(...buildElement(c, el));
   }
 
+  // --- fronty (otwierane) ---
+  for (const f of c.fronts) {
+    boxes.push(...buildFront(c, f));
+  }
+
   return boxes;
+}
+
+/** Drzwi obracają się wokół zawiasu, front szuflady wysuwa się do przodu. */
+function buildFront(c: Cabinet, f: Front): SceneBox[] {
+  const out: SceneBox[] = [];
+  const w = f.x1 - f.x0;
+  const h = f.y1 - f.y0;
+  const cx = f.x0 + w / 2 - c.width / 2;
+  const cy = (f.y0 + f.y1) / 2;
+  const zFront = c.depth / 2 + GAP + D / 2;
+  const color = c.color ?? '#b08968';
+
+  const add = (
+    kind: SceneBox['kind'],
+    size: [number, number, number],
+    pos: [number, number, number],
+    extra: Partial<SceneBox> = {},
+  ) =>
+    out.push({
+      id: `${f.id}:${kind}:${out.length}`,
+      kind,
+      cabinetId: c.id,
+      frontId: f.id,
+      size,
+      position: pos,
+      color,
+      outline: true,
+      ...extra,
+    });
+
+  if (f.kind === 'door') {
+    // zawias po lewej stronie frontu; obrót wokół krawędzi
+    const hingeX = f.x0 - c.width / 2;
+    const angle = (f.open ?? 0) * (Math.PI / 2.2);
+    const dx = cx - hingeX;
+    const rx = hingeX + dx * Math.cos(angle);
+    const rz = zFront + dx * Math.sin(angle);
+    add('front', [w, h, D], [rx, cy, rz], {
+      rotationY: (angle * 180) / Math.PI,
+    });
+    // uchwyt przy krawędzi przeciwnej do zawiasu
+    const hx = w / 2 - 40;
+    add('handle', [120, 12, 12], [
+      rx + hx * Math.cos(angle),
+      f.y1 - 70,
+      rz + hx * Math.sin(angle) + 12,
+    ], { rotationY: (angle * 180) / Math.PI, color: '#8a8f98' });
+  } else {
+    const slide = (f.open ?? 0) * drawerNL(c) * 0.9;
+    add('front', [w, h, D], [cx, cy, zFront + slide]);
+    add('handle', [120, 12, 12], [cx, f.y1 - 30, zFront + slide + 12], { color: '#8a8f98' });
+  }
+  return out;
 }
 
 function buildElement(c: Cabinet, el: CabinetElement): SceneBox[] {
@@ -114,9 +164,15 @@ function buildElement(c: Cabinet, el: CabinetElement): SceneBox[] {
   const spanX = el.x1 > el.x0 ? el.x1 - el.x0 : innerW;
   const x0 = el.x1 > el.x0 ? el.x0 : 0;
   const cx = -(innerW / 2) + x0 + spanX / 2;
-  const depthInner = c.depth - D - 10;
+  const depthInner = innerDepth(c) - 10;
   const color = el.color ?? c.color;
-  const add = (kind: SceneBox['kind'], size: [number, number, number], pos: [number, number, number], extra: Partial<SceneBox> = {}) =>
+
+  const add = (
+    kind: SceneBox['kind'],
+    size: [number, number, number],
+    pos: [number, number, number],
+    extra: Partial<SceneBox> = {},
+  ) =>
     out.push({
       id: `${el.id}:${kind}:${out.length}`,
       kind,
@@ -125,8 +181,11 @@ function buildElement(c: Cabinet, el: CabinetElement): SceneBox[] {
       size,
       position: pos,
       color,
+      outline: true,
       ...extra,
     });
+
+  const slide = (el.open ?? 0) * drawerNL(c) * 0.9;
 
   switch (el.kind) {
     case 'shelf': {
@@ -138,21 +197,22 @@ function buildElement(c: Cabinet, el: CabinetElement): SceneBox[] {
       add('divider', [D, h, depthInner], [cx, y + h / 2, 0]);
       break;
     }
-    case 'drawer': {
-      const h = 140;
-      // dno szuflady + 4 boki
-      add('drawer', [spanX - 20, D, depthInner - 20], [cx, y, 0], { opacity: 0.95 });
-      add('drawer', [spanX - 20, 90, D], [cx, y + 45, -(depthInner - 20) / 2 + D / 2]);
-      add('drawer', [D, 90, depthInner - 20], [cx - (spanX - 20) / 2 + D / 2, y + 45, 0]);
-      add('drawer', [D, 90, depthInner - 20], [cx + (spanX - 20) / 2 - D / 2, y + 45, 0]);
-      // front szuflady
-      add('handle', [spanX - 6, h, D], [cx, y + h / 2, c.depth / 2 + GAP + D / 2]);
-      add('handle', [128, 12, 12], [cx, y + h - 25, c.depth / 2 + GAP + D + 6], { color: '#8a8f98' });
-      // pojemniki w szufladzie
+    case 'drawer':
+    case 'innerDrawer': {
+      // wysokość boku wg systemu Blum: N 66,5 / M 90,5 / K 128,5
+      const sideH = el.variant === 'N' ? 66.5 : el.variant === 'K' ? 128.5 : 90.5;
+      const nl = drawerNL(c);
+      const w = spanX - 20;
+      const d = nl - 20;
+      const z = -depthInner / 2 + d / 2 + slide;
+      add(el.kind, [w, D, d], [cx, y + D / 2, z], { opacity: 0.95 });
+      // boki metalowe 12,8 mm (jak LEGRABOX)
+      add(el.kind, [12.8, sideH, d], [cx - w / 2 + 6.4, y + D + sideH / 2, z], { color: '#9aa3ae' });
+      add(el.kind, [12.8, sideH, d], [cx + w / 2 - 6.4, y + D + sideH / 2, z], { color: '#9aa3ae' });
+      add(el.kind, [w, sideH, 16], [cx, y + D + sideH / 2, z - d / 2 + 8], { color: '#9aa3ae' });
       if (el.organizer?.items.length) {
-        const boxes = organizerBoxes(el.organizer, spanX - 20, depthInner - 20, el.color);
-        for (const b of boxes) {
-          add('organizer', b.size, [cx + b.pos[0], y + D / 2 + b.pos[1], b.pos[2]], {
+        for (const b of organizerBoxes(el.organizer, w - 30, d - 30, el.color)) {
+          add('organizer', b.size, [cx + b.pos[0], y + D + b.pos[1], z + b.pos[2]], {
             color: b.color,
             opacity: b.opacity,
           });
@@ -160,48 +220,48 @@ function buildElement(c: Cabinet, el: CabinetElement): SceneBox[] {
       }
       break;
     }
-    case 'innerDrawer': {
-      add('innerDrawer', [spanX - 20, D, depthInner - 40], [cx, y, -10], { opacity: 0.95 });
-      add('innerDrawer', [spanX - 20, 70, D], [cx, y + 35, -(depthInner - 40) / 2 + D / 2], {});
-      break;
-    }
     case 'drawerSystem': {
-      // system szuflad: 3 szuflady o równych wysokościach w świetle
-      const total = innerHeight(c) - el.y - 20;
       const n = el.variant === '2' ? 2 : el.variant === '4' ? 4 : 3;
+      const total = innerHeight(c) - el.y - 10;
       const gapY = 6;
       const h = (total - gapY * (n - 1)) / n;
+      const nl = drawerNL(c);
+      const w = spanX - 16;
+      const d = nl - 20;
       for (let i = 0; i < n; i++) {
-        const yy = y + i * (h + gapY) + h / 2;
-        add('drawerSystem', [spanX - 10, h - 20, depthInner - 30], [cx, yy, 0], { opacity: 0.95 });
-        add('handle', [spanX - 6, h - 8, D], [cx, yy, c.depth / 2 + GAP + D / 2]);
-        add('handle', [140, 12, 12], [cx, yy + h / 2 - 30, c.depth / 2 + GAP + D + 6], { color: '#8a8f98' });
+        const yy = y + i * (h + gapY);
+        const sideH = Math.min(h - 20, 128.5);
+        const z = -depthInner / 2 + d / 2;
+        add('drawerSystem', [w, D, d], [cx, yy + D / 2, z], { opacity: 0.95 });
+        add('drawerSystem', [12.8, sideH, d], [cx - w / 2 + 6.4, yy + D + sideH / 2, z], { color: '#9aa3ae' });
+        add('drawerSystem', [12.8, sideH, d], [cx + w / 2 - 6.4, yy + D + sideH / 2, z], { color: '#9aa3ae' });
       }
       break;
     }
     case 'cornerBasket': {
-      // kosz narożny: dwa półkola obrócone o 90°
-      const r = Math.min(spanX, depthInner) / 2;
+      const r = Math.min(spanX, depthInner) * 0.45;
       add('cornerBasket', [r * 2, 110, r * 2], [cx, y + 55, 0], { shape: 'cylinder', opacity: 0.9 });
       break;
     }
     case 'cutlery': {
-      // wkład na sztućce: płaska taca z przegrodami
       add('cutlery', [spanX - 40, 40, depthInner - 80], [cx, y + 20, 0], { opacity: 0.9 });
       for (let i = 1; i < 4; i++) {
         add('cutlery', [D, 40, depthInner - 80], [cx - (spanX - 40) / 2 + ((spanX - 40) / 4) * i, y + 20, 0], {
           opacity: 0.8,
+          outline: false,
         });
       }
       break;
     }
   }
 
-  // otwory montażowe (system 32 mm) — tylko gdy włączone
   if (el.holes) {
     const rows = Math.floor(spanX / 32);
     for (let i = 0; i < rows; i++) {
-      add('hole', [8, 13, 8], [cx - spanX / 2 + 16 + i * 32, y + 60, depthInner / 2], { shape: 'cylinder' });
+      add('hole', [8, 13, 8], [cx - spanX / 2 + 16 + i * 32, y + 60, depthInner / 2], {
+        shape: 'cylinder',
+        outline: false,
+      });
     }
   }
 

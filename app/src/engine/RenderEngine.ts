@@ -36,10 +36,17 @@ export interface RenderEngine {
   pickAt?(clientX: number, clientY: number): {
     cabinetId?: string;
     elementId?: string;
+    frontId?: string;
     kind?: string;
     screen: { x: number; y: number };
     point: [number, number, number];
   } | null;
+  /** kamera do wnętrza: przed szafkę albo do szuflady */
+  frameInterior?(
+    cabinet: { x: number; z: number; width: number; height: number; depth: number; rotation: number },
+    view: 'front' | 'drawer',
+    elementY?: number,
+  ): void;
   highlightElement?(elementId: string | null): void;
   disposeDesign?(): void;
   getDebugInfo?(): Record<string, unknown>;

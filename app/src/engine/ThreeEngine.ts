@@ -242,6 +242,43 @@ export class ThreeEngine implements RenderEngine {
     this.controls.update();
   }
 
+  /**
+   * Kamera do wnętrza: 'front' = przed szafką (widok na otwarty front),
+   * 'drawer' = z góry do wybranej szuflady. Współrzędne w mm.
+   */
+  frameInterior(
+    cabinet: { x: number; z: number; width: number; height: number; depth: number; rotation: number },
+    view: 'front' | 'drawer',
+    elementY?: number,
+  ) {
+    if (!this.camera || !this.controls) return;
+    const mm = 0.001;
+    const rad = (cabinet.rotation * Math.PI) / 180;
+    const cx = cabinet.x * mm;
+    const cz = cabinet.z * mm;
+    const W = cabinet.width * mm;
+    const H = cabinet.height * mm;
+    const D = cabinet.depth * mm;
+    const halfY = (elementY ?? 0) * mm;
+
+    const local =
+      view === 'front'
+        ? new THREE.Vector3(0, H * 0.62, D * 1.75)
+        : new THREE.Vector3(0, H * (elementY ? 1 : 0.95) + 0.25, D * 0.42);
+    // obrót wokół osi szafki
+    const wx = cx + local.x * Math.cos(rad) + local.z * Math.sin(rad);
+    const wz = cz - local.x * Math.sin(rad) + local.z * Math.cos(rad);
+
+    this.camera.position.set(wx, local.y + (view === 'drawer' ? halfY * 0.15 : 0), wz);
+    this.controls.target.set(
+      cx,
+      view === 'drawer' ? H * 0.45 + halfY : H * 0.45,
+      cz,
+    );
+    void W;
+    this.controls.update();
+  }
+
   /** Buduje/podmienia całą scenę z listy brył (mm → metry). */
   renderBoxes(boxes: import('./RenderEngine').SceneBox[], cabinetsOrigin: { x: number; z: number } = { x: 0, z: 0 }) {
     if (!this.scene) throw new Error('Engine not initialized');
@@ -276,10 +313,32 @@ export class ThreeEngine implements RenderEngine {
         (b.position[2] + cabinetsOrigin.z) * mm,
       );
       if (b.rotationY) mesh.rotation.y = (b.rotationY * Math.PI) / 180;
-      mesh.userData = { cabinetId: b.cabinetId, elementId: b.elementId, kind: b.kind, boxId: b.id };
+      mesh.userData = {
+        cabinetId: b.cabinetId,
+        elementId: b.elementId,
+        frontId: b.frontId,
+        kind: b.kind,
+        boxId: b.id,
+      };
       mesh.castShadow = false;
       mesh.receiveShadow = false;
       this.designGroup.add(mesh);
+
+      // kontur krawędzi — czytelność bryły (panel/front), pomijany dla drobnych elementów
+      if (b.outline && b.kind !== 'hole' && b.kind !== 'handle') {
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(geom, 25),
+          new THREE.LineBasicMaterial({
+            color: b.kind === 'front' ? 0x2a2f38 : 0x1b2027,
+            transparent: true,
+            opacity: b.kind === 'front' ? 0.55 : 0.75,
+          }),
+        );
+        edges.position.copy(mesh.position);
+        edges.rotation.copy(mesh.rotation);
+        edges.userData = { cabinetId: b.cabinetId, elementId: b.elementId, kind: 'outline' };
+        this.designGroup.add(edges);
+      }
     }
     this.renderer!.render(this.scene, this.camera!);
   }
@@ -294,27 +353,22 @@ export class ThreeEngine implements RenderEngine {
     );
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, this.camera);
-    const hits = ray.intersectObjects(this.designGroup.children, false);
+    const meshes = this.designGroup.children.filter((o) => (o as THREE.Mesh).isMesh);
+    const hits = ray.intersectObjects(meshes, false);
     if (!hits.length) return null;
-    // pomiń fronty, jeśli pod nimi jest element wnętrza (klik ma trafiać w środek)
-    const solid = hits.find((h) => {
-      const k = (h.object.userData as { kind?: string }).kind;
-      const hasElement = (h.object.userData as { elementId?: string }).elementId;
-      return k !== 'front' || hasElement;
-    });
-    const hit = solid ?? hits[0];
-    if (!hit) return null;
-    const ud = hit.object.userData as {
+    const ud = hits[0].object.userData as {
       cabinetId?: string;
       elementId?: string;
+      frontId?: string;
       kind?: string;
     };
     return {
       cabinetId: ud.cabinetId,
       elementId: ud.elementId,
+      frontId: ud.frontId,
       kind: ud.kind,
       screen: { x: clientX, y: clientY },
-      point: hit.point.toArray() as [number, number, number],
+      point: hits[0].point.toArray() as [number, number, number],
     };
   }
 
