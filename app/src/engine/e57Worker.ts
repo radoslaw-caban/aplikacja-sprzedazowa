@@ -29,6 +29,9 @@ self.onmessage = async (e: MessageEvent) => {
     (self as unknown as Worker).postMessage(msg, transfer);
 
   try {
+    // e57-js sprawdza `typeof window` aby wybrać ścieżkę przeglądarkową zamiast
+    // Node/NODEFS — w Workerze `window` nie istnieje, więc podstawiamy self.
+    (self as unknown as { window: unknown }).window = self;
     const base = import.meta.env.BASE_URL || '/';
     // dekoder WASM serwowany statycznie z /e57js/
     const mod = await import(/* @vite-ignore */ `${base}e57js/index.browser.mjs`);
