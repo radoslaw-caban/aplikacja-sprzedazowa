@@ -76,7 +76,51 @@ SketchUp 2025/2026 → File → Export → glTF/GLB → wrzucić GLB do
 `assets/models/` → push → widoczne w aplikacji. Potwierdzone przez użytkownika
 jako akceptowalna ścieżka równoległa.
 
-## 4. Docelowy scenariusz sprzedażowy (etap 5)
+## 5. Parametryczne szafki (kolejny etap)
+
+**Model docelowy:** szafki z pliku .skp (komponenty CabinetSense) są **tylko dawcami układu** —
+dostarczają topologię (podział na sekcje, liczba frontów/szuflad, proporcje, kolejność elementów).
+Nie skalujemy geometrii z GLB. Zamiast tego budujemy **własną bazę parametryczną** w nowym
+środowisku: szafka = zestaw parametrów → generowana geometria (panele korpusu, fronty, blat, cokół).
+
+### Parametry szafki (v1)
+```ts
+interface CabinetParams {
+  id: string;
+  type: 'base' | 'wall' | 'tall' | 'corner';   // dolna / górna / słupek / narożna
+  width: number;    // mm
+  height: number;   // mm
+  depth: number;    // mm
+  sections: CabinetSection[];                  // podział na sekcje (kolumny)
+  plinth: number;        // cokół, mm
+  worktop: number;       // blat, mm (0 = brak)
+  panelThickness: number; // grubość płyty, mm (domyślnie 18)
+  material: string;      // np. 'dab-natur', 'bialy-mat'
+}
+
+interface CabinetSection {
+  kind: 'door' | 'drawers' | 'open' | 'sink' | 'oven';
+  doors?: number;      // liczba frontów przy 'door'
+  drawers?: number;    // liczba szuflad przy 'drawers'
+  widthRatio: number;  // udział w szerokości szafki (suma = 1)
+}
+```
+
+### Generowanie geometrii
+- Korpus: 2 boki, spód, wieniec, plecy — prostopadłościany z `panelThickness`.
+- Fronty: panele o wymiarach wynikających z podziału sekcji, z 3 mm szczeliną.
+- Blat i cokół: panele pełnej szerokości/głębokości wg parametrów.
+- Wszystko jako `THREE.Group` z nazwanymi częściami — gotowe do edycji i wyceny.
+- Katalog z `CabinetParams` = baza szafek (JSON), niezależna od SketchUp/CabinetSense.
+
+### Kolejność prac
+1. [x] Import GLB + gizmo na chmurę punktów
+2. [ ] Parser .skp → ekstrakcja nazw komponentów i wymiarów (dawcy układu)
+3. [ ] Generator parametryczny jednej szafki (typ + wymiary + sekcje)
+4. [ ] Baza szafek (JSON) + UI wyboru i wstawiania do sceny
+5. [ ] Zapis/odczyt projektu i zrzut do oferty PDF
+
+## 6. Docelowy scenariusz sprzedażowy
 
 1. Skan X9 realnej kuchni klienta (.e57) → import do aplikacji
 2. Projekt CabinetSense (.skp → GLB) → nałożenie na chmurę
