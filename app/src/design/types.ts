@@ -28,6 +28,8 @@ export interface CabinetElement {
   variant?: string;
   /** wiercenie / otwory montażowe (rysowane jako walce) */
   holes?: boolean;
+  /** układ pojemników w szufladzie (tylko dla kind 'drawer' / 'innerDrawer' / 'drawerSystem') */
+  organizer?: import('./organizer').OrganizerLayout;
 }
 
 export interface Cabinet {
@@ -52,7 +54,7 @@ export interface Cabinet {
 /** Neutralny opis bryły — renderer nie zna pojęcia „szafka". */
 export interface SceneBox {
   id: string;
-  kind: 'panel' | ElementKind | 'hole' | 'handle';
+  kind: 'panel' | ElementKind | 'hole' | 'handle' | 'organizer' | 'front';
   cabinetId: string;
   elementId?: string;
   /** mm */

@@ -259,12 +259,15 @@ export class ThreeEngine implements RenderEngine {
           : new THREE.BoxGeometry(sx * mm, sy * mm, sz * mm);
       const baseColor = new THREE.Color(b.color ?? '#c9a06a');
       const isPanel = b.kind === 'panel';
+      const isFront = b.kind === 'front';
       const mat = new THREE.MeshStandardMaterial({
         color: baseColor,
         roughness: isPanel ? 0.65 : 0.45,
         metalness: b.kind === 'handle' ? 0.6 : 0.05,
-        transparent: (b.opacity ?? 1) < 1,
-        opacity: b.opacity ?? 1,
+        // fronty półprzezroczyste — widać wnętrze (i da się w nie kliknąć)
+        transparent: isFront || (b.opacity ?? 1) < 1,
+        opacity: isFront ? 0.35 : b.opacity ?? 1,
+        depthWrite: !isFront,
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(
@@ -293,7 +296,15 @@ export class ThreeEngine implements RenderEngine {
     ray.setFromCamera(ndc, this.camera);
     const hits = ray.intersectObjects(this.designGroup.children, false);
     if (!hits.length) return null;
-    const ud = hits[0].object.userData as {
+    // pomiń fronty, jeśli pod nimi jest element wnętrza (klik ma trafiać w środek)
+    const solid = hits.find((h) => {
+      const k = (h.object.userData as { kind?: string }).kind;
+      const hasElement = (h.object.userData as { elementId?: string }).elementId;
+      return k !== 'front' || hasElement;
+    });
+    const hit = solid ?? hits[0];
+    if (!hit) return null;
+    const ud = hit.object.userData as {
       cabinetId?: string;
       elementId?: string;
       kind?: string;
@@ -303,7 +314,7 @@ export class ThreeEngine implements RenderEngine {
       elementId: ud.elementId,
       kind: ud.kind,
       screen: { x: clientX, y: clientY },
-      point: hits[0].point.toArray() as [number, number, number],
+      point: hit.point.toArray() as [number, number, number],
     };
   }
 

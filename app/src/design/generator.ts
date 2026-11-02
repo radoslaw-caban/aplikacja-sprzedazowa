@@ -7,6 +7,7 @@ import {
   type CabinetElement,
   type SceneBox,
 } from './types';
+import { organizerBoxes } from './organizer';
 
 /**
  * Generator geometrii: szafka + elementy → lista brył (mm).
@@ -87,7 +88,7 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
     const frontW = (W - GAP * (c.doors + 1)) / c.doors;
     for (let i = 0; i < c.doors; i++) {
       const x = -(W - GAP) / 2 + GAP + frontW / 2 + i * (frontW + GAP);
-      push('handle', [frontW, frontH, D], [x, bodyY + bodyH / 2, Dp / 2 + GAP + D / 2], {
+      push('front', [frontW, frontH, D], [x, bodyY + bodyH / 2, Dp / 2 + GAP + D / 2], {
         color: c.color ?? '#b08968',
       });
       // uchwyt
@@ -147,6 +148,16 @@ function buildElement(c: Cabinet, el: CabinetElement): SceneBox[] {
       // front szuflady
       add('handle', [spanX - 6, h, D], [cx, y + h / 2, c.depth / 2 + GAP + D / 2]);
       add('handle', [128, 12, 12], [cx, y + h - 25, c.depth / 2 + GAP + D + 6], { color: '#8a8f98' });
+      // pojemniki w szufladzie
+      if (el.organizer?.items.length) {
+        const boxes = organizerBoxes(el.organizer, spanX - 20, depthInner - 20, el.color);
+        for (const b of boxes) {
+          add('organizer', b.size, [cx + b.pos[0], y + D / 2 + b.pos[1], b.pos[2]], {
+            color: b.color,
+            opacity: b.opacity,
+          });
+        }
+      }
       break;
     }
     case 'innerDrawer': {

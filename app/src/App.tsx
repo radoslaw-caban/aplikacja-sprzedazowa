@@ -13,6 +13,8 @@ import {
   type ElementTemplate,
 } from './design/library';
 import { baseCabinet, type Cabinet } from './design/types';
+import OrganizerPanel from './ui/OrganizerPanel';
+import { makeLayout } from './design/organizer';
 import './App.css';
 
 const CLOUD_URL = `${import.meta.env.BASE_URL}dom-chmura.ply`;
@@ -37,6 +39,7 @@ export default function App() {
   const [cabinets, setCabinets] = useState<Cabinet[]>(() => [baseCabinet('cab1', 300, 0)]);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [libOpen, setLibOpen] = useState(true);
+  const [orgFor, setOrgFor] = useState<string | null>(null);
 
   // ---- silnik ----
   useEffect(() => {
@@ -299,6 +302,11 @@ export default function App() {
                     />
                   ))}
                 </div>
+                {(selElement.kind === 'drawer' ||
+                  selElement.kind === 'innerDrawer' ||
+                  selElement.kind === 'drawerSystem') && (
+                  <button onClick={() => setOrgFor(selElement.id)}>🧩 Pojemniki…</button>
+                )}
                 <button className="danger" onClick={() => removeElement(selCabinet.id, selElement.id)}>
                   Usuń element
                 </button>
@@ -420,6 +428,19 @@ export default function App() {
       )}
       {mode === 'design' && !libOpen && (
         <button className="lib-open" onClick={() => setLibOpen(true)}>Biblioteka ▴</button>
+      )}
+
+      {orgFor && selCabinet && selElement && (
+        <OrganizerPanel
+          innerW={selCabinet.width - 40}
+          innerD={selCabinet.depth - 60}
+          layout={
+            selElement.organizer ??
+            makeLayout(selCabinet.width - 40, selCabinet.depth - 60, 50)
+          }
+          onChange={(l) => patchElement(selCabinet.id, selElement.id, { organizer: l })}
+          onClose={() => setOrgFor(null)}
+        />
       )}
     </div>
   );
