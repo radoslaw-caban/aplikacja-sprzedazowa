@@ -23,6 +23,8 @@ export class ThreeEngine implements RenderEngine {
   private pointCloud?: THREE.Points;
   private gizmo?: TransformControls;
   private designGroup = new THREE.Group();
+  private roomGroup = new THREE.Group();
+  private guideGroup = new THREE.Group();
   private config: ProductConfig = {};
   /** mnożnik oddalenia kamery (z ustawień programu) */
   private distanceMul = 1;
@@ -53,6 +55,8 @@ export class ThreeEngine implements RenderEngine {
     this.controls.enableDamping = true;
     this.controls.autoRotateSpeed = 2.0;
     this.scene.add(this.designGroup);
+    this.scene.add(this.roomGroup);
+    this.scene.add(this.guideGroup);
 
     this.resize();
     window.addEventListener('resize', this.resize);
@@ -311,6 +315,100 @@ export class ThreeEngine implements RenderEngine {
     );
     void W;
     this.controls.update();
+  }
+
+  /** Renderuje pomieszczenie testowe (podłoga, ściany, okno, drzwi). */
+  renderRoom(boxes: import('./RenderEngine').RoomBox[], visible = true) {
+    if (!this.scene) throw new Error('Engine not initialized');
+    for (const o of [...this.roomGroup.children]) {
+      o.removeFromParent();
+      const m = o as THREE.Mesh;
+      m.geometry?.dispose?.();
+    }
+    this.roomGroup.visible = visible;
+    if (!visible) {
+      this.renderer?.render(this.scene, this.camera!);
+      return;
+    }
+    const mm = 0.001;
+    for (const b of boxes) {
+      const geom = new THREE.BoxGeometry(b.size[0] * mm, b.size[1] * mm, b.size[2] * mm);
+      const mat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(b.color),
+        roughness: b.kind === 'window' ? 0.1 : b.kind === 'floor' ? 0.75 : 0.9,
+        metalness: b.kind === 'window' ? 0.1 : 0,
+        transparent: (b.opacity ?? 1) < 1,
+        opacity: b.opacity ?? 1,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.set(b.position[0] * mm, b.position[1] * mm, b.position[2] * mm);
+      mesh.userData = { kind: 'room-' + b.kind };
+      this.roomGroup.add(mesh);
+    }
+    this.renderer?.render(this.scene, this.camera!);
+  }
+
+  /** Punkt na podłodze (y=0) pod kursorem — do przesuwania szafek. */
+  screenToFloor(clientX: number, clientY: number): { x: number; z: number } | null {
+    if (!this.renderer || !this.camera) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, this.camera);
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hit = new THREE.Vector3();
+    if (!ray.ray.intersectPlane(plane, hit)) return null;
+    return { x: hit.x * 1000, z: hit.z * 1000 }; // mm
+  }
+
+  /** Rysuje linie dociągania (pomocnicze) na podłodze. */
+  drawGuides(guides: { axis: 'x' | 'z'; value: number; from: number; to: number }[]) {
+    if (!this.scene) return;
+    for (const o of [...this.guideGroup.children]) {
+      o.removeFromParent();
+      (o as THREE.LineSegments).geometry?.dispose?.();
+    }
+    const mm = 0.001;
+    for (const g of guides) {
+      const pts: THREE.Vector3[] = [];
+      if (g.axis === 'x') {
+        pts.push(new THREE.Vector3(g.value * mm, 0.005, g.from * mm));
+        pts.push(new THREE.Vector3(g.value * mm, 0.005, g.to * mm));
+      } else {
+        pts.push(new THREE.Vector3(g.from * mm, 0.005, g.value * mm));
+        pts.push(new THREE.Vector3(g.to * mm, 0.005, g.value * mm));
+      }
+      const geom = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(
+        geom,
+        new THREE.LineBasicMaterial({ color: 0xc9a227, transparent: true, opacity: 0.9 }),
+      );
+      this.guideGroup.add(line);
+    }
+  }
+
+  clearGuides() {
+    for (const o of [...this.guideGroup.children]) {
+      o.removeFromParent();
+      (o as THREE.LineSegments).geometry?.dispose?.();
+    }
+  }
+
+  /** Podświetla całą szafkę (zaznaczenie). */
+  highlightCabinet(cabinetId: string | null) {
+    for (const o of this.designGroup.children) {
+      if (!(o as THREE.Mesh).isMesh) continue;
+      const m = o as THREE.Mesh;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      if (!mat || !mat.emissive) continue;
+      const on = cabinetId !== null && m.userData.cabinetId === cabinetId;
+      mat.emissive.setHex(on ? 0x2a3a55 : 0x000000);
+      mat.emissiveIntensity = on ? 1 : 0;
+    }
   }
 
   /** Buduje/podmienia całą scenę z listy brył (mm → metry). */

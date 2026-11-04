@@ -35,6 +35,30 @@ export interface Front {
   elementId?: string;
 }
 
+/** Kształt wycięcia. */
+export type CutoutShape = 'circle' | 'rect' | 'socket1' | 'socket2';
+
+/** Wycięcie / otwór / kieszeń (frez pod LED) w szafce. */
+export interface Cutout {
+  id: string;
+  shape: CutoutShape;
+  /** w co wchodzi wycięcie */
+  target: 'front' | 'top' | 'bottom' | 'sideL' | 'sideR' | 'element';
+  /** gdy target = 'element' */
+  elementId?: string;
+  /** pozycja w mm w układzie szafki (x od lewej, y od dołu korpusu, z od frontu) */
+  x: number;
+  y: number;
+  z: number;
+  /** prostokąt: szerokość; koło/gniazdo: średnica */
+  w: number;
+  h: number;
+  /** głębokość wycięcia; 0 = na przelot */
+  depth: number;
+  /** kieszeń (nieprzelotowa, np. frez pod LED) */
+  pocket: boolean;
+}
+
 export interface CabinetElement {
   id: string;
   kind: ElementKind;
@@ -68,6 +92,7 @@ export interface Cabinet {
   rotation: number;
   elements: CabinetElement[];
   fronts: Front[];
+  cutouts: Cutout[];
   color?: string;
   /** cokół (mm) — dolne i słupki */
   plinth: number;
@@ -78,7 +103,7 @@ export interface Cabinet {
 /** Neutralny opis bryły — renderer nie zna pojęcia „szafka". */
 export interface SceneBox {
   id: string;
-  kind: 'panel' | ElementKind | 'hole' | 'handle' | 'organizer' | 'front';
+  kind: 'panel' | ElementKind | 'hole' | 'handle' | 'organizer' | 'front' | 'cutout';
   cabinetId: string;
   elementId?: string;
   frontId?: string;
@@ -115,6 +140,7 @@ export function baseCabinet(id = 'cab1', x = 0, z = 0): Cabinet {
     rotation: 0,
     elements: [],
     fronts: [],
+    cutouts: [],
     plinth: 150,
     worktop: true,
   };

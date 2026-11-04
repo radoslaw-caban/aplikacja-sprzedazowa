@@ -100,7 +100,46 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
     boxes.push(...buildFront(c, f));
   }
 
+  // --- wycięcia / otwory / kieszenie ---
+  for (const cut of c.cutouts ?? []) {
+    boxes.push(...buildCutout(c, cut));
+  }
+
   return boxes;
+}
+
+/**
+ * Wycięcie: koło / prostokąt / gniazdo — kieszeń (nieprzelotowa) albo na wylot.
+ * Rysowane jako ciemniejsza bryła w miejscu wycięcia (wizualizacja frezowania).
+ */
+function buildCutout(c: Cabinet, cut: import('./types').Cutout): SceneBox[] {
+  const out: SceneBox[] = [];
+  const isCircle = cut.shape === 'circle' || cut.shape === 'socket1' || cut.shape === 'socket2';
+  const w = cut.shape === 'socket2' ? cut.w * 1.8 : cut.w;
+  const d = cut.depth > 0 ? cut.depth : 18;
+
+  // płaszczyzna wycięcia zależy od targetu
+  const zFront = c.depth / 2 + GAP + D / 2;
+  const yBase = c.type === 'base' ? c.plinth : 0;
+
+  let pos: [number, number, number];
+  if (cut.target === 'front') pos = [cut.x - c.width / 2, yBase + cut.y, zFront];
+  else if (cut.target === 'top') pos = [cut.x - c.width / 2, yBase + c.height - D / 2, cut.z];
+  else if (cut.target === 'bottom') pos = [cut.x - c.width / 2, yBase + D / 2, cut.z];
+  else pos = [cut.x - c.width / 2, yBase + cut.y, cut.z];
+
+  out.push({
+    id: `${c.id}:cutout:${cut.id}`,
+    kind: 'cutout',
+    cabinetId: c.id,
+    size: isCircle ? [w, cut.h, d] : [w, cut.h, d],
+    position: pos,
+    shape: isCircle ? 'cylinder' : 'box',
+    color: cut.pocket ? '#1a1d22' : '#0a0c0f',
+    opacity: cut.pocket ? 0.95 : 1,
+    outline: false,
+  });
+  return out;
 }
 
 /** Drzwi obracają się wokół zawiasu, front szuflady wysuwa się do przodu. */

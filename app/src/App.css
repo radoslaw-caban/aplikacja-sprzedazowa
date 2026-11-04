@@ -334,3 +334,56 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
   font-family: ui-monospace, monospace;
 }
 .keys-key.capture { border-color: #c9a227; background: #201c10; color: #c9a227; }
+
+/* ---- panel inspekcji (prawa strona) ---- */
+.inspect {
+  position: absolute; right: 12px; top: 12px; width: 232px; z-index: 12;
+  background: #0f1318ee; border: 1px solid #2a3240; border-radius: 12px;
+  padding: 10px; display: flex; flex-direction: column; gap: 7px;
+  box-shadow: 0 12px 34px #000a; max-height: calc(100% - 24px); overflow-y: auto;
+}
+.inspect-title {
+  font-size: .8rem; font-weight: 600; color: #e8eaed;
+  padding-bottom: 6px; border-bottom: 1px solid #232b36;
+}
+.inspect button {
+  padding: 7px 10px; border-radius: 8px; background: #1c2128; color: #d3d8de;
+  border: 1px solid #2a313a; font-size: .75rem; cursor: pointer; text-align: left;
+}
+.inspect button:hover { border-color: #c9a227; }
+.inspect button.danger { color: #f87171; border-color: #4a2a2a; }
+.inspect-sel {
+  flex: 1; background: #141a21; color: #d3d8de; border: 1px solid #2a313a;
+  border-radius: 7px; padding: 5px; font-size: .72rem;
+}
+
+/* ---- menu wycięć ---- */
+.cut-menu {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 70;
+  width: 320px; background: #0f1318f5; border: 1px solid #2a3240;
+  border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 24px 60px #000c; backdrop-filter: blur(6px);
+}
+.cut-title { font-size: .88rem; font-weight: 600; color: #e8eaed; margin-bottom: 2px; }
+.cut-shapes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cut-shape {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 6px 2px; border-radius: 9px; background: #151a21;
+  border: 1px solid #262d36; cursor: pointer; color: #9aa3ae; font-size: .62rem;
+}
+.cut-shape.on { border-color: #c9a227; background: #201c10; color: #fff; }
+.cut-row { display: flex; align-items: center; gap: 8px; font-size: .75rem; color: #9aa3ae; }
+.cut-row label { width: 52px; }
+.cut-row input {
+  flex: 1; background: #141a21; border: 1px solid #2a313a; border-radius: 7px;
+  padding: 6px 8px; color: #e8eaed; font-size: .78rem;
+}
+.cut-hint { font-size: .68rem; color: #6b7280; }
+.cut-add {
+  padding: 9px; border-radius: 9px; background: #14251c; color: #4ade80;
+  border: 1px solid #2a4a35; cursor: pointer; font-size: .78rem;
+}
+.cut-menu button { font-family: inherit; }
+.cut-menu button.danger { color: #f87171; background: #2a1a1a; border: 1px solid #4a2a2a; border-radius: 9px; padding: 8px; }
+.cut-menu > button { padding: 8px; border-radius: 9px; background: #1c2128; color: #d3d8de; border: 1px solid #2a313a; cursor: pointer; font-size: .78rem; }
+.sb-add { color: #c9a227; }

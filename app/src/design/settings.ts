@@ -31,6 +31,8 @@ export const ACTIONS: ActionDef[] = [
   { id: 'view.drawer', label: 'Kamera do szuflady', module: 'interior', defaultKey: 'h' },
   { id: 'library.toggle', label: 'Pokaż/ukryj bibliotekę', module: 'global', defaultKey: 'b' },
   { id: 'element.delete', label: 'Usuń wybrany element', module: 'global', defaultKey: 'x' },
+  { id: 'cutout', label: 'Dodaj wycięcie…', module: 'interior', defaultKey: 'v' },
+  { id: 'cabinet.move', label: 'Tryb przesuwania szafek', module: 'layout', defaultKey: 'm' },
   { id: 'cloud.toggle', label: 'Pokaż/ukryj skan', module: 'global', defaultKey: 'c' },
 ];
 

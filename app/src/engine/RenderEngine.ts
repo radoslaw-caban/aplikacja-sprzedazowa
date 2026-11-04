@@ -54,6 +54,14 @@ export interface RenderEngine {
     autoRotate?: boolean;
     frontsVisible?: boolean;
   }): void;
+  /** pomieszczenie testowe */
+  renderRoom?(boxes: import('../design/room').RoomBox[], visible?: boolean): void;
+  /** punkt na podłodze pod kursorem (mm) */
+  screenToFloor?(clientX: number, clientY: number): { x: number; z: number } | null;
+  /** linie dociągania */
+  drawGuides?(guides: { axis: 'x' | 'z'; value: number; from: number; to: number }[]): void;
+  clearGuides?(): void;
+  highlightCabinet?(cabinetId: string | null): void;
   highlightElement?(elementId: string | null): void;
   disposeDesign?(): void;
   getDebugInfo?(): Record<string, unknown>;
@@ -71,4 +79,5 @@ export interface PointCloudData {
   bboxMax?: [number, number, number];
 }
 
-export type { SceneBox, ElementKind, CabinetElement, Cabinet } from '../design/types';
+export type { SceneBox, ElementKind, CabinetElement, Cabinet, Cutout } from '../design/types';
+export type { RoomBox } from '../design/room';
