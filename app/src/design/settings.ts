@@ -1,0 +1,112 @@
+/**
+ * Ustawienia programu — jedno źródło prawdy dla:
+ *  - oddalenia kamery we wszystkich widokach
+ *  - widoczności frontów
+ *  - danych klienta
+ *  - skrótów klawiszowych (każda funkcja ma nazwę i edytowalny skrót)
+ * Zapis w localStorage + eksport/import razem z projektem.
+ */
+
+export type Module = 'layout' | 'interior' | 'global';
+
+export interface ActionDef {
+  id: string;
+  label: string;
+  module: Module;
+  defaultKey: string;
+}
+
+/** Rejestr wszystkich funkcji programu — tu dopisuje się nową funkcję. */
+export const ACTIONS: ActionDef[] = [
+  { id: 'tab.layout', label: 'Przejdź do układu', module: 'global', defaultKey: 'q' },
+  { id: 'tab.interior', label: 'Przejdź do wnętrza', module: 'global', defaultKey: 'w' },
+  { id: 'fronts.toggle', label: 'Pokaż/ukryj fronty', module: 'global', defaultKey: 'd' },
+  { id: 'fronts.open', label: 'Otwórz fronty', module: 'interior', defaultKey: 'o' },
+  { id: 'fronts.close', label: 'Zamknij fronty', module: 'interior', defaultKey: 'p' },
+  { id: 'settings.open', label: 'Ustawienia programu', module: 'global', defaultKey: 's' },
+  { id: 'project.save', label: 'Zapisz projekt', module: 'global', defaultKey: 'k' },
+  { id: 'project.load', label: 'Wczytaj projekt', module: 'global', defaultKey: 'l' },
+  { id: 'view.frame', label: 'Kadruj widok', module: 'global', defaultKey: 'f' },
+  { id: 'view.front', label: 'Kamera przed szafkę', module: 'interior', defaultKey: 'g' },
+  { id: 'view.drawer', label: 'Kamera do szuflady', module: 'interior', defaultKey: 'h' },
+  { id: 'library.toggle', label: 'Pokaż/ukryj bibliotekę', module: 'global', defaultKey: 'b' },
+  { id: 'element.delete', label: 'Usuń wybrany element', module: 'global', defaultKey: 'x' },
+  { id: 'cloud.toggle', label: 'Pokaż/ukryj skan', module: 'global', defaultKey: 'c' },
+];
+
+export interface ClientData {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+}
+
+export interface CameraSettings {
+  /** mnożnik oddalenia (0.5 = bliżej, 3 = dalej) */
+  distance: number;
+  fov: number;
+  /** wysokość patrzenia w widoku wnętrza (0..1 wysokości szafki) */
+  interiorHeight: number;
+}
+
+export interface Settings {
+  camera: CameraSettings;
+  showFronts: boolean;
+  autoRotate: boolean;
+  shortcuts: Record<string, string>;
+  client: ClientData;
+}
+
+const KEY = 'aplikacja-sprzedazowa:settings:v1';
+
+export function defaultSettings(): Settings {
+  return {
+    camera: { distance: 1, fov: 45, interiorHeight: 0.45 },
+    showFronts: true,
+    autoRotate: false,
+    shortcuts: Object.fromEntries(ACTIONS.map((a) => [a.id, a.defaultKey])),
+    client: { name: '', phone: '', email: '', address: '', notes: '' },
+  };
+}
+
+export function loadSettings(): Settings {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return defaultSettings();
+    const parsed = JSON.parse(raw) as Partial<Settings>;
+    const base = defaultSettings();
+    return {
+      ...base,
+      ...parsed,
+      camera: { ...base.camera, ...(parsed.camera ?? {}) },
+      client: { ...base.client, ...(parsed.client ?? {}) },
+      shortcuts: { ...base.shortcuts, ...(parsed.shortcuts ?? {}) },
+    };
+  } catch {
+    return defaultSettings();
+  }
+}
+
+export function saveSettings(s: Settings) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(s));
+  } catch {
+    /* prywatny tryb przeglądarki */
+  }
+}
+
+/** Czy zdarzenie klawiatury odpowiada danemu skrótowi. */
+export function matchesKey(e: KeyboardEvent, key: string): boolean {
+  if (!key) return false;
+  const k = key.toLowerCase();
+  const pressed = e.key.toLowerCase();
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  return pressed === k;
+}
+
+/** Nie przechwytuj skrótów, gdy użytkownik pisze w polu. */
+export function isTyping(e: KeyboardEvent): boolean {
+  const t = e.target as HTMLElement | null;
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+}

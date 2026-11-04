@@ -24,6 +24,10 @@ export class ThreeEngine implements RenderEngine {
   private gizmo?: TransformControls;
   private designGroup = new THREE.Group();
   private config: ProductConfig = {};
+  /** mnożnik oddalenia kamery (z ustawień programu) */
+  private distanceMul = 1;
+  private autoRotateDesign = false;
+  private frontsVisible = true;
   /** true, gdy użytkownik ręcznie nadpisuje materiał modelu (demo kolorów) */
   forceColor = false;
 
@@ -229,6 +233,36 @@ export class ThreeEngine implements RenderEngine {
     return box;
   }
 
+  /**
+   * Ustawienia widoku z panelu ustawień: oddalenie (mnożnik), FOV, obrót projektu,
+   * widoczność frontów. Stosowane we wszystkich widokach (układ / wnętrze / szuflada).
+   */
+  setViewSettings(o: { distance?: number; fov?: number; autoRotate?: boolean; frontsVisible?: boolean }) {
+    if (o.distance !== undefined) this.distanceMul = o.distance;
+    if (o.fov !== undefined && this.camera) {
+      this.camera.fov = o.fov;
+      this.camera.updateProjectionMatrix();
+    }
+    if (o.autoRotate !== undefined) {
+      this.autoRotateDesign = o.autoRotate;
+      if (this.controls) this.controls.autoRotate = o.autoRotate;
+      if (this.controls) this.controls.autoRotateSpeed = 0.8;
+    }
+    if (o.frontsVisible !== undefined) this.frontsVisible = o.frontsVisible;
+    // ponowne kadrowanie, żeby oddalenie zadziałało natychmiast
+    if (o.distance !== undefined) {
+      const box = new THREE.Box3().setFromObject(this.designGroup);
+      if (!box.isEmpty()) {
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const radius = (Math.max(size.x, size.y, size.z) * 0.9 || 1) * this.distanceMul;
+        this.camera?.position.set(center.x + radius * 1.1, center.y + radius * 0.55, center.z + radius * 1.4);
+        this.controls?.target.copy(center);
+        this.controls?.update();
+      }
+    }
+  }
+
   /** Ustawia kamerę na projekt (szafki), a nie na chmurę. */
   frameDesign() {
     if (!this.camera || !this.controls) return;
@@ -289,6 +323,8 @@ export class ThreeEngine implements RenderEngine {
     }
     const mm = 0.001;
     for (const b of boxes) {
+      // fronty ukrywane globalnie (klawisz D / ustawienia)
+      if (b.kind === 'front' && !this.frontsVisible) continue;
       const [sx, sy, sz] = b.size;
       const geom =
         b.shape === 'cylinder'
@@ -296,15 +332,13 @@ export class ThreeEngine implements RenderEngine {
           : new THREE.BoxGeometry(sx * mm, sy * mm, sz * mm);
       const baseColor = new THREE.Color(b.color ?? '#c9a06a');
       const isPanel = b.kind === 'panel';
-      const isFront = b.kind === 'front';
       const mat = new THREE.MeshStandardMaterial({
         color: baseColor,
         roughness: isPanel ? 0.65 : 0.45,
         metalness: b.kind === 'handle' ? 0.6 : 0.05,
-        // fronty półprzezroczyste — widać wnętrze (i da się w nie kliknąć)
-        transparent: isFront || (b.opacity ?? 1) < 1,
-        opacity: isFront ? 0.35 : b.opacity ?? 1,
-        depthWrite: !isFront,
+        // fronty PEŁNE (nieprzezroczyste) — widoczność wnętrza zapewnia ich otwieranie
+        transparent: (b.opacity ?? 1) < 1,
+        opacity: b.opacity ?? 1,
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(
@@ -473,10 +507,8 @@ export class ThreeEngine implements RenderEngine {
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
     this.controls?.update();
-    // delikatne "oddychanie" obiektu, gdy model istnieje
-    if (this.model && this.config.autoRotate !== false) {
-      // obrót sceny realizuje OrbitControls.autoRotate
-    }
+    // obrót projektu w tle (z ustawień) — obraca całą grupę szafek
+    if (this.autoRotateDesign) this.designGroup.rotation.y += 0.0035;
     this.renderer?.render(this.scene!, this.camera!);
   };
 }

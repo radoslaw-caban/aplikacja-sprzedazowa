@@ -47,6 +47,13 @@ export interface RenderEngine {
     view: 'front' | 'drawer',
     elementY?: number,
   ): void;
+  /** ustawienia widoku: oddalenie, FOV, obrót projektu, widoczność frontów */
+  setViewSettings?(o: {
+    distance?: number;
+    fov?: number;
+    autoRotate?: boolean;
+    frontsVisible?: boolean;
+  }): void;
   highlightElement?(elementId: string | null): void;
   disposeDesign?(): void;
   getDebugInfo?(): Record<string, unknown>;

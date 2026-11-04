@@ -232,6 +232,40 @@ export const ELEMENT_TEMPLATES: ElementTemplate[] = [
   { key: 'cutlery', label: 'Wkład na sztućce', kind: 'cutlery' },
 ];
 
+/**
+ * Inteligentne dociąganie: szafka trafia do NAJBLIŻSZEGO końca istniejącego mebla
+ * (lewy lub prawy koniec rzędu), a nie na jego koniec z definicji.
+ * Nie ma pojęcia „element zamykający" — mebel jest zbiorem szafek, do którego
+ * nowa szafka dokleja się z wybranej strony. Zwraca pozycję X (mm).
+ */
+export function attachX(
+  cabinets: Cabinet[],
+  moving: Cabinet,
+  side: 'left' | 'right',
+  gapMm = 0,
+): number {
+  const row = cabinets.filter((c) => c.id !== moving.id && Math.abs(c.z - moving.z) < 1);
+  const half = moving.width / 2;
+  if (!row.length) return half;
+
+  const minX = Math.min(...row.map((c) => c.x - c.width / 2));
+  const maxX = Math.max(...row.map((c) => c.x + c.width / 2));
+  return side === 'left' ? minX - gapMm - half : maxX + gapMm + half;
+}
+
+/** Nowa szafka dokleja się do bliższego końca mebla (domyślnie prawy). */
+export function appendToRowBySide(
+  cabinets: Cabinet[],
+  template: CabinetTemplate,
+  side: 'left' | 'right' = 'right',
+  z = 0,
+): Cabinet {
+  const c = template.make();
+  c.z = z;
+  c.x = attachX(cabinets, c, side);
+  return c;
+}
+
 /** Auto-dociąganie w rzędzie — bez szczelin i nakładania. */
 export function snapX(cabinets: Cabinet[], moving: Cabinet, gapMm = 0): number {
   const others = cabinets.filter((c) => c.id !== moving.id && Math.abs(c.z - moving.z) < 1);
