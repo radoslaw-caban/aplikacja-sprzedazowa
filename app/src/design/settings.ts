@@ -64,6 +64,10 @@ export interface Settings {
   precision: number;
   /** wybrany silnik graficzny */
   engine: string;
+  /** blat — osobny obiekt, łączony automatycznie w biegi */
+  worktop: { enabled: boolean; thickness: number; overhang: number; color: string };
+  /** cokół — osobny obiekt, łączony automatycznie, licowany lub cofnięty */
+  plinth: { enabled: boolean; height: number; mode: 'flush' | 'recessed'; setback: number; color: string };
   shortcuts: Record<string, string>;
   client: ClientData;
 }
@@ -78,6 +82,8 @@ export function defaultSettings(): Settings {
     units: 'mm',
     precision: 1,
     engine: 'three',
+    worktop: { enabled: true, thickness: 38, overhang: 20, color: '#3a3f47' },
+    plinth: { enabled: true, height: 150, mode: 'recessed', setback: 40, color: '#22262c' },
     shortcuts: Object.fromEntries(ACTIONS.map((a) => [a.id, a.defaultKey])),
     client: { name: '', phone: '', email: '', address: '', notes: '' },
   };

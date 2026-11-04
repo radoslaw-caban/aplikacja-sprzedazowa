@@ -6,7 +6,6 @@ import { buildCabinet, innerDepth, innerWidth } from './design/generator';
 import {
   ELEMENT_TEMPLATES,
   LIBRARY_GROUPS,
-  appendToRowBySide,
   attachX,
   byGroup,
   summarize,
@@ -17,6 +16,7 @@ import { baseCabinet, makeDoors, type Cabinet, type Cutout } from './design/type
 import { collidesWithCabinets, elementCollides, findFreeY, collectSnapPoints, nearestSnap, snapToLines } from './design/collision';
 import { defaultRoom, roomBoxes, snapToWalls, cornerSnap, type WallSide } from './design/room';
 import { GROUP_LABELS } from './design/library';
+import { computeRuns, worktopBoxes, plinthBoxes } from './design/runs';
 import { stepFromPrecision, toUnit, fromUnit } from './design/units';
 import OrganizerPanel from './ui/OrganizerPanel';
 import SettingsPanel from './ui/SettingsPanel';
@@ -116,26 +116,31 @@ export default function App() {
   }, [settings, cloudVisible]);
 
   // ---- render ----
-  const boxes = useCallback(
-    () =>
-      cabinets.flatMap((c) => {
-        const rad = (c.rotation * Math.PI) / 180;
-        return buildCabinet(c).map((b) => {
-          const x = b.position[0];
-          const z = b.position[2];
-          return {
-            ...b,
-            position: [
-              x * Math.cos(rad) + z * Math.sin(rad) + c.x,
-              b.position[1],
-              -x * Math.sin(rad) + z * Math.cos(rad) + c.z,
-            ] as [number, number, number],
-            rotationY: (b.rotationY ?? 0) + c.rotation,
-          };
-        });
-      }),
-    [cabinets, settings.showFronts],
-  );
+  const boxes = useCallback(() => {
+    const cab = cabinets.flatMap((c) => {
+      const rad = (c.rotation * Math.PI) / 180;
+      return buildCabinet(c).map((b) => {
+        const x = b.position[0];
+        const z = b.position[2];
+        return {
+          ...b,
+          position: [
+            x * Math.cos(rad) + z * Math.sin(rad) + c.x,
+            b.position[1],
+            -x * Math.sin(rad) + z * Math.cos(rad) + c.z,
+          ] as [number, number, number],
+          rotationY: (b.rotationY ?? 0) + c.rotation,
+        };
+      });
+    });
+    // blat i cokół: osobne obiekty łączone w biegi
+    const runs = computeRuns(cabinets);
+    return [
+      ...cab,
+      ...worktopBoxes(runs, settings.worktop),
+      ...plinthBoxes(runs, settings.plinth),
+    ];
+  }, [cabinets, settings.showFronts, settings.worktop, settings.plinth]);
 
   useEffect(() => {
     if (!ready) return;
@@ -280,9 +285,29 @@ export default function App() {
     setCabinets((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
   const addCabinet = (t: CabinetTemplate, side: 'left' | 'right' = 'right') => {
-    const c = appendToRowBySide(cabinets, t, side, 0);
-    const wall = snapToWalls(room, c.width, c.depth, c.x, -room.depth / 2 + c.depth / 2);
-    const placed: Cabinet = { ...c, x: wall.x, z: wall.z, rotation: wall.rotation };
+    const c = t.make();
+    // Punkt odniesienia: zaznaczona szafka, inaczej ostatnia dodana.
+    const ref = cabinets.find((x) => x.id === selectedId) ?? cabinets[cabinets.length - 1];
+
+    if (!ref) {
+      const wall = snapToWalls(room, c.width, c.depth, c.x, -room.depth / 2 + c.depth / 2);
+      const placed: Cabinet = { ...c, x: wall.x, z: wall.z, rotation: wall.rotation };
+      setCabinets([placed]);
+      setSelectedId(placed.id);
+      return;
+    }
+
+    // Dokładamy w tym samym rzędzie co szafka odniesienia (bez szczelin).
+    const alongZ = ref.rotation === 90 || ref.rotation === 270;
+    const sign = side === 'right' ? 1 : -1;
+    const offset = (ref.width + c.width) / 2;
+    const placed: Cabinet = {
+      ...c,
+      rotation: ref.rotation,
+      x: alongZ ? ref.x : ref.x + sign * offset,
+      z: alongZ ? ref.z + sign * offset : ref.z,
+    };
+
     if (collidesWithCabinets(cabinets, placed)) {
       setStatus('Kolizja — brak miejsca');
       return;

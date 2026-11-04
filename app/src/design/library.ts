@@ -19,9 +19,9 @@ import {
 export interface CabinetTemplate {
   key: string;
   label: string;
-  group: 'podblatowe' | 'górne' | 'słupki' | 'specjalne';
+  group: 'podblatowe' | 'stojace' | 'górne' | 'słupki' | 'specjalne';
   /** kategoria decyduje o wymuszonych elementach (blat, cokół) */
-  category: 'podblatowa' | 'wisząca' | 'słupek' | 'specjalna';
+  category: 'podblatowa' | 'wisząca' | 'słupek' | 'stojąca' | 'specjalna';
   width: number;
   make: () => Cabinet;
 }
@@ -196,6 +196,29 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
+    // Szafki stojące wysokie: BEZ blatu, Z cokołem
+    key: 'standing-600', group: 'stojace', category: 'stojąca', label: 'Stojąca 600 (bez blatu)', width: 600,
+    make: () => {
+      const c = baseDoor(600, 2, 'Stojąca 600');
+      c.height = 2016;
+      c.depth = 560;
+      c.plinth = 150;
+      c.worktop = false;
+      c.backGap = 50;
+      return c;
+    },
+  },
+  {
+    key: 'standing-400', group: 'stojace', category: 'stojąca', label: 'Stojąca 400 (bez blatu)', width: 400,
+    make: () => {
+      const c = baseDoor(400, 1, 'Stojąca 400');
+      c.height = 2016;
+      c.plinth = 150;
+      c.worktop = false;
+      return c;
+    },
+  },
+  {
     key: 'open-600', group: 'specjalne', category: 'specjalna', label: 'Dolna 600 / otwarta', width: 600,
     make: () => {
       const c = baseDoor(600, 0, 'Dolna 600 / otwarta');
@@ -206,11 +229,12 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
   },
 ];
 
-export const LIBRARY_GROUPS = ['podblatowe', 'górne', 'słupki', 'specjalne'] as const;
+export const LIBRARY_GROUPS = ['podblatowe', 'stojace', 'górne', 'słupki', 'specjalne'] as const;
 
 /** Etykiety kategorii widoczne w bibliotece. */
 export const GROUP_LABELS: Record<string, string> = {
   podblatowe: 'Szafki podblatowe',
+  stojace: 'Szafki stojące wysokie',
   górne: 'Szafki wiszące',
   słupki: 'Słupki',
   specjalne: 'Specjalne',
@@ -222,6 +246,7 @@ export const GROUP_LABELS: Record<string, string> = {
  */
 export const CATEGORY_RULES = {
   podblatowa: { forcedWorktop: true, forcedPlinth: true },
+  stojąca: { forcedWorktop: false, forcedPlinth: true },
   wisząca: { forcedWorktop: false, forcedPlinth: false },
   słupek: { forcedWorktop: false, forcedPlinth: true },
   specjalna: { forcedWorktop: false, forcedPlinth: false },

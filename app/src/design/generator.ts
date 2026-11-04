@@ -2,7 +2,6 @@ import {
   BACK_PANEL,
   GAP,
   PANEL,
-  WORKTOP,
   type Cabinet,
   type CabinetElement,
   type Front,
@@ -28,8 +27,11 @@ export function innerWidth(c: Cabinet) {
 export function innerHeight(c: Cabinet) {
   return c.height - 2 * D;
 }
+/** Światło w głąb: szafka natywnie ma 500 mm wnętrza (niezależnie od korpusu). */
+export const NATIVE_INTERIOR_DEPTH = 500;
+
 export function innerDepth(c: Cabinet) {
-  return c.depth - BACK_PANEL;
+  return Math.min(NATIVE_INTERIOR_DEPTH, c.depth - BACK_PANEL);
 }
 
 /** Głębokość nominalna szuflady wg szeregu Blum (NL). */
@@ -66,10 +68,7 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
     });
   };
 
-  // --- cokół (wpuszczony 50 mm) ---
-  if (plinth > 0) {
-    push('panel', [W - 20, plinth, Dp - 50], [0, plinth / 2, -25]);
-  }
+  // --- cokół i blat: OSOBNE obiekty (biegi) — renderowane w runs.ts ---
 
   // --- boki: pełna wysokość i głębokość ---
   push('panel', [D, bodyH, Dp], [-(W - D) / 2, bodyY + bodyH / 2, 0]);
@@ -85,10 +84,7 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
     outline: false,
   });
 
-  // --- blat 38 mm z nawisem ---
-  if (c.worktop && c.type !== 'wall') {
-    push('panel', [W + 40, WORKTOP, Dp + 40], [0, H + WORKTOP / 2, 20]);
-  }
+  // --- blat: osobny obiekt w biegu (runs.ts) ---
 
   // --- elementy wnętrza ---
   for (const el of c.elements) {

@@ -25,7 +25,7 @@ export function defaultRoom(): Room {
     wallThickness: 100,
     window: { x: 3400, y: 900, w: 1500, h: 1400, wall: 'north' },
     door: { x: 600, y: 0, w: 900, h: 2100, wall: 'south' },
-    wallGap: 0,
+    wallGap: 50,
   };
 }
 

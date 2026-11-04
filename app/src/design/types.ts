@@ -94,10 +94,12 @@ export interface Cabinet {
   fronts: Front[];
   cutouts: Cutout[];
   color?: string;
-  /** cokół (mm) — dolne i słupki */
+  /** cokół (mm) — dolne i słupki; blat i cokół renderowane są jako osobne biegi */
   plinth: number;
   /** czy szafka ma blat */
   worktop: boolean;
+  /** odsunięcie pleców od ściany (mm) — domyślnie 50 */
+  backGap: number;
 }
 
 /** Neutralny opis bryły — renderer nie zna pojęcia „szafka". */
@@ -143,6 +145,7 @@ export function baseCabinet(id = 'cab1', x = 0, z = 0): Cabinet {
     cutouts: [],
     plinth: 150,
     worktop: true,
+    backGap: 50,
   };
   c.fronts = makeDoors(c, 1);
   return c;

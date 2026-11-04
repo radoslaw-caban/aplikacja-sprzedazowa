@@ -134,6 +134,68 @@ export default function SettingsPanel({ settings, onChange, onClose, onSaveProje
                   Krok edycji: {settings.precision === 4 ? '0,0001' : settings.precision === 3 ? '0,001' : settings.precision === 2 ? '0,01' : settings.precision === 1 ? '0,1' : '1'} {settings.units}
                 </p>
 
+                <h3>Blat (osobny obiekt)</h3>
+                <label className="set-row">
+                  <span>Widoczny</span>
+                  <button
+                    className={settings.worktop.enabled ? 'set-toggle on' : 'set-toggle'}
+                    onClick={() => onChange({ ...settings, worktop: { ...settings.worktop, enabled: !settings.worktop.enabled } })}
+                  >
+                    {settings.worktop.enabled ? 'WŁ' : 'WYŁ'}
+                  </button>
+                </label>
+                <label className="set-row">
+                  <span>Grubość</span>
+                  <input type="range" min={12} max={60} step={1} value={settings.worktop.thickness}
+                    onChange={(e) => onChange({ ...settings, worktop: { ...settings.worktop, thickness: +e.target.value } })} />
+                  <b>{settings.worktop.thickness} mm</b>
+                </label>
+                <label className="set-row">
+                  <span>Nawis</span>
+                  <input type="range" min={0} max={80} step={1} value={settings.worktop.overhang}
+                    onChange={(e) => onChange({ ...settings, worktop: { ...settings.worktop, overhang: +e.target.value } })} />
+                  <b>{settings.worktop.overhang} mm</b>
+                </label>
+                <p className="set-hint">Blaty sąsiadujących szafek łączą się automatycznie w jeden odcinek na bieg.</p>
+
+                <h3>Cokół (osobny obiekt)</h3>
+                <label className="set-row">
+                  <span>Widoczny</span>
+                  <button
+                    className={settings.plinth.enabled ? 'set-toggle on' : 'set-toggle'}
+                    onClick={() => onChange({ ...settings, plinth: { ...settings.plinth, enabled: !settings.plinth.enabled } })}
+                  >
+                    {settings.plinth.enabled ? 'WŁ' : 'WYŁ'}
+                  </button>
+                </label>
+                <label className="set-row">
+                  <span>Wysokość</span>
+                  <input type="range" min={60} max={200} step={5} value={settings.plinth.height}
+                    onChange={(e) => onChange({ ...settings, plinth: { ...settings.plinth, height: +e.target.value } })} />
+                  <b>{settings.plinth.height} mm</b>
+                </label>
+                <label className="set-row">
+                  <span>Położenie</span>
+                  <div className="modes">
+                    <button className={settings.plinth.mode === 'flush' ? 'on' : ''}
+                      onClick={() => onChange({ ...settings, plinth: { ...settings.plinth, mode: 'flush' } })}>
+                      Licowany
+                    </button>
+                    <button className={settings.plinth.mode === 'recessed' ? 'on' : ''}
+                      onClick={() => onChange({ ...settings, plinth: { ...settings.plinth, mode: 'recessed' } })}>
+                      Cofnięty
+                    </button>
+                  </div>
+                </label>
+                <label className="set-row">
+                  <span>Cofnięcie</span>
+                  <input type="range" min={0} max={120} step={5} value={settings.plinth.setback}
+                    disabled={settings.plinth.mode !== 'recessed'}
+                    onChange={(e) => onChange({ ...settings, plinth: { ...settings.plinth, setback: +e.target.value } })} />
+                  <b>{settings.plinth.setback} mm</b>
+                </label>
+                <p className="set-hint">Domyślnie cofnięty 40 mm. Cokoły łączą się automatycznie na całym biegu.</p>
+
                 <h3>Silnik graficzny</h3>
                 <div className="set-actions">
                   {ENGINE_OPTIONS.map((e) => (
