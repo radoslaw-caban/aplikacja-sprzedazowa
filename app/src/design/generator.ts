@@ -49,6 +49,8 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
   const plinth = c.type === 'base' ? c.plinth : 0;
   const bodyH = H - plinth;
   const bodyY = plinth;
+  /** szafki wiszące stoją na wysokości montażu, nie na podłodze */
+  const lift = c.mountHeight ?? 0;
 
   const push = (
     kind: SceneBox['kind'],
@@ -70,6 +72,13 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
 
   // --- cokół i blat: OSOBNE obiekty (biegi) — renderowane w runs.ts ---
 
+  // --- zaślepienie od góry szafki do sufitu (wisząca + filler) ---
+  if (c.topFiller && c.topFiller > 0) {
+    push('panel', [W, c.topFiller, Dp], [0, bodyY + bodyH + c.topFiller / 2 + lift, 0], {
+      color: c.color ?? '#efe9e1',
+    });
+  }
+
   // --- boki: pełna wysokość i głębokość ---
   push('panel', [D, bodyH, Dp], [-(W - D) / 2, bodyY + bodyH / 2, 0]);
   push('panel', [D, bodyH, Dp], [(W - D) / 2, bodyY + bodyH / 2, 0]);
@@ -85,6 +94,9 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
   });
 
   // --- blat: osobny obiekt w biegu (runs.ts) ---
+
+  // przesunięcie szafki wiszącej na wysokość montażu
+  if (lift) for (const b of boxes) b.position[1] += lift;
 
   // --- elementy wnętrza ---
   for (const el of c.elements) {

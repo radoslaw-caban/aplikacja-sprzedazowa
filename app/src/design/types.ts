@@ -100,12 +100,18 @@ export interface Cabinet {
   worktop: boolean;
   /** odsunięcie pleców od ściany (mm) — domyślnie 50 */
   backGap: number;
+  /** wysokość montażu nad podłogą (mm) — dla szafek wiszących */
+  mountHeight?: number;
+  /** szerokość otwartego dojścia (mm) — dla szafek z dojściem */
+  accessWidth?: number;
+  /** wysokość zaślepienia do sufitu (mm) */
+  topFiller?: number;
 }
 
 /** Neutralny opis bryły — renderer nie zna pojęcia „szafka". */
 export interface SceneBox {
   id: string;
-  kind: 'panel' | ElementKind | 'hole' | 'handle' | 'organizer' | 'front' | 'cutout';
+  kind: 'panel' | ElementKind | 'hole' | 'handle' | 'organizer' | 'front' | 'cutout' | 'scene';
   cabinetId: string;
   elementId?: string;
   frontId?: string;

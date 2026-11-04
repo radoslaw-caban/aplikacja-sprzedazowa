@@ -19,9 +19,9 @@ import {
 export interface CabinetTemplate {
   key: string;
   label: string;
-  group: 'podblatowe' | 'stojace' | 'górne' | 'słupki' | 'specjalne';
+  group: 'podblatowe' | 'stojace' | 'górne' | 'słupki' | 'dojscie' | 'specjalne';
   /** kategoria decyduje o wymuszonych elementach (blat, cokół) */
-  category: 'podblatowa' | 'wisząca' | 'słupek' | 'stojąca' | 'specjalna';
+  category: 'podblatowa' | 'wisząca' | 'słupek' | 'stojąca' | 'z dojściem' | 'specjalna';
   width: number;
   make: () => Cabinet;
 }
@@ -106,6 +106,52 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
   },
 
   // ---------- GÓRNE ----------
+  {
+    // Wisząca 60 cm nad blatem + zaślepienie do sufitu
+    key: 'wall-600-filler', group: 'górne', category: 'wisząca', label: 'Wisząca 600 + zaślepka do sufitu', width: 600,
+    make: () => {
+      const c = baseDoor(600, 1, 'Wisząca 600 + zaślepka');
+      c.type = 'wall'; c.height = 720; c.depth = 350; c.worktop = false; c.plinth = 0;
+      c.elements = [el('shelf', 340)];
+      c.fronts = makeDoors(c, 1);
+      // zaślepienie: dodatkowy element od góry szafki do sufitu
+      c.mountHeight = 1500; // 60 cm nad blatem
+      c.topFiller = 480;
+      return c;
+    },
+  },
+  {
+    // Szafka pod umywalkę — montowana pod blatem, bez cokołu z tyłu
+    key: 'sink-600', group: 'górne', category: 'wisząca', label: 'Pod umywalkę 600', width: 600,
+    make: () => {
+      const c = baseDoor(600, 2, 'Pod umywalkę 600');
+      c.type = 'base'; c.height = 720; c.depth = 500; c.plinth = 0; c.worktop = true;
+      c.fronts = [];
+      c.elements = [];
+      return c;
+    },
+  },
+  {
+    // Szafki z dojściem — otwarta wnęka na dojście (np. do licznika, pralki, pionu)
+    key: 'access-600', group: 'dojscie', category: 'z dojściem', label: 'Szafka z dojściem 600', width: 600,
+    make: () => {
+      const c = baseDoor(600, 0, 'Z dojściem 600');
+      c.fronts = [];
+      c.elements = [el('shelf', 340)];
+      c.accessWidth = 600;
+      return c;
+    },
+  },
+  {
+    key: 'access-900', group: 'dojscie', category: 'z dojściem', label: 'Szafka z dojściem 900 (pion/licznik)', width: 900,
+    make: () => {
+      const c = baseDoor(900, 0, 'Z dojściem 900');
+      c.fronts = [];
+      c.elements = [];
+      c.accessWidth = 900;
+      return c;
+    },
+  },
   {
     key: 'wall-400', group: 'górne', category: 'wisząca', label: 'Górna 400', width: 400,
     make: () => {
@@ -229,7 +275,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
   },
 ];
 
-export const LIBRARY_GROUPS = ['podblatowe', 'stojace', 'górne', 'słupki', 'specjalne'] as const;
+export const LIBRARY_GROUPS = ['podblatowe', 'stojace', 'górne', 'słupki', 'dojscie', 'specjalne'] as const;
 
 /** Etykiety kategorii widoczne w bibliotece. */
 export const GROUP_LABELS: Record<string, string> = {
@@ -237,6 +283,7 @@ export const GROUP_LABELS: Record<string, string> = {
   stojace: 'Szafki stojące wysokie',
   górne: 'Szafki wiszące',
   słupki: 'Słupki',
+  dojscie: 'Szafki z dojściem',
   specjalne: 'Specjalne',
 };
 
@@ -249,6 +296,7 @@ export const CATEGORY_RULES = {
   stojąca: { forcedWorktop: false, forcedPlinth: true },
   wisząca: { forcedWorktop: false, forcedPlinth: false },
   słupek: { forcedWorktop: false, forcedPlinth: true },
+  'z dojściem': { forcedWorktop: false, forcedPlinth: true },
   specjalna: { forcedWorktop: false, forcedPlinth: false },
 };
 

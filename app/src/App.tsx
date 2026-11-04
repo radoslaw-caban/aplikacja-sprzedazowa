@@ -17,6 +17,8 @@ import { collidesWithCabinets, elementCollides, findFreeY, collectSnapPoints, ne
 import { defaultRoom, roomBoxes, snapToWalls, cornerSnap, type WallSide } from './design/room';
 import { GROUP_LABELS } from './design/library';
 import { computeRuns, worktopBoxes, plinthBoxes } from './design/runs';
+import { exteriorBoxes } from './design/exterior';
+import RoomDialog, { type RoomDraft } from './ui/RoomDialog';
 import { stepFromPrecision, toUnit, fromUnit } from './design/units';
 import OrganizerPanel from './ui/OrganizerPanel';
 import SettingsPanel from './ui/SettingsPanel';
@@ -51,12 +53,15 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [libOpen, setLibOpen] = useState(true);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
-  const [room] = useState(defaultRoom());
+  const [room, setRoom] = useState(defaultRoom());
+  const [roomDialog, setRoomDialog] = useState(false);
   const [moveMode, setMoveMode] = useState(false);
   const [cornerDir, setCornerDir] = useState<WallSide>('south');
   const [carrying, setCarrying] = useState<string | null>(null);
   const [engineEpoch, setEngineEpoch] = useState(0);
   const [cloudVisible, setCloudVisible] = useState(true);
+  const [exterior, setExterior] = useState(true);
+  const [roof, setRoof] = useState(false);
 
   const active = cabinets.find((c) => c.id === selectedId) ?? undefined;
   const selElement = active?.elements.find((e) => e.id === selectedElement);
@@ -139,8 +144,16 @@ export default function App() {
       ...cab,
       ...worktopBoxes(runs, settings.worktop),
       ...plinthBoxes(runs, settings.plinth),
+      ...(exterior ? exteriorBoxes(room, { roof }) : []),
     ];
-  }, [cabinets, settings.showFronts, settings.worktop, settings.plinth]);
+  }, [cabinets, settings.showFronts, settings.worktop, settings.plinth, exterior, roof, room]);
+
+  // pokój przebudowywany przy zmianie wymiarów / przeznaczenia
+  useEffect(() => {
+    if (!ready) return;
+    engineRef.current?.renderRoom?.(roomBoxes(room), true);
+    engineRef.current?.frameDesign?.();
+  }, [ready, room, engineEpoch]);
 
   useEffect(() => {
     if (!ready) return;
@@ -167,21 +180,16 @@ export default function App() {
     const canvas = canvasRef.current!;
     let down = { x: 0, y: 0, t: 0, moved: false };
 
-    /** Start chwytu: łapiemy za najbliższy narożnik/krawędź/przecięcie. */
+    /** Start chwytu: szafka przykleja się DOKŁADNIE w miejscu kliknięcia. */
     const startCarry = (e: PointerEvent) => {
       const hit = engineRef.current?.pickAt?.(e.clientX, e.clientY);
       const floor = engineRef.current?.screenToFloor?.(e.clientX, e.clientY);
       if (!hit?.cabinetId || !floor) return false;
       const c = cabinets.find((x) => x.id === hit.cabinetId);
       if (!c) return false;
-      const pts = collectSnapPoints(cabinets.filter((x) => x.id !== c.id));
-      const grab = nearestSnap(pts, floor.x, floor.z, 200);
-      // offset: punkt chwytu minus pozycja szafki (żeby trzymała się pod palcem)
-      dragRef.current = {
-        id: c.id,
-        dx: grab ? grab.x - c.x : floor.x - c.x,
-        dz: grab ? grab.z - c.z : floor.z - c.z,
-      };
+      // offset = wektor od środka szafki do punktu kliknięcia.
+      // Bez przyciągania do punktów charakterystycznych — inaczej szafka skacze.
+      dragRef.current = { id: c.id, dx: floor.x - c.x, dz: floor.z - c.z };
       setSelectedId(c.id);
       setCarrying(c.id);
       return true;
@@ -200,35 +208,34 @@ export default function App() {
       if (!drag) return;
       const floor = engineRef.current?.screenToFloor?.(e.clientX, e.clientY);
       if (!floor) return;
-      const rawX = floor.x - drag.dx;
-      const rawZ = floor.z - drag.dz;
       setCabinets((cs) => {
         const c = cs.find((x) => x.id === drag.id);
         if (!c) return cs;
         const pts = collectSnapPoints(cs.filter((x) => x.id !== c.id));
-        // 1) najpierw przyciąganie do punktów charakterystycznych
-        const spot = nearestSnap(pts, rawX, rawZ, 120);
-        let nx = spot ? spot.x - (drag.dx) : rawX;
-        let nz = spot ? spot.z - (drag.dz) : rawZ;
-        // 2) potem prowadnice po liniach
-        const lines = snapToLines(pts, nx, nz, 60);
-        nx = lines.x;
-        nz = lines.z;
-        // 3) ściany pomieszczenia
-        const distToWall = Math.min(
-          Math.abs(nz + room.depth / 2),
-          Math.abs(nz - room.depth / 2),
-          Math.abs(nx + room.width / 2),
-          Math.abs(nx - room.width / 2),
-        );
-        let test: Cabinet = { ...c, x: nx, z: nz };
-        let guides = lines.guides;
-        if (distToWall < 250) {
-          const wall = snapToWalls(room, c.width, c.depth, nx, nz);
-          test = { ...test, ...wall };
-          guides = [];
+        // Punkt chwytu = miejsce pod kursorem; to on się przyciąga, nie środek szafki.
+        let gx = floor.x;
+        let gz = floor.z;
+        const spot = nearestSnap(pts, gx, gz, 140);
+        if (spot) {
+          gx = spot.x;
+          gz = spot.z;
+        } else {
+          const lines = snapToLines(pts, gx, gz, 60);
+          gx = lines.x;
+          gz = lines.z;
         }
-        engineRef.current?.drawGuides?.(guides);
+        let test: Cabinet = { ...c, x: gx - drag.dx, z: gz - drag.dz };
+        // ściana: tylko gdy blisko, i tylko dla osi prostopadłej do ściany
+        const distToWall = Math.min(
+          Math.abs(test.z + room.depth / 2),
+          Math.abs(test.z - room.depth / 2),
+          Math.abs(test.x + room.width / 2),
+          Math.abs(test.x - room.width / 2),
+        );
+        if (distToWall < 250) {
+          const wall = snapToWalls(room, c.width, c.depth, test.x, test.z);
+          test = { ...test, x: wall.x, z: wall.z, rotation: wall.rotation };
+        }
         if (collidesWithCabinets(cs, test)) return cs;
         return cs.map((x) => (x.id === drag.id ? test : x));
       });
@@ -497,6 +504,23 @@ export default function App() {
           >
             ⟳ {settings.autoRotate ? 'Orbita WŁ' : 'Orbita WYŁ'}
           </button>
+          <button className="chip" title="Rysuj pomieszczenie" onClick={() => setRoomDialog(true)}>
+            ▭ Pomieszczenie
+          </button>
+          <button
+            className={`chip ${exterior ? 'on' : ''}`}
+            title="Otoczenie domu (podjazd, kostka, drzewa, dach)"
+            onClick={() => setExterior((v) => !v)}
+          >
+            🏡 Otoczenie {exterior ? 'WŁ' : 'WYŁ'}
+          </button>
+          <button
+            className={`chip ${roof ? 'on' : ''}`}
+            title="Dach — domyślnie ukryty, żeby nie zasłaniał wnętrza"
+            onClick={() => setRoof((v) => !v)}
+          >
+            ⌂ Dach {roof ? 'WŁ' : 'WYŁ'}
+          </button>
           <button
             className={`chip ${moveMode ? 'on' : ''}`}
             title="Tryb przesuwania (M)"
@@ -715,6 +739,25 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {roomDialog && (
+        <RoomDialog
+          initial={{ width: room.width, depth: room.depth, height: room.wallHeight }}
+          onCancel={() => setRoomDialog(false)}
+          onConfirm={(d: RoomDraft) => {
+            setRoom({
+              ...room,
+              width: d.width,
+              depth: d.depth,
+              wallHeight: d.height,
+              purpose: d.purpose,
+              name: d.name,
+            } as never);
+            setRoomDialog(false);
+            setStatus(`Pomieszczenie: ${d.name} · ${(d.width * d.depth / 1e6).toFixed(2)} m² · ${d.purpose}`);
+          }}
+        />
+      )}
 
       {settingsOpen && (
         <SettingsPanel

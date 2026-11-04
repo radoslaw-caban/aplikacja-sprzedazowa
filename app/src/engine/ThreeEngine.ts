@@ -61,6 +61,11 @@ export class ThreeEngine implements RenderEngine {
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
     this.controls.autoRotateSpeed = 2.0;
+    // przybliżanie pod kursorem — model nie wpada w ekran przy zoomie
+    this.controls.zoomToCursor = true;
+    this.controls.minDistance = 0.05;
+    this.controls.maxDistance = 60;
+    this.controls.zoomSpeed = 0.9;
     this.scene.add(this.designGroup);
     this.scene.add(this.roomGroup);
     this.scene.add(this.guideGroup);
@@ -249,6 +254,7 @@ export class ThreeEngine implements RenderEngine {
    * widoczność frontów. Stosowane we wszystkich widokach (układ / wnętrze / szuflada).
    */
   setViewSettings(o: { distance?: number; fov?: number; autoRotate?: boolean; frontsVisible?: boolean }) {
+    const prevDistance = this.distanceMul;
     if (o.distance !== undefined) this.distanceMul = o.distance;
     if (o.fov !== undefined && this.camera) {
       this.camera.fov = o.fov;
@@ -260,24 +266,34 @@ export class ThreeEngine implements RenderEngine {
       if (this.controls) this.controls.autoRotateSpeed = 0.8;
     }
     if (o.frontsVisible !== undefined) this.frontsVisible = o.frontsVisible;
-    // ponowne kadrowanie, żeby oddalenie zadziałało natychmiast
-    if (o.distance !== undefined) {
-      const box = new THREE.Box3().setFromObject(this.designGroup);
-      if (!box.isEmpty()) {
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-        const radius = (Math.max(size.x, size.y, size.z) * 0.9 || 1) * this.distanceMul;
-        this.camera?.position.set(center.x + radius * 1.1, center.y + radius * 0.55, center.z + radius * 1.4);
-        this.controls?.target.copy(center);
-        this.controls?.update();
+    // Kadrowanie TYLKO gdy użytkownik faktycznie zmienił oddalenie —
+    // wcześniej każde odświeżenie sceny przestawiało kamerę ("przyciąganie do elementu").
+    const distanceChanged = o.distance !== undefined && Math.abs(prevDistance - this.distanceMul) > 1e-6;
+    if (distanceChanged) {
+      // zmiana oddalenia = dolly kamery wzdłuż kierunku patrzenia, bez zmiany celu
+      if (this.camera && this.controls) {
+        const target = this.controls.target.clone();
+        const dir = this.camera.position.clone().sub(target);
+        const base = dir.length() / (prevDistance || 1);
+        dir.setLength(base * this.distanceMul);
+        this.camera.position.copy(target).add(dir);
+        this.controls.update();
       }
     }
   }
 
-  /** Ustawia kamerę na projekt (szafki), a nie na chmurę. */
+  /** Ustawia kamerę na PROJEKT (szafki), pomijając otoczenie i pokój. */
   frameDesign() {
     if (!this.camera || !this.controls) return;
-    const box = new THREE.Box3().setFromObject(this.designGroup);
+    const box = new THREE.Box3();
+    // pokój + bryły projektu; otoczenie (trawnik, podjazd, drzewa) pomijamy
+    for (const obj of this.roomGroup.children) box.expandByObject(obj);
+    for (const obj of this.designGroup.children) {
+      if (obj.userData?.kind === 'scene') continue;
+      if (!obj.visible) continue;
+      box.expandByObject(obj);
+    }
+    if (box.isEmpty()) box.setFromObject(this.designGroup);
     if (box.isEmpty()) return;
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
