@@ -71,12 +71,25 @@ export function exteriorBoxes(room: Room, opts: { roof?: boolean } = {}): SceneB
     [W / 2 + 11000, D / 2 + 8500, 7600],
   ];
   trees.forEach(([x, z, h], i) => {
-    // pień
-    out.push(box(`tree-${i}-trunk`, [260, h * 0.5, 260], [x, -170 + h * 0.25, z], '#6b4a30', { shape: 'cylinder', mat: 'wood-dark' }));
-    // korona — trzy cylindry/kule o różnych zieleniach
-    out.push(box(`tree-${i}-crown-a`, [h * 0.46, h * 0.3, h * 0.46], [x, -170 + h * 0.52, z], '#ffffff', { mat: 'foliage', shape: 'sphere' }));
-    out.push(box(`tree-${i}-crown-b`, [h * 0.38, h * 0.26, h * 0.38], [x, -170 + h * 0.7, z], '#e8f5e0', { mat: 'foliage', shape: 'sphere' }));
-    out.push(box(`tree-${i}-crown-c`, [h * 0.26, h * 0.2, h * 0.26], [x, -170 + h * 0.85, z], '#d8efcc', { mat: 'foliage', shape: 'sphere' }));
+    const base = -170;
+    // pień (stożkowy, węższy u góry)
+    out.push(box(`tree-${i}-trunk`, [h * 0.055, h * 0.52, h * 0.055], [x, base + h * 0.26, z], '#5d4430', {
+      shape: 'cylinder', mat: 'wood-dark',
+    }));
+    // korona: kilka nieregularnych brył, żeby nie wyglądała jak kula
+    const blobs: [number, number, number, number, string][] = [
+      [h * 0.52, h * 0.30, h * 0.52, 0.50, '#4f8542'],
+      [h * 0.40, h * 0.26, h * 0.40, 0.66, '#5c9550'],
+      [h * 0.32, h * 0.22, h * 0.32, 0.80, '#6aa55c'],
+      [h * 0.26, h * 0.18, h * 0.26, 0.92, '#79b56a'],
+    ];
+    blobs.forEach(([sx, sy, sz, at, col], k) => {
+      out.push(box(`tree-${i}-crown-${k}`, [sx, sy, sz], [
+        x + (k % 2 ? h * 0.06 : -h * 0.05),
+        base + h * at,
+        z + (k % 3 === 0 ? h * 0.04 : -h * 0.03),
+      ], col, { shape: 'sphere', mat: 'foliage' }));
+    });
   });
 
   // --- dach (opcjonalny: domyślnie off, żeby nie zasłaniał wnętrza) ---
@@ -106,8 +119,10 @@ export function exteriorBoxes(room: Room, opts: { roof?: boolean } = {}): SceneB
     const winW = win.w;
     const winH = win.h;
     const wz = -D / 2 - 40;
+    // ościeżnica
+    out.push(box('win-reveal-top', [winW + 160, 60, 120], [wx, wy + winH / 2 + 60, wz], '#e6e3dc', { mat: 'plaster' }));
     // rama zewnętrzna
-    out.push(box('win-frame', [winW + 120, winH + 120, 80], [wx, wy, wz], '#2f3237'));
+    out.push(box('win-frame', [winW + 120, winH + 120, 80], [wx, wy, wz], '#2f3237', { mat: 'metal' }));
     // szyba
     out.push(box('win-glass', [winW, winH, 24], [wx, wy, wz - 10], '#a8d4e6', { opacity: 0.35, mat: 'glass' }));
     // szprosy: pion + poziom
@@ -121,22 +136,39 @@ export function exteriorBoxes(room: Room, opts: { roof?: boolean } = {}): SceneB
   const dr = room.door;
   if (dr && dr.w > 0) {
     const dx = dr.x - room.width / 2;
-    const dz = D / 2 + 70;
+    const dz = D / 2 + 40;
     const dh = dr.h;
     const drW = dr.w;
-    // ościeżnica
-    out.push(box('door-frame', [drW + 140, dh + 80, 120], [dx, dh / 2, dz], '#3a2a1e'));
-    // skrzydło
-    out.push(box('door-leaf', [drW, dh, 70], [dx, dh / 2, dz + 20], '#6b4a2f', { mat: 'wood-dark' }));
-    // płyciny
-    out.push(box('door-panel-a', [drW - 220, dh * 0.34, 30], [dx, dh * 0.68, dz + 60], '#5d3f27'));
-    out.push(box('door-panel-b', [drW - 220, dh * 0.34, 30], [dx, dh * 0.28, dz + 60], '#5d3f27'));
-    // klamka
-    out.push(box('door-handle', [70, 70, 140], [dx + drW / 2 - 140, dh * 0.46, dz + 90], '#c9a227', { shape: 'cylinder' }));
+
+    // ościeżnica: dwie pionowe opaski + nadproże
+    out.push(box('door-jamb-l', [70, dh + 70, 140], [dx - drW / 2 - 35, dh / 2, dz], '#4a3626', { mat: 'wood-dark' }));
+    out.push(box('door-jamb-r', [70, dh + 70, 140], [dx + drW / 2 + 35, dh / 2, dz], '#4a3626', { mat: 'wood-dark' }));
+    out.push(box('door-head', [drW + 140, 70, 140], [dx, dh + 35, dz], '#4a3626', { mat: 'wood-dark' }));
+
+    // skrzydło z drewna
+    out.push(box('door-leaf', [drW - 10, dh - 10, 60], [dx, dh / 2, dz + 30], '#9c7550', { mat: 'wood' }));
+
+    // płyciny (górna duża, dolna mała)
+    out.push(box('door-panel-top', [drW - 260, dh * 0.46, 22], [dx, dh * 0.64, dz + 62], '#8a6544', { mat: 'wood' }));
+    out.push(box('door-panel-bot', [drW - 260, dh * 0.24, 22], [dx, dh * 0.22, dz + 62], '#8a6544', { mat: 'wood' }));
+
+    // przeszklenie w górnej płycinie
+    out.push(box('door-glass', [drW - 320, dh * 0.3, 14], [dx, dh * 0.68, dz + 70], '#bcdcec', { mat: 'glass', opacity: 0.28 }));
+
+    // klamka: szyld + pochwyt
+    out.push(box('door-rose', [60, 160, 26], [dx + drW / 2 - 130, dh * 0.45, dz + 66], '#8d8d8d', { mat: 'metal' }));
+    out.push(box('door-handle', [22, 22, 90], [dx + drW / 2 - 130, dh * 0.45, dz + 100], '#c9a227', { mat: 'metal', shape: 'cylinder', rotationX: 90 }));
+
+    // próg i schodek
+    out.push(box('door-sill', [drW + 60, 30, 160], [dx, 15, dz], '#9a9a9a'));
+    out.push(box('door-step', [drW + 500, 150, 460], [dx, -75, dz + 300], '#a8a8a8', { mat: 'stone' }));
+
     // daszek nad wejściem
-    out.push(box('porch-canopy', [drW + 900, 90, 1200], [dx, dh + 300, dz + 400], '#5e211d'));
-    // schodek
-    out.push(box('door-step', [drW + 500, 160, 500], [dx, -80, dz + 300], '#a8a8a8'));
+    out.push(box('porch-canopy', [drW + 900, 90, 1100], [dx, dh + 330, dz + 480], '#5e211d', { mat: 'roof' }));
+    out.push(box('porch-lamp', [70, 70, 70], [dx - drW / 2 - 300, dh - 200, dz + 60], '#ffe9c4', {
+      shape: 'sphere', emissive: '#ffe9c4', emissiveIntensity: 3,
+      light: { color: '#ffe4b8', intensity: 1.2, distance: 1600, y: dh - 200 },
+    }));
   }
 
   return out;

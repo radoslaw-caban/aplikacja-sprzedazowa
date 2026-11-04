@@ -211,13 +211,13 @@ function roofTexture(): HTMLCanvasElement {
 function foliageTexture(): HTMLCanvasElement {
   const size = 512;
   const [c, ctx] = canvas(size);
-  ctx.fillStyle = '#2f5527';
+  ctx.fillStyle = '#4a7a3c';
   ctx.fillRect(0, 0, size, size);
   for (let i = 0; i < 2500; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
-    const g = 80 + Math.random() * 110;
-    ctx.fillStyle = `rgba(${25 + Math.random() * 40}, ${g}, ${25 + Math.random() * 40}, .8)`;
+    const g = 110 + Math.random() * 105;
+    ctx.fillStyle = `rgba(${45 + Math.random() * 50}, ${g}, ${35 + Math.random() * 45}, .85)`;
     ctx.beginPath();
     ctx.ellipse(x, y, 2 + Math.random() * 6, 1 + Math.random() * 4, Math.random() * Math.PI, 0, Math.PI * 2);
     ctx.fill();

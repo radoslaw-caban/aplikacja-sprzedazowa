@@ -196,6 +196,25 @@ export default function SettingsPanel({ settings, onChange, onClose, onSaveProje
                 </label>
                 <p className="set-hint">Domyślnie cofnięty 40 mm. Cokoły łączą się automatycznie na całym biegu.</p>
 
+                <h3>Okucia</h3>
+                <label className="set-row">
+                  <span>Poziom detalu</span>
+                  <div className="modes">
+                    <button className={settings.hardwareDetail !== 'full' ? 'on' : ''}
+                      onClick={() => onChange({ ...settings, hardwareDetail: 'basic' })}>
+                      Podstawowy
+                    </button>
+                    <button className={settings.hardwareDetail === 'full' ? 'on' : ''}
+                      onClick={() => onChange({ ...settings, hardwareDetail: 'full' })}>
+                      Pełny
+                    </button>
+                  </div>
+                </label>
+                <p className="set-hint">
+                  Podstawowy: uchwyty + prowadnice. Pełny: dodatkowo zawiasy Blum CLIP top,
+                  nóżki regulowane, wieszaki ścienne i wsporniki półek (więcej brył = wolniejszy render).
+                </p>
+
                 <h3>Silnik graficzny</h3>
                 <div className="set-actions">
                   {ENGINE_OPTIONS.map((e) => (

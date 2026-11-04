@@ -1,19 +1,22 @@
 import {
   baseCabinet,
   makeDoors,
-  makeDrawerFronts,
   type Cabinet,
   type CabinetElement,
   type ElementKind,
 } from './types';
 
 /**
- * Wstępna baza szafek — standardy europejskie (bezramowe).
- * Wymiary wg katalogów producentów:
- *  - dolne: korpus 720 mm, głęb. 560 mm, cokół 100–150, blat 38 mm
- *  - górne: głęb. 350 mm, wys. 360–864 mm
- *  - słupki: głęb. 561 mm, wys. 2016–2232 mm
- *  - szuflady: szereg Blum LEGRABOX (N 66,5 / M 90,5 / K 128,5; NL 270–650)
+ * Baza szafek — standardy europejskie (bezramowe), wymiary z katalogów producentów:
+ *
+ *  PODBLATOWE: korpus 720 mm, głęb. 560 mm, nóżki 100–150, blat 38 → 908 mm
+ *              szerokości 150 / 300 / 400 / 450 / 500 / 600 / 700 / 800 / 900 / 1000 / 1200
+ *  WISZĄCE:    głęb. 350 mm, wys. 575 / 720 / 900 mm
+ *  SŁUPKI:     głęb. 561 mm, korpus 2016 / 2216 mm
+ *  Szuflady:   Blum LEGRABOX N 66,5 / M 90,5 / K 128,5 / C 177
+ *              Blum TANDEMBOX antaro N 68,5 / M 83,6 / K 149 / L 183
+ *              Hettich AvanTech YOU 77 / 101 / 139 / 187 / 251
+ *  Zawiasy:    Blum CLIP top BLUMOTION 71B3550 — kielich Ø 35 × 11,5, kąt 110°
  */
 
 export interface CabinetTemplate {
@@ -23,6 +26,8 @@ export interface CabinetTemplate {
   /** kategoria decyduje o wymuszonych elementach (blat, cokół) */
   category: 'podblatowa' | 'wisząca' | 'słupek' | 'stojąca' | 'z dojściem' | 'specjalna';
   width: number;
+  /** krótki opis do podpowiedzi w bibliotece */
+  hint?: string;
   make: () => Cabinet;
 }
 
@@ -38,104 +43,231 @@ const el = (kind: ElementKind, y: number, variant?: string): CabinetElement => (
   variant,
 });
 
-function baseDoor(width: number, doors: number, name: string): Cabinet {
+// ---------------------------------------------------------------------------
+// Konstruktory
+// ---------------------------------------------------------------------------
+
+function mkBase(width: number, doors: number, name: string, opts: Partial<Cabinet> = {}): Cabinet {
   const c = baseCabinet(uid(), 0, 0);
   c.width = width;
   c.name = name;
   c.fronts = makeDoors(c, doors);
+  Object.assign(c, opts);
   return c;
 }
 
 /** Szafka dolna z szufladami — wysokości frontów wg systemu Blum. */
-function baseDrawers(width: number, heights: number[], name: string): Cabinet {
+function mkDrawers(width: number, heights: number[], name: string): Cabinet {
   const c = baseCabinet(uid(), 0, 0);
   c.width = width;
   c.name = name;
+  c.runner = 'legrabox';
   const els: CabinetElement[] = [];
+  const fronts: Cabinet['fronts'] = [];
   let y = 0;
   for (const h of heights) {
-    els.push(el('drawer', y, h >= 170 ? 'K' : 'M'));
+    els.push(el('drawer', y, h >= 160 ? 'K' : h >= 85 ? 'M' : 'N'));
+    fronts.push({
+      id: `${c.id}-dr${fronts.length}`,
+      kind: 'drawer',
+      x0: 3,
+      x1: width - 3,
+      y0: y,
+      y1: y + h,
+      open: 0,
+    });
     y += h + 6;
   }
   c.elements = els;
-  c.fronts = makeDrawerFronts(c, heights, els.map((e) => e.id));
+  c.fronts = fronts;
   return c;
 }
 
+function mkWall(
+  width: number,
+  doors: number,
+  height: number,
+  name: string,
+  opts: Partial<Cabinet> = {},
+): Cabinet {
+  const c = baseCabinet(uid(), 0, 0);
+  c.width = width;
+  c.name = name;
+  c.type = 'wall';
+  c.height = height;
+  c.depth = 350;
+  c.plinth = 0;
+  c.worktop = false;
+  c.mountHeight = 1500;
+  c.elements = [el('shelf', height * 0.45)];
+  c.fronts = makeDoors(c, doors);
+  Object.assign(c, opts);
+  return c;
+}
+
+function mkTall(width: number, doors: number, height: number, name: string): Cabinet {
+  const c = baseCabinet(uid(), 0, 0);
+  c.width = width;
+  c.name = name;
+  c.type = 'tall';
+  c.height = height;
+  c.depth = 561;
+  c.plinth = 150;
+  c.worktop = false;
+  c.elements = [el('shelf', height * 0.35), el('shelf', height * 0.62)];
+  c.fronts = makeDoors(c, doors);
+  return c;
+}
+
+// ---------------------------------------------------------------------------
+// KATALOG
+// ---------------------------------------------------------------------------
+
 export const CABINET_LIBRARY: CabinetTemplate[] = [
-  // ---------- DOLNE ----------
-  { key: 'base-300', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 300 / 1 front', width: 300, make: () => baseDoor(300, 1, 'Dolna 300') },
-  { key: 'base-400', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 400 / 1 front', width: 400, make: () => baseDoor(400, 1, 'Dolna 400') },
-  { key: 'base-450', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 450 / 1 front', width: 450, make: () => baseDoor(450, 1, 'Dolna 450') },
-  { key: 'base-500', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 500 / 1 front', width: 500, make: () => baseDoor(500, 1, 'Dolna 500') },
-  { key: 'base-600', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / 1 front', width: 600, make: () => baseDoor(600, 1, 'Dolna 600') },
-  { key: 'base-800', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 800 / 2 fronty', width: 800, make: () => baseDoor(800, 2, 'Dolna 800') },
-  { key: 'base-900', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 900 / 2 fronty', width: 900, make: () => baseDoor(900, 2, 'Dolna 900') },
-  { key: 'base-1000', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 1000 / 2 fronty', width: 1000, make: () => baseDoor(1000, 2, 'Dolna 1000') },
-  { key: 'base-1200', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 1200 / 3 fronty', width: 1200, make: () => baseDoor(1200, 3, 'Dolna 1200') },
-
-  { key: 'drawer-600-2', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / 2 szuflady', width: 600, make: () => baseDrawers(600, [280, 280], 'Dolna 600 / 2 szuflady') },
-  { key: 'drawer-600-3', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / 3 szuflady', width: 600, make: () => baseDrawers(600, [220, 220, 220], 'Dolna 600 / 3 szuflady') },
-  { key: 'drawer-600-4', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / 4 szuflady', width: 600, make: () => baseDrawers(600, [176, 176, 176, 176], 'Dolna 600 / 4 szuflady') },
-  { key: 'drawer-800-3', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 800 / 3 szuflady', width: 800, make: () => baseDrawers(800, [220, 220, 220], 'Dolna 800 / 3 szuflady') },
-
+  // ======================= PODBLATOWE =======================
+  { key: 'base-150', group: 'podblatowe', category: 'podblatowa', width: 150, label: 'Dolna 150 (wąska)', hint: 'Pojemnik na wąskie dodatki', make: () => mkBase(150, 1, 'Dolna 150') },
+  { key: 'base-300', group: 'podblatowe', category: 'podblatowa', width: 300, label: 'Dolna 300 / 1 front', hint: 'Standard wąski', make: () => mkBase(300, 1, 'Dolna 300') },
+  { key: 'base-400', group: 'podblatowe', category: 'podblatowa', width: 400, label: 'Dolna 400 / 1 front', hint: 'Standard', make: () => mkBase(400, 1, 'Dolna 400') },
+  { key: 'base-450', group: 'podblatowe', category: 'podblatowa', width: 450, label: 'Dolna 450 / 1 front', hint: 'Standard', make: () => mkBase(450, 1, 'Dolna 450') },
+  { key: 'base-500', group: 'podblatowe', category: 'podblatowa', width: 500, label: 'Dolna 500 / 1 front', hint: 'Standard', make: () => mkBase(500, 1, 'Dolna 500') },
+  { key: 'base-600', group: 'podblatowe', category: 'podblatowa', width: 600, label: 'Dolna 600 / 1 front', hint: 'Moduł podstawowy 600', make: () => mkBase(600, 1, 'Dolna 600') },
   {
-    key: 'sink-800', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 800 / zlew', width: 800,
-    make: () => {
-      const c = baseDoor(800, 2, 'Dolna 800 / zlew');
-      c.elements = [el('shelf', 0)];
+    key: 'base-600-2d', group: 'podblatowe', category: 'podblatowa', width: 600, label: 'Dolna 600 / 2 fronty',
+    hint: 'Dwie półfronty + przegroda', make: () => {
+      const c = mkBase(600, 2, 'Dolna 600 / 2 fronty');
+      c.elements = [el('shelf', 0), el('divider', 0)];
       return c;
     },
   },
+  { key: 'base-600-3dr', group: 'podblatowe', category: 'podblatowa', width: 600, label: 'Dolna 600 / 3 szuflady', hint: 'Blum LEGRABOX M 90,5', make: () => mkDrawers(600, [128, 128, 128], 'Dolna 600 / 3 szuflady') },
+  { key: 'base-600-4dr', group: 'podblatowe', category: 'podblatowa', width: 600, label: 'Dolna 600 / 4 szuflady', hint: 'Blum LEGRABOX N 66,5', make: () => mkDrawers(600, [128, 90, 90, 90], 'Dolna 600 / 4 szuflady') },
   {
-    key: 'hob-600', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / płyta', width: 600,
-    make: () => {
-      const c = baseDoor(600, 1, 'Dolna 600 / płyta');
-      c.elements = [el('drawer', 0, 'K')];
-      return c;
-    },
-  },
-  {
-    key: 'cargo-300', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 300 / cargo', width: 300,
-    make: () => {
-      const c = baseDoor(300, 0, 'Dolna 300 / cargo');
+    key: 'base-600-oven', group: 'podblatowe', category: 'podblatowa', width: 600, label: 'Dolna 600 / piekarnik',
+    hint: 'Nisza piekarnika 595×595 pod blatem', make: () => {
+      const c = mkBase(600, 0, 'Dolna 600 / piekarnik');
       c.fronts = [];
-      c.elements = [el('drawer', 0, 'K'), el('drawer', 350, 'K')];
+      c.elements = [el('shelf', 600)];
+      return c;
+    },
+  },
+  { key: 'base-700', group: 'podblatowe', category: 'podblatowa', width: 700, label: 'Dolna 700 / 2 fronty', hint: 'Standard', make: () => mkBase(700, 2, 'Dolna 700') },
+  { key: 'base-800', group: 'podblatowe', category: 'podblatowa', width: 800, label: 'Dolna 800 / 2 fronty', hint: 'Szafa zlewowa / duża', make: () => mkBase(800, 2, 'Dolna 800') },
+  { key: 'base-800-dr', group: 'podblatowe', category: 'podblatowa', width: 800, label: 'Dolna 800 / 3 szuflady K', hint: 'Blum LEGRABOX K 128,5', make: () => mkDrawers(800, [180, 180, 180], 'Dolna 800 / 3 szuflady') },
+  {
+    key: 'base-900-sink', group: 'podblatowe', category: 'podblatowa', width: 900, label: 'Dolna 900 / zlew',
+    hint: 'Dno wzmocnione, miejsce na syfon', make: () => {
+      const c = mkBase(900, 2, 'Dolna 900 / zlew');
+      c.elements = [];
+      return c;
+    },
+  },
+  { key: 'base-900-hob', group: 'podblatowe', category: 'podblatowa', width: 900, label: 'Dolna 900 / płyta', hint: 'Szuflady pod płytą indukcyjną', make: () => mkDrawers(900, [150, 240, 240], 'Dolna 900 / płyta') },
+  { key: 'base-1000', group: 'podblatowe', category: 'podblatowa', width: 1000, label: 'Dolna 1000 / 2 fronty', hint: 'Standard szeroki', make: () => mkBase(1000, 2, 'Dolna 1000') },
+  { key: 'base-1200', group: 'podblatowe', category: 'podblatowa', width: 1200, label: 'Dolna 1200 / 3 fronty', hint: 'Maksymalna szerokość modułu', make: () => mkBase(1200, 3, 'Dolna 1200') },
+  {
+    key: 'base-600-dw', group: 'podblatowe', category: 'podblatowa', width: 600, label: 'Zmywarka 600',
+    hint: 'Miejsce na zmywarkę pod blatem', make: () => {
+      const c = mkBase(600, 0, 'Zmywarka 600');
+      c.fronts = [];
+      c.plinth = 0;
+      return c;
+    },
+  },
+  {
+    key: 'base-600-bin', group: 'podblatowe', category: 'podblatowa', width: 600, label: 'Dolna 600 / kosze',
+    hint: 'Wyciągane kosze na odpady', make: () => {
+      const c = mkBase(600, 1, 'Dolna 600 / kosze');
+      c.elements = [el('cornerBasket', 0)];
+      return c;
+    },
+  },
+  {
+    key: 'corner-900', group: 'podblatowe', category: 'podblatowa', width: 900, label: 'Narożna 900 / karuzela',
+    hint: 'Karuzela narożna', make: () => {
+      const c = mkBase(900, 1, 'Narożna 900');
+      c.elements = [el('cornerBasket', 300)];
+      return c;
+    },
+  },
+  {
+    key: 'corner-blind', group: 'podblatowe', category: 'podblatowa', width: 900, label: 'Narożna 900 / ślepa',
+    hint: 'Narożnik z dostępem jednostronnym', make: () => {
+      const c = mkBase(900, 1, 'Narożna 900 / ślepa');
+      c.elements = [el('shelf', 300)];
       return c;
     },
   },
 
-  // ---------- GÓRNE ----------
+  // ======================= STOJĄCE WYSOKIE =======================
+  { key: 'standing-400', group: 'stojace', category: 'stojąca', width: 400, label: 'Stojąca 400 (bez blatu)', hint: 'Korpus 2016, cokół 150', make: () => mkTall(400, 1, 2016, 'Stojąca 400') },
+  { key: 'standing-600', group: 'stojace', category: 'stojąca', width: 600, label: 'Stojąca 600 (bez blatu)', hint: 'Korpus 2016, cokół 150', make: () => mkTall(600, 2, 2016, 'Stojąca 600') },
+  { key: 'standing-600-h', group: 'stojace', category: 'stojąca', width: 600, label: 'Stojąca 600 / 2216', hint: 'Wysoka pod sufit z cokołem', make: () => mkTall(600, 2, 2216, 'Stojąca 600 / 2216') },
+  { key: 'standing-900', group: 'stojace', category: 'stojąca', width: 900, label: 'Stojąca 900 / 3 fronty', hint: 'Spiżarka szeroka', make: () => mkTall(900, 3, 2016, 'Stojąca 900') },
+
+  // ======================= WISZĄCE =======================
+  { key: 'wall-300', group: 'górne', category: 'wisząca', width: 300, label: 'Wisząca 300', hint: 'Głęb. 350, wys. 720', make: () => mkWall(300, 1, 720, 'Wisząca 300') },
+  { key: 'wall-400', group: 'górne', category: 'wisząca', width: 400, label: 'Wisząca 400', hint: 'Głęb. 350, wys. 720', make: () => mkWall(400, 1, 720, 'Wisząca 400') },
+  { key: 'wall-500', group: 'górne', category: 'wisząca', width: 500, label: 'Wisząca 500', hint: 'Głęb. 350, wys. 720', make: () => mkWall(500, 1, 720, 'Wisząca 500') },
+  { key: 'wall-600', group: 'górne', category: 'wisząca', width: 600, label: 'Wisząca 600', hint: 'Głęb. 350, wys. 720', make: () => mkWall(600, 1, 720, 'Wisząca 600') },
+  { key: 'wall-600-lift', group: 'górne', category: 'wisząca', width: 600, label: 'Wisząca 600 / podnośna', hint: 'AVENTOS HL — front podnoszony', make: () => mkWall(600, 0, 720, 'Wisząca 600 / podnośna') },
   {
-    // Wisząca 60 cm nad blatem + zaślepienie do sufitu
-    key: 'wall-600-filler', group: 'górne', category: 'wisząca', label: 'Wisząca 600 + zaślepka do sufitu', width: 600,
-    make: () => {
-      const c = baseDoor(600, 1, 'Wisząca 600 + zaślepka');
-      c.type = 'wall'; c.height = 720; c.depth = 350; c.worktop = false; c.plinth = 0;
-      c.elements = [el('shelf', 340)];
-      c.fronts = makeDoors(c, 1);
-      // zaślepienie: dodatkowy element od góry szafki do sufitu
-      c.mountHeight = 1500; // 60 cm nad blatem
+    key: 'wall-600-filler', group: 'górne', category: 'wisząca', width: 600, label: 'Wisząca 600 + zaślepka',
+    hint: '60 cm nad blatem, zaślepka 480 mm', make: () => {
+      const c = mkWall(600, 1, 720, 'Wisząca 600 + zaślepka');
+      c.mountHeight = 1500;
       c.topFiller = 480;
       return c;
     },
   },
+  { key: 'wall-800', group: 'górne', category: 'wisząca', width: 800, label: 'Wisząca 800 / 2 fronty', hint: 'Głęb. 350, wys. 720', make: () => mkWall(800, 2, 720, 'Wisząca 800') },
+  { key: 'wall-900', group: 'górne', category: 'wisząca', width: 900, label: 'Wisząca 900 / 2 fronty', hint: 'Głęb. 350, wys. 720', make: () => mkWall(900, 2, 720, 'Wisząca 900') },
+  { key: 'wall-600-low', group: 'górne', category: 'wisząca', width: 600, label: 'Wisząca 600 / 575', hint: 'Nad okapem, wys. 575', make: () => mkWall(600, 1, 575, 'Wisząca 600 / 575') },
+  { key: 'wall-600-high', group: 'górne', category: 'wisząca', width: 600, label: 'Wisząca 600 / 900', hint: 'Wyższa wersja — do 900', make: () => mkWall(600, 1, 900, 'Wisząca 600 / 900') },
   {
-    // Szafka pod umywalkę — montowana pod blatem, bez cokołu z tyłu
-    key: 'sink-600', group: 'górne', category: 'wisząca', label: 'Pod umywalkę 600', width: 600,
-    make: () => {
-      const c = baseDoor(600, 2, 'Pod umywalkę 600');
-      c.type = 'base'; c.height = 720; c.depth = 500; c.plinth = 0; c.worktop = true;
+    key: 'sink-600', group: 'górne', category: 'wisząca', width: 600, label: 'Pod umywalkę 600',
+    hint: 'Korpus 720×500, bez cokołu', make: () => {
+      const c = mkBase(600, 0, 'Pod umywalkę 600');
+      c.height = 720;
+      c.depth = 500;
+      c.plinth = 0;
+      c.worktop = true;
       c.fronts = [];
+      return c;
+    },
+  },
+
+  // ======================= SŁUPKI =======================
+  {
+    key: 'tall-600-oven', group: 'słupki', category: 'słupek', width: 600, label: 'Słupek 600 / piekarnik',
+    hint: 'Nisza 595×595, wys. 2016', make: () => {
+      const c = mkTall(600, 2, 2016, 'Słupek 600 / piekarnik');
+      c.elements = [el('shelf', 950), el('drawer', 150, 'M')];
+      return c;
+    },
+  },
+  { key: 'tall-450', group: 'słupki', category: 'słupek', width: 450, label: 'Słupek 450 / spiżarnia', hint: 'Wysuwane kosze, wys. 2016', make: () => mkTall(450, 1, 2016, 'Słupek 450 / spiżarnia') },
+  {
+    key: 'tall-600-fridge', group: 'słupki', category: 'słupek', width: 600, label: 'Słupek 600 / lodówka',
+    hint: 'Zabudowa lodówki, wys. 2216', make: () => {
+      const c = mkTall(600, 2, 2216, 'Słupek 600 / lodówka');
       c.elements = [];
       return c;
     },
   },
   {
-    // Szafki z dojściem — otwarta wnęka na dojście (np. do licznika, pralki, pionu)
-    key: 'access-600', group: 'dojscie', category: 'z dojściem', label: 'Szafka z dojściem 600', width: 600,
-    make: () => {
-      const c = baseDoor(600, 0, 'Z dojściem 600');
+    key: 'tall-600-micro', group: 'słupki', category: 'słupek', width: 600, label: 'Słupek 600 / mikrofala',
+    hint: 'Nisza mikrofali nad piekarnikiem', make: () => {
+      const c = mkTall(600, 2, 2216, 'Słupek 600 / mikrofala');
+      c.elements = [el('shelf', 1350)];
+      return c;
+    },
+  },
+
+  // ======================= Z DOJŚCIEM =======================
+  {
+    key: 'access-600', group: 'dojscie', category: 'z dojściem', width: 600, label: 'Szafka z dojściem 600',
+    hint: 'Otwarta wnęka — pion, licznik', make: () => {
+      const c = mkBase(600, 0, 'Z dojściem 600');
       c.fronts = [];
       c.elements = [el('shelf', 340)];
       c.accessWidth = 600;
@@ -143,133 +275,38 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'access-900', group: 'dojscie', category: 'z dojściem', label: 'Szafka z dojściem 900 (pion/licznik)', width: 900,
-    make: () => {
-      const c = baseDoor(900, 0, 'Z dojściem 900');
+    key: 'access-900', group: 'dojscie', category: 'z dojściem', width: 900, label: 'Szafka z dojściem 900',
+    hint: 'Pod pion kanalizacyjny / licznik', make: () => {
+      const c = mkBase(900, 0, 'Z dojściem 900');
       c.fronts = [];
-      c.elements = [];
       c.accessWidth = 900;
       return c;
     },
   },
-  {
-    key: 'wall-400', group: 'górne', category: 'wisząca', label: 'Górna 400', width: 400,
-    make: () => {
-      const c = baseDoor(400, 1, 'Górna 400');
-      c.type = 'wall'; c.height = 720; c.depth = 350; c.worktop = false; c.plinth = 0;
-      c.elements = [el('shelf', 340)];
-      c.fronts = makeDoors(c, 1);
-      return c;
-    },
-  },
-  {
-    key: 'wall-600', group: 'górne', category: 'wisząca', label: 'Górna 600', width: 600,
-    make: () => {
-      const c = baseDoor(600, 1, 'Górna 600');
-      c.type = 'wall'; c.height = 720; c.depth = 350; c.worktop = false; c.plinth = 0;
-      c.elements = [el('shelf', 340)];
-      c.fronts = makeDoors(c, 1);
-      return c;
-    },
-  },
-  {
-    key: 'wall-800', group: 'górne', category: 'wisząca', label: 'Górna 800 / 2 fronty', width: 800,
-    make: () => {
-      const c = baseDoor(800, 2, 'Górna 800');
-      c.type = 'wall'; c.height = 720; c.depth = 350; c.worktop = false; c.plinth = 0;
-      c.elements = [el('shelf', 340)];
-      c.fronts = makeDoors(c, 2);
-      return c;
-    },
-  },
-  {
-    key: 'wall-600-lift', group: 'górne', category: 'wisząca', label: 'Górna 600 / podnośna', width: 600,
-    make: () => {
-      const c = baseDoor(600, 1, 'Górna 600 / podnośna');
-      c.type = 'wall'; c.height = 490; c.depth = 350; c.worktop = false; c.plinth = 0;
-      c.fronts = makeDoors(c, 1);
-      return c;
-    },
-  },
 
-  // ---------- SŁUPKI ----------
+  // ======================= SPECJALNE =======================
   {
-    key: 'tall-600', group: 'słupki', category: 'słupek', label: 'Słupek 600', width: 600,
-    make: () => {
-      const c = baseDoor(600, 2, 'Słupek 600');
-      c.type = 'tall'; c.height = 2100; c.depth = 561;
-      c.elements = [el('shelf', 700), el('shelf', 1400)];
-      c.fronts = makeDoors(c, 2);
+    key: 'open-600', group: 'specjalne', category: 'specjalna', width: 600, label: 'Dolna 600 / otwarta',
+    hint: 'Bez frontów — ekspozycja', make: () => {
+      const c = mkBase(600, 0, 'Dolna 600 / otwarta');
+      c.elements = [el('shelf', 340)];
       return c;
     },
   },
   {
-    key: 'tall-600-oven', group: 'słupki', category: 'słupek', label: 'Słupek 600 / piekarnik', width: 600,
-    make: () => {
-      const c = baseDoor(600, 2, 'Słupek 600 / piekarnik');
-      c.type = 'tall'; c.height = 2100; c.depth = 561;
-      c.elements = [el('shelf', 1200), el('shelf', 1800)];
-      c.fronts = makeDoors(c, 2);
-      return c;
-    },
-  },
-  {
-    key: 'tall-450', group: 'słupki', category: 'słupek', label: 'Słupek 450 / spiżarnia', width: 450,
-    make: () => {
-      const c = baseDoor(450, 1, 'Słupek 450 / spiżarnia');
-      c.type = 'tall'; c.height = 2100; c.depth = 561;
-      c.elements = [el('shelf', 900), el('shelf', 1500)];
-      c.fronts = makeDoors(c, 1);
-      return c;
-    },
-  },
-
-  // ---------- SPECJALNE ----------
-  {
-    key: 'corner-carousel', group: 'specjalne', category: 'specjalna', label: 'Narożna / kosz obrotowy', width: 900,
-    make: () => {
-      const c = baseDoor(900, 1, 'Narożna / kosz');
-      c.elements = [el('cornerBasket', 100), el('cornerBasket', 500)];
-      return c;
-    },
-  },
-  {
-    key: 'sink-double', group: 'specjalne', category: 'specjalna', label: 'Dolna 900 / 2 zlewy', width: 900,
-    make: () => {
-      const c = baseDoor(900, 2, 'Dolna 900 / 2 zlewy');
-      c.elements = [el('shelf', 0), el('divider', 0)];
-      return c;
-    },
-  },
-  {
-    // Szafki stojące wysokie: BEZ blatu, Z cokołem
-    key: 'standing-600', group: 'stojace', category: 'stojąca', label: 'Stojąca 600 (bez blatu)', width: 600,
-    make: () => {
-      const c = baseDoor(600, 2, 'Stojąca 600');
-      c.height = 2016;
-      c.depth = 560;
-      c.plinth = 150;
-      c.worktop = false;
-      c.backGap = 50;
-      return c;
-    },
-  },
-  {
-    key: 'standing-400', group: 'stojace', category: 'stojąca', label: 'Stojąca 400 (bez blatu)', width: 400,
-    make: () => {
-      const c = baseDoor(400, 1, 'Stojąca 400');
-      c.height = 2016;
-      c.plinth = 150;
-      c.worktop = false;
-      return c;
-    },
-  },
-  {
-    key: 'open-600', group: 'specjalne', category: 'specjalna', label: 'Dolna 600 / otwarta', width: 600,
-    make: () => {
-      const c = baseDoor(600, 0, 'Dolna 600 / otwarta');
+    key: 'wine-600', group: 'specjalne', category: 'specjalna', width: 600, label: 'Słupek 600 / witryna na wino',
+    hint: 'Półki na butelki', make: () => {
+      const c = mkTall(600, 0, 2016, 'Witryna na wino');
       c.fronts = [];
-      c.elements = [el('shelf', 340)];
+      c.elements = [el('shelf', 300), el('shelf', 600), el('shelf', 900), el('shelf', 1200)];
+      return c;
+    },
+  },
+  {
+    key: 'micro-600', group: 'specjalne', category: 'specjalna', width: 600, label: 'Wisząca 600 / mikrofala',
+    hint: 'Nisza mikrofali w ciągu górnym', make: () => {
+      const c = mkWall(600, 1, 720, 'Wisząca 600 / mikrofala');
+      c.elements = [];
       return c;
     },
   },
@@ -288,15 +325,18 @@ export const GROUP_LABELS: Record<string, string> = {
 };
 
 /**
- * Szafki podblatowe: ZAWSZE blat (edytowalny: grubość, nawis)
- * i ZAWSZE cokół (edytowalna wysokość, wpuszczenie).
+ * Reguły kategorii:
+ *  - podblatowa: ZAWSZE blat i cokół (osobne, łączone obiekty)
+ *  - stojąca:    BEZ blatu, Z cokołem
+ *  - słupek:     cokół, bez blatu
+ *  - wisząca:    bez blatu i cokołu, na wysokości montażu
  */
 export const CATEGORY_RULES = {
   podblatowa: { forcedWorktop: true, forcedPlinth: true },
   stojąca: { forcedWorktop: false, forcedPlinth: true },
   wisząca: { forcedWorktop: false, forcedPlinth: false },
   słupek: { forcedWorktop: false, forcedPlinth: true },
-  'z dojściem': { forcedWorktop: false, forcedPlinth: true },
+  'z dojściem': { forcedWorktop: true, forcedPlinth: true },
   specjalna: { forcedWorktop: false, forcedPlinth: false },
 };
 
@@ -327,10 +367,7 @@ export const ELEMENT_TEMPLATES: ElementTemplate[] = [
 ];
 
 /**
- * Inteligentne dociąganie: szafka trafia do NAJBLIŻSZEGO końca istniejącego mebla
- * (lewy lub prawy koniec rzędu), a nie na jego koniec z definicji.
- * Nie ma pojęcia „element zamykający" — mebel jest zbiorem szafek, do którego
- * nowa szafka dokleja się z wybranej strony. Zwraca pozycję X (mm).
+ * Inteligentne dociąganie: szafka trafia do NAJBLIŻSZEGO końca istniejącego mebla.
  */
 export function attachX(
   cabinets: Cabinet[],

@@ -115,6 +115,15 @@ export default function App() {
       .catch(() => worker.terminate());
   }, [ready, cloudVisible]);
 
+  // ---- poziom detalu okuć: zastosuj do wszystkich szafek ----
+  useEffect(() => {
+    setCabinets((cs) =>
+      cs.every((c) => c.detail === settings.hardwareDetail)
+        ? cs
+        : cs.map((c) => ({ ...c, detail: settings.hardwareDetail })),
+    );
+  }, [settings.hardwareDetail]);
+
   // ---- tryb przesuwania: kamera zablokowana, żeby nie uciekała z szafką ----
   useEffect(() => {
     engineRef.current?.setControlsEnabled?.(!moveMode);
@@ -352,7 +361,7 @@ export default function App() {
 
     if (!ref) {
       const wall = snapToWalls(room, c.width, c.depth, c.x, -room.depth / 2 + c.depth / 2);
-      const placed: Cabinet = { ...c, x: wall.x, z: wall.z, rotation: wall.rotation };
+      const placed: Cabinet = { ...c, x: wall.x, z: wall.z, rotation: wall.rotation, detail: settings.hardwareDetail };
       setCabinets([placed]);
       setSelectedId(placed.id);
       return;
@@ -364,6 +373,8 @@ export default function App() {
     const offset = (ref.width + c.width) / 2;
     const placed: Cabinet = {
       ...c,
+      detail: settings.hardwareDetail,
+      handle: settings.hardwareDetail === 'full' ? 'bar' : 'bar',
       rotation: ref.rotation,
       x: alongZ ? ref.x : ref.x + sign * offset,
       z: alongZ ? ref.z + sign * offset : ref.z,

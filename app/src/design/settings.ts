@@ -64,6 +64,8 @@ export interface Settings {
   precision: number;
   /** wybrany silnik graficzny */
   engine: string;
+  /** poziom detalu okuć: basic = uchwyty + prowadnice, full = + zawiasy, nóżki, wieszaki, wsporniki */
+  hardwareDetail: 'basic' | 'full';
   /** blat — osobny obiekt, łączony automatycznie w biegi */
   worktop: { enabled: boolean; thickness: number; overhang: number; color: string };
   /** cokół — osobny obiekt, łączony automatycznie, licowany lub cofnięty */
@@ -82,6 +84,7 @@ export function defaultSettings(): Settings {
     units: 'mm',
     precision: 1,
     engine: 'three',
+    hardwareDetail: 'basic',
     worktop: { enabled: true, thickness: 38, overhang: 20, color: '#e9e5dd' },
     plinth: { enabled: true, height: 150, mode: 'recessed', setback: 40, color: '#42423f' },
     shortcuts: Object.fromEntries(ACTIONS.map((a) => [a.id, a.defaultKey])),

@@ -429,3 +429,22 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .modal-actions .ghost { background: transparent; border: 1px solid #2a313a; color: #c7cdd4; border-radius: 9px; padding: 8px 14px; cursor: pointer; }
 .modal-actions .primary { background: #2f6f4f; border: 1px solid #3d8a63; color: #eafff3; border-radius: 9px; padding: 8px 16px; cursor: pointer; }
+
+/* ---- biblioteka: etykiety dwuliniowe, bez ucinania ---- */
+.sb-item { min-height: 30px; }
+.sb-item .sb-label,
+.sb-item span:not(.sb-glyph):not(.sb-tag):not(.sb-thumb) {
+  flex: 1 1 auto; min-width: 0;
+  white-space: normal; overflow: visible; text-overflow: clip;
+  line-height: 1.2;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.sb-tag {
+  flex: 0 0 auto; font-size: .62rem; color: #c9a227;
+  background: #201c10; border-radius: 4px; padding: 1px 4px;
+}
+.sb-thumb {
+  flex: 0 0 auto; width: 14px; height: 14px; border-radius: 3px;
+  border: 1px solid #2a313a;
+}
+.sb-group { margin-bottom: 10px; }
