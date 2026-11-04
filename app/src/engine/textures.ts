@@ -270,10 +270,10 @@ export function texturesFor(kind: MatKind): { map: THREE.Texture; bump?: THREE.T
   let cv: HTMLCanvasElement;
   switch (kind) {
     case 'wood':
-      cv = woodTexture('#b98b58', '#7d5330', '#d8b184');
+      cv = woodTexture('#b9a184', '#8a7358', '#d6c6ae');
       break;
     case 'wood-dark':
-      cv = woodTexture('#5b3a22', '#3a2415', '#7d5330');
+      cv = woodTexture('#5c4430', '#3d2c1e', '#7d6248');
       break;
     case 'laminate':
       cv = woodTexture('#cfc6b8', '#a89c8b', '#e6dfd3');
@@ -419,4 +419,104 @@ export function bumpScale(kind: MatKind): number {
     default:
       return 0.004;
   }
+}
+
+/**
+ * Normal mapa z wysokości (Sobel) — daje prawdziwe odbicia faktury,
+ * czego bump map nie potrafi (bump tylko zaciemnia).
+ */
+function normalFrom(cv: HTMLCanvasElement, strength = 2.0): HTMLCanvasElement {
+  // redukcja do 256 px — normalna mapa nie potrzebuje pełnej rozdzielczości
+  const size = 256;
+  const small = document.createElement('canvas');
+  small.width = small.height = size;
+  small.getContext('2d')!.drawImage(cv, 0, 0, size, size);
+  cv = small;
+  const src = cv.getContext('2d')!.getImageData(0, 0, size, size);
+  const out = document.createElement('canvas');
+  out.width = size;
+  out.height = size;
+  const ctx = out.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  const lum = (x: number, y: number) => {
+    const i = (((y + size) % size) * size + ((x + size) % size)) * 4;
+    return (src.data[i] * 0.299 + src.data[i + 1] * 0.587 + src.data[i + 2] * 0.114) / 255;
+  };
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx =
+        lum(x - 1, y - 1) + 2 * lum(x - 1, y) + lum(x - 1, y + 1) -
+        (lum(x + 1, y - 1) + 2 * lum(x + 1, y) + lum(x + 1, y + 1));
+      const dy =
+        lum(x - 1, y - 1) + 2 * lum(x, y - 1) + lum(x + 1, y - 1) -
+        (lum(x - 1, y + 1) + 2 * lum(x, y + 1) + lum(x + 1, y + 1));
+      const nx = dx * strength;
+      const ny = dy * strength;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      const i = (y * size + x) * 4;
+      img.data[i] = ((nx / len) * 0.5 + 0.5) * 255;
+      img.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+      img.data[i + 2] = ((nz / len) * 0.5 + 0.5) * 255;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
+
+/** Normal mapa dla materiału (cache). */
+const normalCache = new Map<MatKind, THREE.Texture>();
+
+export function normalMapFor(kind: MatKind): THREE.Texture {
+  const hit = normalCache.get(kind);
+  if (hit) return hit;
+  const base = texturesFor(kind).map.image as HTMLCanvasElement;
+  const strength = kind === 'cobble' ? 3.2 : kind === 'grass' || kind === 'foliage' ? 2.6 : 2.0;
+  const t = new THREE.CanvasTexture(normalFrom(base, strength));
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = 8;
+  normalCache.set(kind, t);
+  return t;
+}
+
+/** Mapa chropowatości — powierzchnie nie są jednolite (plamy, przetarcia). */
+const roughCache = new Map<MatKind, THREE.Texture>();
+
+export function roughnessMapFor(kind: MatKind): THREE.Texture {
+  const hit = roughCache.get(kind);
+  if (hit) return hit;
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#b8b8b8';
+  ctx.fillRect(0, 0, size, size);
+  // plamy różnej chropowatości
+  for (let i = 0; i < 140; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const r = 20 + Math.random() * 90;
+    const v = 150 + Math.random() * 90;
+    const g = ctx.createRadialGradient(x, y, 1, x, y, r);
+    g.addColorStop(0, `rgba(${v},${v},${v},.35)`);
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // drobne ziarno
+  for (let i = 0; i < 20000; i++) {
+    const v = 150 + Math.random() * 90;
+    ctx.fillStyle = `rgba(${v},${v},${v},.12)`;
+    ctx.fillRect(Math.random() * size, Math.random() * size, 2, 2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = 8;
+  roughCache.set(kind, t);
+  return t;
 }

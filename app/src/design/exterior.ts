@@ -72,11 +72,11 @@ export function exteriorBoxes(room: Room, opts: { roof?: boolean } = {}): SceneB
   ];
   trees.forEach(([x, z, h], i) => {
     // pień
-    out.push(box(`tree-${i}-trunk`, [260, h * 0.45, 260], [x, h * 0.225, z], '#6b4a30', { shape: 'cylinder', mat: 'wood-dark' }));
+    out.push(box(`tree-${i}-trunk`, [260, h * 0.5, 260], [x, -170 + h * 0.25, z], '#6b4a30', { shape: 'cylinder', mat: 'wood-dark' }));
     // korona — trzy cylindry/kule o różnych zieleniach
-    out.push(box(`tree-${i}-crown-a`, [h * 0.46, h * 0.3, h * 0.46], [x, h * 0.5, z], '#ffffff', { mat: 'foliage', shape: 'sphere' }));
-    out.push(box(`tree-${i}-crown-b`, [h * 0.38, h * 0.26, h * 0.38], [x, h * 0.68, z], '#e8f5e0', { mat: 'foliage', shape: 'sphere' }));
-    out.push(box(`tree-${i}-crown-c`, [h * 0.26, h * 0.2, h * 0.26], [x, h * 0.84, z], '#d8efcc', { mat: 'foliage', shape: 'sphere' }));
+    out.push(box(`tree-${i}-crown-a`, [h * 0.46, h * 0.3, h * 0.46], [x, -170 + h * 0.52, z], '#ffffff', { mat: 'foliage', shape: 'sphere' }));
+    out.push(box(`tree-${i}-crown-b`, [h * 0.38, h * 0.26, h * 0.38], [x, -170 + h * 0.7, z], '#e8f5e0', { mat: 'foliage', shape: 'sphere' }));
+    out.push(box(`tree-${i}-crown-c`, [h * 0.26, h * 0.2, h * 0.26], [x, -170 + h * 0.85, z], '#d8efcc', { mat: 'foliage', shape: 'sphere' }));
   });
 
   // --- dach (opcjonalny: domyślnie off, żeby nie zasłaniał wnętrza) ---

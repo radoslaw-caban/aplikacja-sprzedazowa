@@ -3,8 +3,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { texturesFor, materialProps, textureScale, matKindFor, bumpScale } from './textures';
+import { PostFX } from './PostFX';
+import { texturesFor, materialProps, textureScale, matKindFor, bumpScale, normalMapFor, roughnessMapFor } from './textures';
 import type { ProductConfig, RenderEngine } from './RenderEngine';
 
 /**
@@ -42,22 +42,69 @@ export class ThreeEngine implements RenderEngine {
   /** true, gdy użytkownik ręcznie nadpisuje materiał modelu (demo kolorów) */
   forceColor = false;
   private matCache = new Map<string, THREE.Material>();
+  private post?: PostFX;
+  /** 'low' | 'medium' | 'high' — wpływa na AO/bloom */
+  private quality: 'low' | 'medium' | 'high' = 'high';
+  private frameTimes: number[] = [];
+  private lastFrame = 0;
+  private degraded = 0;
   /** ściany półprzezroczyste — widok roboczy wnętrza */
   private wallGhost = true;
 
-  /** Gradientowe niebo jako tło sceny. */
+  /**
+   * Niebo equirect: gradient zenitu, horyzont, ciepły pas przy horyzoncie
+   * i rozbłysk słońca. Ta sama tekstura jest tłem i źródłem IBL (odbicia).
+   */
   private skyTexture(): THREE.Texture {
+    const w = 1024;
+    const h = 512;
     const c = document.createElement('canvas');
-    c.width = 32;
-    c.height = 256;
+    c.width = w;
+    c.height = h;
     const ctx = c.getContext('2d')!;
-    const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, '#7fa8cc');
-    g.addColorStop(0.45, '#bcd3e6');
-    g.addColorStop(0.7, '#e6eef4');
-    g.addColorStop(1, '#c9c3b6');
+
+    // gradient pionowy: zenit → horyzont → grunt
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0.0, '#4f7fae');
+    g.addColorStop(0.32, '#8fb4d2');
+    g.addColorStop(0.5, '#dbe7ef');
+    g.addColorStop(0.52, '#e8e3d6');
+    g.addColorStop(0.75, '#a89b86');
+    g.addColorStop(1.0, '#6b6355');
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 32, 256);
+    ctx.fillRect(0, 0, w, h);
+
+    // słońce: jasny dysk + poświata
+    const sunX = w * 0.32;
+    const sunY = h * 0.26;
+    const glow = ctx.createRadialGradient(sunX, sunY, 1, sunX, sunY, h * 0.55);
+    glow.addColorStop(0, 'rgba(255,252,240,1)');
+    glow.addColorStop(0.035, 'rgba(255,246,214,0.95)');
+    glow.addColorStop(0.12, 'rgba(255,238,196,0.35)');
+    glow.addColorStop(0.4, 'rgba(255,235,190,0.10)');
+    glow.addColorStop(1, 'rgba(255,235,190,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+
+    // delikatne chmury — pasma o niskim kontraście
+    for (let i = 0; i < 26; i++) {
+      const cx = Math.random() * w;
+      const cy = h * (0.18 + Math.random() * 0.26);
+      const rw = 90 + Math.random() * 260;
+      const rh = 14 + Math.random() * 34;
+      const cg = ctx.createRadialGradient(cx, cy, 1, cx, cy, rw);
+      cg.addColorStop(0, `rgba(255,255,255,${0.10 + Math.random() * 0.12})`);
+      cg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(1, rh / rw);
+      ctx.fillStyle = cg;
+      ctx.beginPath();
+      ctx.arc(0, 0, rw, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     t.mapping = THREE.EquirectangularReflectionMapping;
@@ -101,6 +148,8 @@ export class ThreeEngine implements RenderEngine {
       bump.needsUpdate = true;
       bump.repeat.copy(map.repeat);
     }
+    const normal = normalMapFor(kind);
+    const rough = roughnessMapFor(kind);
 
     const useTex = kind !== 'glass' && kind !== 'metal';
     const mat = new THREE.MeshStandardMaterial({
@@ -110,10 +159,14 @@ export class ThreeEngine implements RenderEngine {
       map: useTex ? map : undefined,
       bumpMap: useTex && bump ? bump : undefined,
       bumpScale: bumpScale(kind),
-      transparent: props.transparent || (b.opacity ?? 1) < 1,
-      opacity: props.opacity ?? b.opacity ?? 1,
+      normalMap: useTex ? normal.clone() : undefined,
+      roughnessMap: useTex ? rough.clone() : undefined,
+      normalScale: new THREE.Vector2(0.45, 0.45),
       envMapIntensity: 1.15,
     });
+    // powtórzenia map faktury zgodne z mapą koloru
+    if (mat.normalMap) mat.normalMap.repeat.copy(map.repeat);
+    if (mat.roughnessMap) mat.roughnessMap.repeat.copy(map.repeat);
     this.matCache.set(key, mat);
     return mat;
   }
@@ -122,7 +175,7 @@ export class ThreeEngine implements RenderEngine {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 0.95;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -135,10 +188,13 @@ export class ThreeEngine implements RenderEngine {
     this.camera.position.set(2.4, 1.6, 3.2);
 
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    // IBL z tego samego nieba — odbicia odpowiadają scenerii (nie „studyjna szara puszka")
+    const envSrc = this.skyTexture();
+    this.scene.environment = pmrem.fromEquirectangular(envSrc).texture;
+    this.scene.environmentIntensity = 1.0;
 
     // słońce z cieniami
-    const sun = new THREE.DirectionalLight(0xfff4e2, 2.6);
+    const sun = new THREE.DirectionalLight(0xfff8ee, 1.85);
     sun.position.set(-6, 15, 9);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -150,8 +206,8 @@ export class ThreeEngine implements RenderEngine {
     cam.updateProjectionMatrix();
 
     // światło niebios (góra chłodna, dół ciepły od gruntu)
-    const hemi = new THREE.HemisphereLight(0xdfefff, 0x6b5a44, 0.85);
-    this.scene.add(sun, hemi, new THREE.AmbientLight(0xffffff, 0.18));
+    const hemi = new THREE.HemisphereLight(0xdceaf7, 0x6f6656, 0.62);
+    this.scene.add(sun, hemi, new THREE.AmbientLight(0xffffff, 0.10));
 
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -166,6 +222,16 @@ export class ThreeEngine implements RenderEngine {
     this.scene.add(this.guideGroup);
 
     this.resize();
+    // post-processing: AO + bloom + korekcja + SMAA
+    try {
+      this.post = new PostFX(this.renderer, this.scene, this.camera);
+      this.post.setSize(this.renderer.domElement.clientWidth || 1, this.renderer.domElement.clientHeight || 1, this.renderer.getPixelRatio());
+      // na softwarowym renderze (bez GPU) efekty ciężkie od razu wyłączone
+      this.setQuality(this.isSoftRenderer() ? 'low' : 'high');
+    } catch (e) {
+      console.warn('PostFX niedostępny, render bezpośredni', e);
+      this.post = undefined;
+    }
     window.addEventListener('resize', this.resize);
     this.loop();
   }
@@ -445,7 +511,7 @@ export class ThreeEngine implements RenderEngine {
     }
     this.roomGroup.visible = visible;
     if (!visible) {
-      this.renderer?.render(this.scene, this.camera!);
+      this.draw();
       return;
     }
     const mm = 0.001;
@@ -488,7 +554,7 @@ export class ThreeEngine implements RenderEngine {
       mesh.castShadow = b.kind === 'wall' && !this.wallGhost;
       this.roomGroup.add(mesh);
     }
-    this.renderer?.render(this.scene, this.camera!);
+    this.draw();
   }
 
   /** Punkt na podłodze (y=0) pod kursorem — do przesuwania szafek. */
@@ -540,6 +606,29 @@ export class ThreeEngine implements RenderEngine {
     }
   }
 
+  /** Jakość renderu: low = bez AO i bloomu, medium = sam AO, high = wszystko. */
+  setQuality(level: 'low' | 'medium' | 'high') {
+    this.quality = level;
+    if (!this.post) return;
+    this.post.set({
+      ao: level !== 'low',
+      bloom: level === 'high',
+      grade: true,
+    });
+  }
+
+  /** Czy GPU jest sprzętowe — przy SwiftShader wyłączamy efekty ciężkie. */
+  private isSoftRenderer(): boolean {
+    try {
+      const gl = this.renderer?.getContext();
+      const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+      const name = ext ? String(gl!.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+      return /swiftshader|llvmpipe|software/i.test(name);
+    } catch {
+      return false;
+    }
+  }
+
   /** Ściany przezroczyste (widok roboczy) albo pełne. */
   setWallGhost(on: boolean) {
     this.wallGhost = on;
@@ -552,7 +641,7 @@ export class ThreeEngine implements RenderEngine {
       mat.depthWrite = !on;
       mat.needsUpdate = true;
     }
-    this.renderer?.render(this.scene!, this.camera!);
+    this.draw();
   }
 
   /** Pokaż/ukryj chmurę punktów. */
@@ -630,7 +719,7 @@ export class ThreeEngine implements RenderEngine {
         this.designGroup.add(edges);
       }
     }
-    this.renderer!.render(this.scene, this.camera!);
+    this.draw();
   }
 
   /** Raycast: co kliknął użytkownik (cabinetId / elementId). */
@@ -748,6 +837,7 @@ export class ThreeEngine implements RenderEngine {
   dispose() {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.resize);
+    this.post?.dispose();
     this.renderer?.dispose();
   }
 
@@ -758,13 +848,37 @@ export class ThreeEngine implements RenderEngine {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.post?.setSize(w, h, this.renderer.getPixelRatio());
   };
+
+  /** Jeden punkt renderowania — zawsze przez pipeline, gdy dostępny. */
+  private draw() {
+    if (!this.renderer || !this.scene || !this.camera) return;
+    if (this.post) this.post.render();
+    else this.renderer.render(this.scene, this.camera);
+  }
 
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
+
+    // pomiar płynności: przy klatkach > 45 ms obniżamy jakość (maks. 2 razy)
+    const now = performance.now();
+    if (this.lastFrame) {
+      this.frameTimes.push(now - this.lastFrame);
+      if (this.frameTimes.length > 30) {
+        const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+        this.frameTimes = [];
+        if (avg > 45 && this.degraded < 2 && this.quality !== 'low') {
+          this.setQuality(this.quality === 'high' ? 'medium' : 'low');
+          this.degraded++;
+        }
+      }
+    }
+    this.lastFrame = now;
+
     this.controls?.update();
     // obrót projektu w tle (z ustawień) — obraca całą grupę szafek
     if (this.autoRotateDesign) this.designGroup.rotation.y += 0.0035;
-    this.renderer?.render(this.scene!, this.camera!);
+    this.draw();
   };
 }

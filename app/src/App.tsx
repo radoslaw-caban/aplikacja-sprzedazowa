@@ -59,7 +59,7 @@ export default function App() {
   const [cornerDir, setCornerDir] = useState<WallSide>('south');
   const [carrying, setCarrying] = useState<string | null>(null);
   const [engineEpoch, setEngineEpoch] = useState(0);
-  const [cloudVisible, setCloudVisible] = useState(true);
+  const [cloudVisible, setCloudVisible] = useState(false);
   const [exterior, setExterior] = useState(true);
   const [roof, setRoof] = useState(false);
   const [wallGhost, setWallGhost] = useState(true);
@@ -90,14 +90,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engineEpoch]);
 
-  // ---- chmura (tło; w pomieszczeniu testowym opcjonalna) ----
+  // ---- chmura: ładowana leniwie, dopiero gdy użytkownik włączy ----
+  const cloudLoaded = useRef(false);
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !cloudVisible || cloudLoaded.current) return;
+    cloudLoaded.current = true;
     const worker = new PlyWorker();
     worker.onmessage = (e: MessageEvent) => {
       const d = e.data;
       if (d.type === 'done') {
         engineRef.current?.loadPointCloud(d as PointCloudData).then(() => {
+          engineRef.current?.setCloudVisible?.(cloudVisible);
           setStatus(`Skan: ${d.pointCount.toLocaleString('pl-PL')} pkt`);
         });
       }
@@ -107,7 +110,7 @@ export default function App() {
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`PLY ${r.status}`))))
       .then((b) => worker.postMessage({ buffer: b }, [b]))
       .catch(() => worker.terminate());
-  }, [ready]);
+  }, [ready, cloudVisible]);
 
   // ---- ustawienia → silnik ----
   useEffect(() => {
