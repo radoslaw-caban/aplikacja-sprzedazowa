@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { texturesFor, materialProps, textureScale, matKindFor } from './textures';
+import { texturesFor, materialProps, textureScale, matKindFor, bumpScale } from './textures';
 import type { ProductConfig, RenderEngine } from './RenderEngine';
 
 /**
@@ -96,6 +96,11 @@ export class ThreeEngine implements RenderEngine {
       Math.max(0.25, (Math.max(b.size[0], sz) / 1000) / scaleM),
       Math.max(0.25, (Math.max(sy, sz) / 1000) / scaleM),
     );
+    const bump = tex.bump?.clone();
+    if (bump) {
+      bump.needsUpdate = true;
+      bump.repeat.copy(map.repeat);
+    }
 
     const useTex = kind !== 'glass' && kind !== 'metal';
     const mat = new THREE.MeshStandardMaterial({
@@ -103,9 +108,11 @@ export class ThreeEngine implements RenderEngine {
       roughness: props.roughness,
       metalness: props.metalness,
       map: useTex ? map : undefined,
+      bumpMap: useTex && bump ? bump : undefined,
+      bumpScale: bumpScale(kind),
       transparent: props.transparent || (b.opacity ?? 1) < 1,
       opacity: props.opacity ?? b.opacity ?? 1,
-      envMapIntensity: 0.9,
+      envMapIntensity: 1.15,
     });
     this.matCache.set(key, mat);
     return mat;
@@ -462,10 +469,12 @@ export class ThreeEngine implements RenderEngine {
         roughness: props.roughness,
         metalness: props.metalness,
         map: kind === 'glass' ? undefined : map,
+        bumpMap: kind === 'glass' ? undefined : tex.bump?.clone(),
+        bumpScale: bumpScale(kind),
         transparent: props.transparent || (b.opacity ?? 1) < 1,
         opacity: props.opacity ?? b.opacity ?? 1,
         side: THREE.DoubleSide,
-        envMapIntensity: 0.85,
+        envMapIntensity: 1.1,
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(b.position[0] * mm, b.position[1] * mm, b.position[2] * mm);

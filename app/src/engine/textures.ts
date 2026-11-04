@@ -263,7 +263,7 @@ function toTexture(cv: HTMLCanvasElement, repeat = 1): THREE.Texture {
 }
 
 /** Zwraca tekstury dla danego rodzaju materiału. */
-export function texturesFor(kind: MatKind): { map: THREE.Texture; rough?: THREE.Texture } {
+export function texturesFor(kind: MatKind): { map: THREE.Texture; bump?: THREE.Texture } {
   const hit = cache.get(kind);
   if (hit) return hit;
 
@@ -302,7 +302,10 @@ export function texturesFor(kind: MatKind): { map: THREE.Texture; rough?: THREE.
       cv = plasterTexture();
       break;
   }
-  const entry = { map: toTexture(cv) };
+  const map = toTexture(cv);
+  const bump = toTexture(cv);
+  bump.colorSpace = THREE.NoColorSpace;
+  const entry = { map, bump };
   cache.set(kind, entry);
   return entry;
 }
@@ -390,5 +393,30 @@ export function matKindFor(kind: string): MatKind {
       return 'plaster';
     default:
       return 'laminate';
+  }
+}
+
+/** Siła bump mapy — drewno i kamień najbardziej zyskują na fakturze. */
+export function bumpScale(kind: MatKind): number {
+  switch (kind) {
+    case 'wood':
+    case 'wood-dark':
+      return 0.012;
+    case 'stone':
+      return 0.008;
+    case 'laminate':
+      return 0.006;
+    case 'cobble':
+      return 0.03;
+    case 'grass':
+      return 0.02;
+    case 'roof':
+      return 0.018;
+    case 'foliage':
+      return 0.025;
+    case 'deck':
+      return 0.014;
+    default:
+      return 0.004;
   }
 }
