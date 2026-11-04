@@ -1,4 +1,12 @@
 import {
+  handleBoxes,
+  hingeBoxes,
+  legBoxes,
+  hangerBoxes,
+  shelfPinBoxes,
+  runnerBoxes,
+} from './hardware';
+import {
   BACK_PANEL,
   GAP,
   PANEL,
@@ -106,6 +114,69 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
   // --- fronty (otwierane) ---
   for (const f of c.fronts) {
     boxes.push(...buildFront(c, f));
+  }
+
+  // --- OKUCIA: uchwyty na frontach, zawiasy, nóżki, wieszaki ---
+  const handleType = c.handle ?? (c.type === 'wall' ? 'edge' : 'bar');
+  for (const f of c.fronts) {
+    const fw = f.x1 - f.x0;
+    const fh = f.y1 - f.y0;
+    const cx = -W / 2 + (f.x0 + f.x1) / 2;
+    const cy = bodyBottom(c) + (f.y0 + f.y1) / 2;
+    // front otwarty = uchwyt jedzie razem z drzwiami (uproszczenie: zostaje na miejscu)
+    boxes.push(
+      ...handleBoxes(
+        c.id,
+        handleType,
+        [fw, fh],
+        [cx, f.kind === 'drawer' ? cy : bodyBottom(c) + f.y1 - 40, c.depth / 2 + 9],
+        c.color ?? '#b9bcc1',
+      ),
+    );
+    // zawiasy tylko dla skrzydeł
+    if (c.detail === 'full' && f.kind === 'door' && fw > 300) {
+      const hingeY = [bodyBottom(c) + f.y0 + 100, bodyBottom(c) + f.y1 - 100];
+      for (const hy of hingeY) {
+        boxes.push(...hingeBoxes(c.id, 'left', -W / 2 + f.x0 + 2, hy, c.depth / 2, c.depth));
+        boxes.push(...hingeBoxes(c.id, 'right', -W / 2 + f.x1 - 2, hy, c.depth / 2, c.depth));
+      }
+    }
+  }
+
+  // nóżki pod korpusem (dolne i wysokie)
+  if (c.detail === 'full' && (c.type === 'base' || c.type === 'tall')) {
+    boxes.push(...legBoxes(c.id, W, Dp, Math.max(c.plinth, 100)));
+  }
+  // wieszaki ścienne
+  if (c.detail === 'full' && c.type === 'wall' && c.mountHeight) {
+    boxes.push(...hangerBoxes(c.id, W, c.mountHeight + H - 40, -Dp / 2 + 20));
+  }
+  // prowadnice szuflad (system N/M/K albo AvanTech)
+  if (c.runner && c.runner !== 'none') {
+    for (const el of c.elements) {
+      if (el.kind !== 'drawer') continue;
+      const level = (el.variant === 'K' || el.variant === 'C') ? 'K' : (el.variant === 'M' ? 'M' : 'N');
+      boxes.push(
+        ...runnerBoxes(
+          c.id,
+          c.runner,
+          level,
+          bodyBottom(c) + D + el.y,
+          innerWidth(c),
+          innerDepth(c),
+          -innerDepth(c) / 2,
+        ),
+      );
+    }
+  }
+
+  // wsporniki półek
+  if (c.detail === 'full') {
+    for (const el of c.elements) {
+      if (el.kind === 'shelf') {
+        boxes.push(...shelfPinBoxes(c.id, W, bodyBottom(c) + D + el.y, 0));
+      }
+    }
   }
 
   // --- wycięcia / otwory / kieszenie ---

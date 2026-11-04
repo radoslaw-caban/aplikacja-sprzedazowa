@@ -163,6 +163,8 @@ export class ThreeEngine implements RenderEngine {
       roughnessMap: useTex ? rough.clone() : undefined,
       normalScale: new THREE.Vector2(0.45, 0.45),
       envMapIntensity: 1.15,
+      emissive: b.emissive ? new THREE.Color(b.emissive) : new THREE.Color('#000000'),
+      emissiveIntensity: b.emissiveIntensity ?? (b.emissive ? 2 : 0),
     });
     // powtórzenia map faktury zgodne z mapą koloru
     if (mat.normalMap) mat.normalMap.repeat.copy(map.repeat);
@@ -606,6 +608,11 @@ export class ThreeEngine implements RenderEngine {
     }
   }
 
+  /** Włącz/wyłącz sterowanie kamerą (przy przesuwaniu szafki kamera ma stać). */
+  setControlsEnabled(on: boolean) {
+    if (this.controls) this.controls.enabled = on;
+  }
+
   /** Jakość renderu: low = bez AO i bloomu, medium = sam AO, high = wszystko. */
   setQuality(level: 'low' | 'medium' | 'high') {
     this.quality = level;
@@ -691,6 +698,8 @@ export class ThreeEngine implements RenderEngine {
         (b.position[2] + cabinetsOrigin.z) * mm,
       );
       if (b.rotationY) mesh.rotation.y = (b.rotationY * Math.PI) / 180;
+      if (b.rotationZ) mesh.rotation.z = (b.rotationZ * Math.PI) / 180;
+      if (b.rotationX) mesh.rotation.x = (b.rotationX * Math.PI) / 180;
       mesh.userData = {
         cabinetId: b.cabinetId,
         elementId: b.elementId,
@@ -699,9 +708,26 @@ export class ThreeEngine implements RenderEngine {
         boxId: b.id,
       };
       const solid = b.kind !== 'hole' && b.mat !== 'glass';
-      mesh.castShadow = solid && b.kind !== 'scene';
+      mesh.castShadow = solid && b.kind !== 'scene' && !b.emissive;
       mesh.receiveShadow = solid;
       this.designGroup.add(mesh);
+
+      // realne światło oprawy (lampy, LED)
+      if (b.light) {
+        const lp = new THREE.PointLight(
+          new THREE.Color(b.light.color),
+          b.light.intensity,
+          (b.light.distance ?? 1200) * mm,
+          2,
+        );
+        lp.position.set(
+          (b.position[0] + cabinetsOrigin.x) * mm,
+          (b.light.y ?? b.position[1]) * mm,
+          (b.position[2] + cabinetsOrigin.z) * mm,
+        );
+        lp.userData = { kind: 'light' };
+        this.designGroup.add(lp);
+      }
 
       // kontur krawędzi — czytelność bryły (panel/front), pomijany dla drobnych elementów
       if (b.outline && b.kind !== 'hole' && b.kind !== 'handle') {

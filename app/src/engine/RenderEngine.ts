@@ -65,6 +65,7 @@ export interface RenderEngine {
   setCloudVisible?(visible: boolean): void;
   setWallGhost?(on: boolean): void;
   setQuality?(level: 'low' | 'medium' | 'high'): void;
+  setControlsEnabled?(on: boolean): void;
   highlightElement?(elementId: string | null): void;
   disposeDesign?(): void;
   getDebugInfo?(): Record<string, unknown>;

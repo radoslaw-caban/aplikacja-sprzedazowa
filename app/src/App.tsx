@@ -12,13 +12,15 @@ import {
   type CabinetTemplate,
   type ElementTemplate,
 } from './design/library';
-import { baseCabinet, makeDoors, type Cabinet, type Cutout } from './design/types';
+import { baseCabinet, makeDoors, type Cabinet, type Cutout, type SceneBox } from './design/types';
 import { collidesWithCabinets, elementCollides, findFreeY, collectSnapPoints, nearestSnap, snapToLines } from './design/collision';
 import { defaultRoom, roomBoxes, snapToWalls, cornerSnap, type WallSide } from './design/room';
 import { GROUP_LABELS } from './design/library';
 import { computeRuns, worktopBoxes, plinthBoxes } from './design/runs';
 import { exteriorBoxes } from './design/exterior';
 import RoomDialog, { type RoomDraft } from './ui/RoomDialog';
+import { LIGHT_TEMPLATES, type LightTemplate } from './design/lighting';
+import { HANDLE_SPECS, RUNNER_SPECS } from './design/hardware';
 import { stepFromPrecision, toUnit, fromUnit } from './design/units';
 import OrganizerPanel from './ui/OrganizerPanel';
 import SettingsPanel from './ui/SettingsPanel';
@@ -32,7 +34,7 @@ import './App.css';
 const CLOUD_URL = `${import.meta.env.BASE_URL}dom-chmura.ply`;
 const COLORS = ['#e8e2d8', '#c9a06a', '#b08968', '#2f3437', '#5b6b73', '#8d9b6a'];
 
-type Tab = 'layout' | 'interior';
+type Tab = 'layout' | 'interior' | 'lights';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -63,6 +65,7 @@ export default function App() {
   const [exterior, setExterior] = useState(true);
   const [roof, setRoof] = useState(false);
   const [wallGhost, setWallGhost] = useState(true);
+  const [lights, setLights] = useState<SceneBox[]>([]);
 
   const active = cabinets.find((c) => c.id === selectedId) ?? undefined;
   const selElement = active?.elements.find((e) => e.id === selectedElement);
@@ -112,6 +115,16 @@ export default function App() {
       .catch(() => worker.terminate());
   }, [ready, cloudVisible]);
 
+  // ---- tryb przesuwania: kamera zablokowana, żeby nie uciekała z szafką ----
+  useEffect(() => {
+    engineRef.current?.setControlsEnabled?.(!moveMode);
+    if (!moveMode) {
+      dragRef.current = null;
+      setCarrying(null);
+      engineRef.current?.clearGuides?.();
+    }
+  }, [moveMode]);
+
   // ---- ustawienia → silnik ----
   useEffect(() => {
     saveSettings(settings);
@@ -150,8 +163,9 @@ export default function App() {
       ...worktopBoxes(runs, settings.worktop),
       ...plinthBoxes(runs, settings.plinth),
       ...(exterior ? exteriorBoxes(room, { roof }) : []),
+      ...lights,
     ];
-  }, [cabinets, settings.showFronts, settings.worktop, settings.plinth, exterior, roof, room]);
+  }, [cabinets, settings.showFronts, settings.worktop, settings.plinth, exterior, roof, room, lights]);
 
   // pokój przebudowywany przy zmianie wymiarów / przeznaczenia
   useEffect(() => {
@@ -202,9 +216,9 @@ export default function App() {
 
     const onDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY, t: Date.now(), moved: false };
-      if (!moveMode) return;
-      startCarry(e);
-      canvas.setPointerCapture?.(e.pointerId);
+      // W trybie M nie ruszamy przyciskiem: jedno kliknięcie podnosi szafkę,
+      // drugie odkłada. Kamera jest wyłączona, więc nie ucieka razem z szafką.
+      if (moveMode) e.stopPropagation();
     };
 
     const onMove = (e: PointerEvent) => {
@@ -229,7 +243,14 @@ export default function App() {
           gx = lines.x;
           gz = lines.z;
         }
-        let test: Cabinet = { ...c, x: gx - drag.dx, z: gz - drag.dz };
+        // trzymaj szafkę w obrębie pomieszczenia (nie ucieka poza ściany)
+        const halfW = c.rotation === 90 || c.rotation === 270 ? c.depth / 2 : c.width / 2;
+        const halfD = c.rotation === 90 || c.rotation === 270 ? c.width / 2 : c.depth / 2;
+        const limX = Math.max(0, room.width / 2 - halfW);
+        const limZ = Math.max(0, room.depth / 2 - halfD);
+        const cx = Math.max(-limX, Math.min(limX, gx - drag.dx));
+        const cz = Math.max(-limZ, Math.min(limZ, gz - drag.dz));
+        let test: Cabinet = { ...c, x: cx, z: cz };
         // ściana: tylko gdy blisko, i tylko dla osi prostopadłej do ściany
         const distToWall = Math.min(
           Math.abs(test.z + room.depth / 2),
@@ -247,15 +268,26 @@ export default function App() {
     };
 
     const onUp = () => {
+      // w trybie M szafka pozostaje „w ręce" — odkłada ją dopiero klik
+      if (moveMode) return;
       dragRef.current = null;
       engineRef.current?.clearGuides?.();
     };
 
     const onClick = (e: MouseEvent) => {
       if (moveMode) {
-        // w trybie M: klik ustawia szafkę w miejscu docelowym
-        if (!carrying) startCarry(e as unknown as PointerEvent);
-        else setCarrying(null);
+        if (!carrying) {
+          if (startCarry(e as unknown as PointerEvent)) {
+            engineRef.current?.setControlsEnabled?.(false);
+            setStatus('Szafka podniesiona — przesuń kursor i kliknij, żeby odłożyć');
+          }
+        } else {
+          dragRef.current = null;
+          setCarrying(null);
+          engineRef.current?.clearGuides?.();
+          engineRef.current?.setControlsEnabled?.(true);
+          setStatus('Szafka odłożona');
+        }
         return;
       }
       const hit = engineRef.current?.pickAt?.(e.clientX, e.clientY);
@@ -295,6 +327,23 @@ export default function App() {
   // ---- operacje ----
   const patchCabinet = (id: string, patch: Partial<Cabinet>) =>
     setCabinets((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+
+  /** Dodaje oprawę oświetleniową nad zaznaczoną szafką (albo w środku pokoju). */
+  const addLight = (t: LightTemplate) => {
+    const base = active;
+    const x = base?.x ?? 0;
+    const z = base?.z ?? 0;
+    const w = base?.width ?? 600;
+    let y = 2600;
+    if (t.group === 'podszafkowe') y = base ? (base.mountHeight ?? 1500) - 20 : 1400;
+    if (t.group === 'cokół') y = 40;
+    if (t.group === 'wyspa') y = 1500;
+    if (t.group === 'ściana') y = base ? 1500 : 1200;
+    if (t.group === 'sufit') y = 2600;
+    const made = t.make(x, y, z, w).map((b) => ({ ...b, id: `${b.id}-${Math.random().toString(36).slice(2, 6)}` }));
+    setLights((ls) => [...ls, ...made]);
+    setStatus(`Dodano: ${t.label} (${t.temp})`);
+  };
 
   const addCabinet = (t: CabinetTemplate, side: 'left' | 'right' = 'right') => {
     const c = t.make();
@@ -543,6 +592,7 @@ export default function App() {
           <div className="modes">
             <button className={tab === 'layout' ? 'on' : ''} onClick={() => setTab('layout')}>Układ</button>
             <button className={tab === 'interior' ? 'on' : ''} onClick={() => active && enterInterior(active)}>Wnętrze</button>
+            <button className={tab === 'lights' ? 'on' : ''} onClick={() => setTab('lights')}>Oświetlenie</button>
           </div>
           <span className="badge ok">{status || (ready ? 'gotowe' : 'ładowanie…')}</span>
         </div>
@@ -551,6 +601,27 @@ export default function App() {
       <div className="main">
         {libOpen && (
           <aside className="sidebar">
+            {tab === 'lights' && (
+              <>
+                {(['podszafkowe', 'cokół', 'sufit', 'ściana', 'wyspa'] as const).map((grp) => {
+                  const items = LIGHT_TEMPLATES.filter((t) => t.group === grp);
+                  if (!items.length) return null;
+                  return (
+                    <div className="sb-group" key={grp}>
+                      <div className="sb-title">{grp === 'cokół' ? 'Cokół' : grp}</div>
+                      {items.map((t) => (
+                        <div key={t.key} className="sb-item" onClick={() => addLight(t)} title={t.hint}>
+                          <span className="sb-thumb" style={{ background: t.color }} />
+                          <span className="sb-label">{t.label}</span>
+                          <span className="sb-tag">{t.temp}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
             {tab === 'layout' ? (
               LIBRARY_GROUPS.map((g) => (
                 <div className="sb-group" key={g}>
@@ -679,6 +750,30 @@ export default function App() {
                   type="number" step={1} value={active.rotation}
                   onChange={(e) => patchCabinet(active.id, { rotation: +e.target.value })}
                 />
+              </div>
+              <div className="precise">
+                <label>Uchwyt</label>
+                <select
+                  value={active.handle ?? 'bar'}
+                  onChange={(e) => patchCabinet(active.id, { handle: e.target.value as never })}
+                >
+                  {(Object.keys(HANDLE_SPECS) as (keyof typeof HANDLE_SPECS)[]).map((k) => (
+                    <option key={k} value={k}>{HANDLE_SPECS[k].label}</option>
+                  ))}
+                  <option value="none">Bez uchwytu</option>
+                </select>
+              </div>
+              <div className="precise">
+                <label>Prowadnice</label>
+                <select
+                  value={active.runner ?? 'legrabox'}
+                  onChange={(e) => patchCabinet(active.id, { runner: e.target.value as never })}
+                >
+                  {(Object.keys(RUNNER_SPECS) as (keyof typeof RUNNER_SPECS)[]).map((k) => (
+                    <option key={k} value={k}>{RUNNER_SPECS[k].label}</option>
+                  ))}
+                  <option value="none">Bez prowadnic</option>
+                </select>
               </div>
               <div className="bubble-row">
                 <label>Szer.</label>

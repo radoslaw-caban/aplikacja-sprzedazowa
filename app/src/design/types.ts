@@ -106,6 +106,12 @@ export interface Cabinet {
   accessWidth?: number;
   /** wysokość zaślepienia do sufitu (mm) */
   topFiller?: number;
+  /** typ uchwytu na фронтах */
+  handle?: 'bar' | 'cup' | 'edge' | 'knob' | 'none';
+  /** poziom detalu okuć: basic = uchwyty+prowadnice, full = +zawiasy, nóżki, wsporniki */
+  detail?: 'basic' | 'full';
+  /** system szuflad */
+  runner?: 'legrabox' | 'tandembox' | 'antaro' | 'aventech' | 'none';
 }
 
 /** Neutralny opis bryły — renderer nie zna pojęcia „szafka". */
@@ -121,11 +127,17 @@ export interface SceneBox {
   position: [number, number, number];
   rotationY?: number;
   rotationZ?: number;
+  rotationX?: number;
   color?: string;
   shape?: 'box' | 'cylinder' | 'sphere';
   opacity?: number;
   /** rysuj kontur krawędzi */
   outline?: boolean;
+  /** świecenie (LED, lampy) */
+  emissive?: string;
+  emissiveIntensity?: number;
+  /** realne źródło światła w tym miejscu */
+  light?: { color: string; intensity: number; distance: number; y?: number };
   /** rodzaj materiału PBR (tekstura proceduralna) */
   mat?: 'wood' | 'wood-dark' | 'laminate' | 'stone' | 'glass' | 'metal' | 'grass' | 'cobble' | 'plaster' | 'roof' | 'foliage' | 'deck' | 'brick';
 }
