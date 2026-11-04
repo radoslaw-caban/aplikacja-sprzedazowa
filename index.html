@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/aplikacja-sprzedazowa/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0b0d10" />
+    <title>Konfigurator 3D — Aplikacja sprzedażowa</title>
+    <!-- COOP/COEP dla SharedArrayBuffer (wymagane przez dekoder WASM E57).
+         GitHub Pages nie pozwala ustawić nagłówków, więc robi to service worker. -->
+    <script>
+      if (typeof window !== 'undefined' && !window.crossOriginIsolated) {
+        document.write('<script src="/aplikacja-sprzedazowa/coi-serviceworker.min.js"><\/script>');
+      }
+    </script>
+    <script type="module" crossorigin src="/aplikacja-sprzedazowa/assets/index-BEnE4K3R.js"></script>
+    <link rel="stylesheet" crossorigin href="/aplikacja-sprzedazowa/assets/index-EpqenYC2.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
