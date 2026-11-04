@@ -387,3 +387,15 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
 .cut-menu button.danger { color: #f87171; background: #2a1a1a; border: 1px solid #4a2a2a; border-radius: 9px; padding: 8px; }
 .cut-menu > button { padding: 8px; border-radius: 9px; background: #1c2128; color: #d3d8de; border: 1px solid #2a313a; cursor: pointer; font-size: .78rem; }
 .sb-add { color: #c9a227; }
+
+/* ---- pola precyzyjne ---- */
+.precise {
+  display: flex; align-items: center; gap: 8px;
+  font-size: .72rem; color: #9aa3ae;
+}
+.precise label { width: 84px; flex-shrink: 0; }
+.precise input {
+  flex: 1; width: 100%; background: #141a21; border: 1px solid #2a313a;
+  border-radius: 7px; padding: 5px 7px; color: #e8eaed;
+  font-size: .76rem; font-family: ui-monospace, monospace;
+}

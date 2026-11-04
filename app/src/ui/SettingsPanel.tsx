@@ -5,6 +5,7 @@ import {
   type ClientData,
   type Settings,
 } from '../design/settings';
+import { ENGINE_OPTIONS } from '../design/units';
 
 interface Props {
   settings: Settings;
@@ -106,6 +107,49 @@ export default function SettingsPanel({ settings, onChange, onClose, onSaveProje
                 </label>
 
                 <h3>Projekt</h3>
+                <label className="set-row">
+                  <span>Jednostka wymiarów</span>
+                  <div className="modes">
+                    {(['mm', 'cm', 'm'] as const).map((u) => (
+                      <button
+                        key={u}
+                        className={settings.units === u ? 'on' : ''}
+                        onClick={() => onChange({ ...settings, units: u })}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </label>
+                <label className="set-row">
+                  <span>Dokładność edycji</span>
+                  <input
+                    type="range" min={0} max={4} step={1}
+                    value={settings.precision}
+                    onChange={(e) => onChange({ ...settings, precision: +e.target.value })}
+                  />
+                  <b>{settings.precision} miejsc</b>
+                </label>
+                <p className="set-hint">
+                  Krok edycji: {settings.precision === 4 ? '0,0001' : settings.precision === 3 ? '0,001' : settings.precision === 2 ? '0,01' : settings.precision === 1 ? '0,1' : '1'} {settings.units}
+                </p>
+
+                <h3>Silnik graficzny</h3>
+                <div className="set-actions">
+                  {ENGINE_OPTIONS.map((e) => (
+                    <button
+                      key={e.id}
+                      className={settings.engine === e.id ? 'set-toggle on' : 'set-toggle'}
+                      title={e.description}
+                      onClick={() => onChange({ ...settings, engine: e.id })}
+                    >
+                      {e.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="set-hint">Przełączanie skrótem: {settings.shortcuts['engine.cycle']?.toUpperCase()}</p>
+
+                <h3>Zapis projektu</h3>
                 <div className="set-actions">
                   <button onClick={onSaveProject}>💾 Zapisz projekt</button>
                   <label className="set-file">

@@ -33,7 +33,9 @@ export const ACTIONS: ActionDef[] = [
   { id: 'element.delete', label: 'Usuń wybrany element', module: 'global', defaultKey: 'x' },
   { id: 'cutout', label: 'Dodaj wycięcie…', module: 'interior', defaultKey: 'v' },
   { id: 'cabinet.move', label: 'Tryb przesuwania szafek', module: 'layout', defaultKey: 'm' },
-  { id: 'cloud.toggle', label: 'Pokaż/ukryj skan', module: 'global', defaultKey: 'c' },
+  { id: 'engine.cycle', label: 'Przełącz silnik graficzny', module: 'global', defaultKey: 'e' },
+  { id: 'cloud.toggle', label: 'Pokaż/ukryj chmurę punktów', module: 'global', defaultKey: 'c' },
+  { id: 'orbit.toggle', label: 'Auto-orbitowanie pola roboczego', module: 'global', defaultKey: 'o' },
 ];
 
 export interface ClientData {
@@ -56,6 +58,12 @@ export interface Settings {
   camera: CameraSettings;
   showFronts: boolean;
   autoRotate: boolean;
+  /** jednostka wyświetlania wymiarów */
+  units: 'mm' | 'cm' | 'm';
+  /** dokładność edycji: liczba miejsc po przecinku (0..4) */
+  precision: number;
+  /** wybrany silnik graficzny */
+  engine: string;
   shortcuts: Record<string, string>;
   client: ClientData;
 }
@@ -67,6 +75,9 @@ export function defaultSettings(): Settings {
     camera: { distance: 1, fov: 45, interiorHeight: 0.45 },
     showFronts: true,
     autoRotate: false,
+    units: 'mm',
+    precision: 1,
+    engine: 'three',
     shortcuts: Object.fromEntries(ACTIONS.map((a) => [a.id, a.defaultKey])),
     client: { name: '', phone: '', email: '', address: '', notes: '' },
   };

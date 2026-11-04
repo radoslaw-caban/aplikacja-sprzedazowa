@@ -62,6 +62,7 @@ export interface RenderEngine {
   drawGuides?(guides: { axis: 'x' | 'z'; value: number; from: number; to: number }[]): void;
   clearGuides?(): void;
   highlightCabinet?(cabinetId: string | null): void;
+  setCloudVisible?(visible: boolean): void;
   highlightElement?(elementId: string | null): void;
   disposeDesign?(): void;
   getDebugInfo?(): Record<string, unknown>;

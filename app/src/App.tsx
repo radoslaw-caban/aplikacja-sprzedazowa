@@ -14,8 +14,10 @@ import {
   type ElementTemplate,
 } from './design/library';
 import { baseCabinet, makeDoors, type Cabinet, type Cutout } from './design/types';
-import { collidesWithCabinets, elementCollides, findFreeY } from './design/collision';
+import { collidesWithCabinets, elementCollides, findFreeY, collectSnapPoints, nearestSnap, snapToLines } from './design/collision';
 import { defaultRoom, roomBoxes, snapToWalls, cornerSnap, type WallSide } from './design/room';
+import { GROUP_LABELS } from './design/library';
+import { stepFromPrecision, toUnit, fromUnit } from './design/units';
 import OrganizerPanel from './ui/OrganizerPanel';
 import SettingsPanel from './ui/SettingsPanel';
 import CabinetThumb from './ui/CabinetThumb';
@@ -52,14 +54,18 @@ export default function App() {
   const [room] = useState(defaultRoom());
   const [moveMode, setMoveMode] = useState(false);
   const [cornerDir, setCornerDir] = useState<WallSide>('south');
+  const [carrying, setCarrying] = useState<string | null>(null);
+  const [engineEpoch, setEngineEpoch] = useState(0);
+  const [cloudVisible, setCloudVisible] = useState(true);
 
   const active = cabinets.find((c) => c.id === selectedId) ?? undefined;
   const selElement = active?.elements.find((e) => e.id === selectedElement);
   const selCut = active?.cutouts.find((c) => c.id === selectedCut);
 
-  // ---- silnik ----
+  // ---- silnik (restart przy zmianie silnika graficznego) ----
   useEffect(() => {
-    const engine = createEngine();
+    setReady(false);
+    const engine = createEngine(settings.engine, settings.engine === 'wireframe' ? 'wireframe' : 'pbr');
     engineRef.current = engine;
     (window as unknown as { engine?: unknown }).engine = engine;
     const canvas = canvasRef.current!;
@@ -76,7 +82,7 @@ export default function App() {
       engine.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [engineEpoch]);
 
   // ---- chmura (tło; w pomieszczeniu testowym opcjonalna) ----
   useEffect(() => {
@@ -106,7 +112,8 @@ export default function App() {
       autoRotate: settings.autoRotate,
       frontsVisible: settings.showFronts,
     });
-  }, [settings]);
+    engineRef.current?.setCloudVisible?.(cloudVisible);
+  }, [settings, cloudVisible]);
 
   // ---- render ----
   const boxes = useCallback(
@@ -134,7 +141,14 @@ export default function App() {
     if (!ready) return;
     engineRef.current?.renderBoxes?.(boxes());
     engineRef.current?.highlightCabinet?.(selectedId);
-  }, [ready, boxes, selectedId]);
+    engineRef.current?.setCloudVisible?.(cloudVisible);
+    engineRef.current?.setViewSettings?.({
+      distance: settings.camera.distance,
+      fov: settings.camera.fov,
+      autoRotate: settings.autoRotate,
+      frontsVisible: settings.showFronts,
+    });
+  }, [ready, boxes, selectedId, cloudVisible, settings.camera, settings.autoRotate, settings.showFronts, engineEpoch]);
 
   useEffect(() => {
     if (!ready) return;
@@ -142,38 +156,60 @@ export default function App() {
     return () => clearTimeout(t);
   }, [ready]);
 
-  // ---- interakcja: klik = zaznacz, dwuklik = wnętrze, M = przesuwanie ----
+  // ---- interakcja: klik = zaznacz, dwuklik = wnętrze, M = przesuwanie z chwytem ----
   useEffect(() => {
     if (!ready) return;
     const canvas = canvasRef.current!;
     let down = { x: 0, y: 0, t: 0, moved: false };
 
+    /** Start chwytu: łapiemy za najbliższy narożnik/krawędź/przecięcie. */
+    const startCarry = (e: PointerEvent) => {
+      const hit = engineRef.current?.pickAt?.(e.clientX, e.clientY);
+      const floor = engineRef.current?.screenToFloor?.(e.clientX, e.clientY);
+      if (!hit?.cabinetId || !floor) return false;
+      const c = cabinets.find((x) => x.id === hit.cabinetId);
+      if (!c) return false;
+      const pts = collectSnapPoints(cabinets.filter((x) => x.id !== c.id));
+      const grab = nearestSnap(pts, floor.x, floor.z, 200);
+      // offset: punkt chwytu minus pozycja szafki (żeby trzymała się pod palcem)
+      dragRef.current = {
+        id: c.id,
+        dx: grab ? grab.x - c.x : floor.x - c.x,
+        dz: grab ? grab.z - c.z : floor.z - c.z,
+      };
+      setSelectedId(c.id);
+      setCarrying(c.id);
+      return true;
+    };
+
     const onDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY, t: Date.now(), moved: false };
       if (!moveMode) return;
-      const hit = engineRef.current?.pickAt?.(e.clientX, e.clientY);
-      if (hit?.cabinetId) {
-        const c = cabinets.find((x) => x.id === hit.cabinetId);
-        const floor = engineRef.current?.screenToFloor?.(e.clientX, e.clientY);
-        if (c && floor) {
-          dragRef.current = { id: c.id, dx: c.x - floor.x, dz: c.z - floor.z };
-          setSelectedId(c.id);
-        }
-      }
+      startCarry(e);
+      canvas.setPointerCapture?.(e.pointerId);
     };
 
     const onMove = (e: PointerEvent) => {
       if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) down.moved = true;
       const drag = dragRef.current;
-      if (!drag || !moveMode) return;
+      if (!drag) return;
       const floor = engineRef.current?.screenToFloor?.(e.clientX, e.clientY);
       if (!floor) return;
-      const nx = floor.x + drag.dx;
-      const nz = floor.z + drag.dz;
+      const rawX = floor.x - drag.dx;
+      const rawZ = floor.z - drag.dz;
       setCabinets((cs) => {
         const c = cs.find((x) => x.id === drag.id);
         if (!c) return cs;
-        // dociąganie do ścian (tył do ściany, z odstępem)
+        const pts = collectSnapPoints(cs.filter((x) => x.id !== c.id));
+        // 1) najpierw przyciąganie do punktów charakterystycznych
+        const spot = nearestSnap(pts, rawX, rawZ, 120);
+        let nx = spot ? spot.x - (drag.dx) : rawX;
+        let nz = spot ? spot.z - (drag.dz) : rawZ;
+        // 2) potem prowadnice po liniach
+        const lines = snapToLines(pts, nx, nz, 60);
+        nx = lines.x;
+        nz = lines.z;
+        // 3) ściany pomieszczenia
         const distToWall = Math.min(
           Math.abs(nz + room.depth / 2),
           Math.abs(nz - room.depth / 2),
@@ -181,23 +217,30 @@ export default function App() {
           Math.abs(nx - room.width / 2),
         );
         let test: Cabinet = { ...c, x: nx, z: nz };
-        if (distToWall < 300) {
+        let guides = lines.guides;
+        if (distToWall < 250) {
           const wall = snapToWalls(room, c.width, c.depth, nx, nz);
           test = { ...test, ...wall };
+          guides = [];
         }
+        engineRef.current?.drawGuides?.(guides);
         if (collidesWithCabinets(cs, test)) return cs;
         return cs.map((x) => (x.id === drag.id ? test : x));
       });
     };
 
     const onUp = () => {
-      const wasDragging = !!dragRef.current;
       dragRef.current = null;
       engineRef.current?.clearGuides?.();
-      if (wasDragging || down.moved || Date.now() - down.t > 600) return;
     };
 
     const onClick = (e: MouseEvent) => {
+      if (moveMode) {
+        // w trybie M: klik ustawia szafkę w miejscu docelowym
+        if (!carrying) startCarry(e as unknown as PointerEvent);
+        else setCarrying(null);
+        return;
+      }
       const hit = engineRef.current?.pickAt?.(e.clientX, e.clientY);
       if (!hit?.cabinetId) {
         setSelectedId(null);
@@ -208,7 +251,7 @@ export default function App() {
       }
       setSelectedId(hit.cabinetId);
       setSelectedElement(hit.elementId ?? null);
-      setSelectedCut(hit.kind === 'cutout' ? null : null);
+      setSelectedCut(null);
     };
 
     const onDbl = (e: MouseEvent) => {
@@ -230,7 +273,7 @@ export default function App() {
       canvas.removeEventListener('dblclick', onDbl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, moveMode, cabinets, room]);
+  }, [ready, moveMode, cabinets, room, carrying]);
 
   // ---- operacje ----
   const patchCabinet = (id: string, patch: Partial<Cabinet>) =>
@@ -386,6 +429,13 @@ export default function App() {
       else if (hit('library.toggle')) { setLibOpen((v) => !v); e.preventDefault(); }
       else if (hit('element.delete')) { if (selectedElement) removeElement(selectedElement); e.preventDefault(); }
       else if (hit('cabinet.move')) { setMoveMode((v) => !v); e.preventDefault(); }
+      else if (hit('engine.cycle')) {
+        setSettings((s) => ({ ...s, engine: s.engine === 'three' ? 'wireframe' : 'three' }));
+        setEngineEpoch((x) => x + 1);
+        e.preventDefault();
+      }
+      else if (hit('cloud.toggle')) { setCloudVisible((v) => !v); e.preventDefault(); }
+      else if (hit('orbit.toggle')) { setSettings((s) => ({ ...s, autoRotate: !s.autoRotate })); e.preventDefault(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -393,6 +443,9 @@ export default function App() {
   }, [settings, settingsOpen, active, selectedElement, cabinets]);
 
   const summary = active ? summarize(active) : null;
+  const unitStep = stepFromPrecision(settings.units, settings.precision);
+  const fmt = (mm: number) => `${toUnit(mm, settings.units).toFixed(settings.precision)}`;
+  const unitLabel = settings.units;
 
   return (
     <div className="app">
@@ -405,6 +458,20 @@ export default function App() {
         <button className="gear" title="Ustawienia (S)" onClick={() => setSettingsOpen(true)}>⚙</button>
         <h1>Projektant szafek</h1>
         <div className="header-right">
+          <button
+            className={`chip ${cloudVisible ? 'on' : ''}`}
+            title="Chmura punktów (C)"
+            onClick={() => setCloudVisible((v) => !v)}
+          >
+            ☁ {cloudVisible ? 'Chmura WŁ' : 'Chmura WYŁ'}
+          </button>
+          <button
+            className={`chip ${settings.autoRotate ? 'on' : ''}`}
+            title="Auto-orbitowanie pola roboczego (O)"
+            onClick={() => setSettings((s) => ({ ...s, autoRotate: !s.autoRotate }))}
+          >
+            ⟳ {settings.autoRotate ? 'Orbita WŁ' : 'Orbita WYŁ'}
+          </button>
           <button
             className={`chip ${moveMode ? 'on' : ''}`}
             title="Tryb przesuwania (M)"
@@ -426,7 +493,7 @@ export default function App() {
             {tab === 'layout' ? (
               LIBRARY_GROUPS.map((g) => (
                 <div className="sb-group" key={g}>
-                  <div className="sb-title">{g}</div>
+                  <div className="sb-title">{GROUP_LABELS[g] ?? g}</div>
                   {byGroup(g).map((t) => (
                     <div
                       key={t.key} className="sb-item" draggable
@@ -512,6 +579,46 @@ export default function App() {
           {tab === 'layout' && active && (
             <div className="inspect">
               <div className="inspect-title">{active.name}</div>
+              <div className="precise">
+                <label>X [{unitLabel}]</label>
+                <input
+                  type="number" step={unitStep}
+                  value={fmt(active.x)}
+                  onChange={(e) => {
+                    const mm = fromUnit(+e.target.value, settings.units);
+                    patchCabinet(active.id, { x: mm });
+                  }}
+                />
+              </div>
+              <div className="precise">
+                <label>Z [{unitLabel}]</label>
+                <input
+                  type="number" step={unitStep}
+                  value={fmt(active.z)}
+                  onChange={(e) => patchCabinet(active.id, { z: fromUnit(+e.target.value, settings.units) })}
+                />
+              </div>
+              <div className="precise">
+                <label>Szer. [{unitLabel}]</label>
+                <input
+                  type="number" step={unitStep}
+                  value={fmt(active.width)}
+                  onChange={(e) => {
+                    const w = fromUnit(+e.target.value, settings.units);
+                    patchCabinet(active.id, {
+                      width: w,
+                      fronts: active.fronts.length ? makeDoors({ ...active, width: w }, active.fronts.length) : [],
+                    });
+                  }}
+                />
+              </div>
+              <div className="precise">
+                <label>Obrót [°]</label>
+                <input
+                  type="number" step={1} value={active.rotation}
+                  onChange={(e) => patchCabinet(active.id, { rotation: +e.target.value })}
+                />
+              </div>
               <div className="bubble-row">
                 <label>Szer.</label>
                 <input type="range" min={300} max={1200} step={10} value={active.width}

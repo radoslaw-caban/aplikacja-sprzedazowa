@@ -13,6 +13,13 @@ export class ThreeEngine implements RenderEngine {
   id = 'three';
   capabilities = { maxTextureSize: 4096, supportsDraco: true };
 
+  /** tryb renderowania: pełny PBR albo szkic techniczny (same krawędzie) */
+  private renderMode: 'pbr' | 'wireframe';
+
+  constructor(renderMode: 'pbr' | 'wireframe' = 'pbr') {
+    this.renderMode = renderMode;
+  }
+
   private renderer?: THREE.WebGLRenderer;
   private scene?: THREE.Scene;
   private camera?: THREE.PerspectiveCamera;
@@ -398,6 +405,11 @@ export class ThreeEngine implements RenderEngine {
     }
   }
 
+  /** Pokaż/ukryj chmurę punktów. */
+  setCloudVisible(visible: boolean) {
+    if (this.pointCloud) this.pointCloud.visible = visible;
+  }
+
   /** Podświetla całą szafkę (zaznaczenie). */
   highlightCabinet(cabinetId: string | null) {
     for (const o of this.designGroup.children) {
@@ -430,13 +442,15 @@ export class ThreeEngine implements RenderEngine {
           : new THREE.BoxGeometry(sx * mm, sy * mm, sz * mm);
       const baseColor = new THREE.Color(b.color ?? '#c9a06a');
       const isPanel = b.kind === 'panel';
+      const wire = this.renderMode === 'wireframe';
       const mat = new THREE.MeshStandardMaterial({
         color: baseColor,
         roughness: isPanel ? 0.65 : 0.45,
         metalness: b.kind === 'handle' ? 0.6 : 0.05,
         // fronty PEŁNE (nieprzezroczyste) — widoczność wnętrza zapewnia ich otwieranie
-        transparent: (b.opacity ?? 1) < 1,
-        opacity: b.opacity ?? 1,
+        transparent: wire || (b.opacity ?? 1) < 1,
+        opacity: wire ? 0.06 : b.opacity ?? 1,
+        wireframe: wire,
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(

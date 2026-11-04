@@ -19,7 +19,9 @@ import {
 export interface CabinetTemplate {
   key: string;
   label: string;
-  group: 'dolne' | 'górne' | 'słupki' | 'specjalne';
+  group: 'podblatowe' | 'górne' | 'słupki' | 'specjalne';
+  /** kategoria decyduje o wymuszonych elementach (blat, cokół) */
+  category: 'podblatowa' | 'wisząca' | 'słupek' | 'specjalna';
   width: number;
   make: () => Cabinet;
 }
@@ -62,23 +64,23 @@ function baseDrawers(width: number, heights: number[], name: string): Cabinet {
 
 export const CABINET_LIBRARY: CabinetTemplate[] = [
   // ---------- DOLNE ----------
-  { key: 'base-300', group: 'dolne', label: 'Dolna 300 / 1 front', width: 300, make: () => baseDoor(300, 1, 'Dolna 300') },
-  { key: 'base-400', group: 'dolne', label: 'Dolna 400 / 1 front', width: 400, make: () => baseDoor(400, 1, 'Dolna 400') },
-  { key: 'base-450', group: 'dolne', label: 'Dolna 450 / 1 front', width: 450, make: () => baseDoor(450, 1, 'Dolna 450') },
-  { key: 'base-500', group: 'dolne', label: 'Dolna 500 / 1 front', width: 500, make: () => baseDoor(500, 1, 'Dolna 500') },
-  { key: 'base-600', group: 'dolne', label: 'Dolna 600 / 1 front', width: 600, make: () => baseDoor(600, 1, 'Dolna 600') },
-  { key: 'base-800', group: 'dolne', label: 'Dolna 800 / 2 fronty', width: 800, make: () => baseDoor(800, 2, 'Dolna 800') },
-  { key: 'base-900', group: 'dolne', label: 'Dolna 900 / 2 fronty', width: 900, make: () => baseDoor(900, 2, 'Dolna 900') },
-  { key: 'base-1000', group: 'dolne', label: 'Dolna 1000 / 2 fronty', width: 1000, make: () => baseDoor(1000, 2, 'Dolna 1000') },
-  { key: 'base-1200', group: 'dolne', label: 'Dolna 1200 / 3 fronty', width: 1200, make: () => baseDoor(1200, 3, 'Dolna 1200') },
+  { key: 'base-300', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 300 / 1 front', width: 300, make: () => baseDoor(300, 1, 'Dolna 300') },
+  { key: 'base-400', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 400 / 1 front', width: 400, make: () => baseDoor(400, 1, 'Dolna 400') },
+  { key: 'base-450', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 450 / 1 front', width: 450, make: () => baseDoor(450, 1, 'Dolna 450') },
+  { key: 'base-500', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 500 / 1 front', width: 500, make: () => baseDoor(500, 1, 'Dolna 500') },
+  { key: 'base-600', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / 1 front', width: 600, make: () => baseDoor(600, 1, 'Dolna 600') },
+  { key: 'base-800', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 800 / 2 fronty', width: 800, make: () => baseDoor(800, 2, 'Dolna 800') },
+  { key: 'base-900', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 900 / 2 fronty', width: 900, make: () => baseDoor(900, 2, 'Dolna 900') },
+  { key: 'base-1000', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 1000 / 2 fronty', width: 1000, make: () => baseDoor(1000, 2, 'Dolna 1000') },
+  { key: 'base-1200', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 1200 / 3 fronty', width: 1200, make: () => baseDoor(1200, 3, 'Dolna 1200') },
 
-  { key: 'drawer-600-2', group: 'dolne', label: 'Dolna 600 / 2 szuflady', width: 600, make: () => baseDrawers(600, [280, 280], 'Dolna 600 / 2 szuflady') },
-  { key: 'drawer-600-3', group: 'dolne', label: 'Dolna 600 / 3 szuflady', width: 600, make: () => baseDrawers(600, [220, 220, 220], 'Dolna 600 / 3 szuflady') },
-  { key: 'drawer-600-4', group: 'dolne', label: 'Dolna 600 / 4 szuflady', width: 600, make: () => baseDrawers(600, [176, 176, 176, 176], 'Dolna 600 / 4 szuflady') },
-  { key: 'drawer-800-3', group: 'dolne', label: 'Dolna 800 / 3 szuflady', width: 800, make: () => baseDrawers(800, [220, 220, 220], 'Dolna 800 / 3 szuflady') },
+  { key: 'drawer-600-2', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / 2 szuflady', width: 600, make: () => baseDrawers(600, [280, 280], 'Dolna 600 / 2 szuflady') },
+  { key: 'drawer-600-3', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / 3 szuflady', width: 600, make: () => baseDrawers(600, [220, 220, 220], 'Dolna 600 / 3 szuflady') },
+  { key: 'drawer-600-4', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / 4 szuflady', width: 600, make: () => baseDrawers(600, [176, 176, 176, 176], 'Dolna 600 / 4 szuflady') },
+  { key: 'drawer-800-3', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 800 / 3 szuflady', width: 800, make: () => baseDrawers(800, [220, 220, 220], 'Dolna 800 / 3 szuflady') },
 
   {
-    key: 'sink-800', group: 'dolne', label: 'Dolna 800 / zlew', width: 800,
+    key: 'sink-800', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 800 / zlew', width: 800,
     make: () => {
       const c = baseDoor(800, 2, 'Dolna 800 / zlew');
       c.elements = [el('shelf', 0)];
@@ -86,7 +88,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'hob-600', group: 'dolne', label: 'Dolna 600 / płyta', width: 600,
+    key: 'hob-600', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 600 / płyta', width: 600,
     make: () => {
       const c = baseDoor(600, 1, 'Dolna 600 / płyta');
       c.elements = [el('drawer', 0, 'K')];
@@ -94,7 +96,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'cargo-300', group: 'dolne', label: 'Dolna 300 / cargo', width: 300,
+    key: 'cargo-300', group: 'podblatowe', category: 'podblatowa', label: 'Dolna 300 / cargo', width: 300,
     make: () => {
       const c = baseDoor(300, 0, 'Dolna 300 / cargo');
       c.fronts = [];
@@ -105,7 +107,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
 
   // ---------- GÓRNE ----------
   {
-    key: 'wall-400', group: 'górne', label: 'Górna 400', width: 400,
+    key: 'wall-400', group: 'górne', category: 'wisząca', label: 'Górna 400', width: 400,
     make: () => {
       const c = baseDoor(400, 1, 'Górna 400');
       c.type = 'wall'; c.height = 720; c.depth = 350; c.worktop = false; c.plinth = 0;
@@ -115,7 +117,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'wall-600', group: 'górne', label: 'Górna 600', width: 600,
+    key: 'wall-600', group: 'górne', category: 'wisząca', label: 'Górna 600', width: 600,
     make: () => {
       const c = baseDoor(600, 1, 'Górna 600');
       c.type = 'wall'; c.height = 720; c.depth = 350; c.worktop = false; c.plinth = 0;
@@ -125,7 +127,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'wall-800', group: 'górne', label: 'Górna 800 / 2 fronty', width: 800,
+    key: 'wall-800', group: 'górne', category: 'wisząca', label: 'Górna 800 / 2 fronty', width: 800,
     make: () => {
       const c = baseDoor(800, 2, 'Górna 800');
       c.type = 'wall'; c.height = 720; c.depth = 350; c.worktop = false; c.plinth = 0;
@@ -135,7 +137,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'wall-600-lift', group: 'górne', label: 'Górna 600 / podnośna', width: 600,
+    key: 'wall-600-lift', group: 'górne', category: 'wisząca', label: 'Górna 600 / podnośna', width: 600,
     make: () => {
       const c = baseDoor(600, 1, 'Górna 600 / podnośna');
       c.type = 'wall'; c.height = 490; c.depth = 350; c.worktop = false; c.plinth = 0;
@@ -146,7 +148,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
 
   // ---------- SŁUPKI ----------
   {
-    key: 'tall-600', group: 'słupki', label: 'Słupek 600', width: 600,
+    key: 'tall-600', group: 'słupki', category: 'słupek', label: 'Słupek 600', width: 600,
     make: () => {
       const c = baseDoor(600, 2, 'Słupek 600');
       c.type = 'tall'; c.height = 2100; c.depth = 561;
@@ -156,7 +158,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'tall-600-oven', group: 'słupki', label: 'Słupek 600 / piekarnik', width: 600,
+    key: 'tall-600-oven', group: 'słupki', category: 'słupek', label: 'Słupek 600 / piekarnik', width: 600,
     make: () => {
       const c = baseDoor(600, 2, 'Słupek 600 / piekarnik');
       c.type = 'tall'; c.height = 2100; c.depth = 561;
@@ -166,7 +168,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'tall-450', group: 'słupki', label: 'Słupek 450 / spiżarnia', width: 450,
+    key: 'tall-450', group: 'słupki', category: 'słupek', label: 'Słupek 450 / spiżarnia', width: 450,
     make: () => {
       const c = baseDoor(450, 1, 'Słupek 450 / spiżarnia');
       c.type = 'tall'; c.height = 2100; c.depth = 561;
@@ -178,7 +180,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
 
   // ---------- SPECJALNE ----------
   {
-    key: 'corner-carousel', group: 'specjalne', label: 'Narożna / kosz obrotowy', width: 900,
+    key: 'corner-carousel', group: 'specjalne', category: 'specjalna', label: 'Narożna / kosz obrotowy', width: 900,
     make: () => {
       const c = baseDoor(900, 1, 'Narożna / kosz');
       c.elements = [el('cornerBasket', 100), el('cornerBasket', 500)];
@@ -186,7 +188,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'sink-double', group: 'specjalne', label: 'Dolna 900 / 2 zlewy', width: 900,
+    key: 'sink-double', group: 'specjalne', category: 'specjalna', label: 'Dolna 900 / 2 zlewy', width: 900,
     make: () => {
       const c = baseDoor(900, 2, 'Dolna 900 / 2 zlewy');
       c.elements = [el('shelf', 0), el('divider', 0)];
@@ -194,7 +196,7 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
     },
   },
   {
-    key: 'open-600', group: 'specjalne', label: 'Dolna 600 / otwarta', width: 600,
+    key: 'open-600', group: 'specjalne', category: 'specjalna', label: 'Dolna 600 / otwarta', width: 600,
     make: () => {
       const c = baseDoor(600, 0, 'Dolna 600 / otwarta');
       c.fronts = [];
@@ -204,7 +206,26 @@ export const CABINET_LIBRARY: CabinetTemplate[] = [
   },
 ];
 
-export const LIBRARY_GROUPS = ['dolne', 'górne', 'słupki', 'specjalne'] as const;
+export const LIBRARY_GROUPS = ['podblatowe', 'górne', 'słupki', 'specjalne'] as const;
+
+/** Etykiety kategorii widoczne w bibliotece. */
+export const GROUP_LABELS: Record<string, string> = {
+  podblatowe: 'Szafki podblatowe',
+  górne: 'Szafki wiszące',
+  słupki: 'Słupki',
+  specjalne: 'Specjalne',
+};
+
+/**
+ * Szafki podblatowe: ZAWSZE blat (edytowalny: grubość, nawis)
+ * i ZAWSZE cokół (edytowalna wysokość, wpuszczenie).
+ */
+export const CATEGORY_RULES = {
+  podblatowa: { forcedWorktop: true, forcedPlinth: true },
+  wisząca: { forcedWorktop: false, forcedPlinth: false },
+  słupek: { forcedWorktop: false, forcedPlinth: true },
+  specjalna: { forcedWorktop: false, forcedPlinth: false },
+};
 
 export function byGroup(g: string) {
   return CABINET_LIBRARY.filter((t) => t.group === g);

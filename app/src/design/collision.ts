@@ -96,8 +96,119 @@ export function findFreeY(c: Cabinet, candidate: CabinetElement): number | null 
 }
 
 // ---------------------------------------------------------------------------
-// Dociąganie szafek: krawędzie i narożniki (każdy z każdym w projekcie)
+// Punkty charakterystyczne: narożniki, środki krawędzi, przecięcia linii
 // ---------------------------------------------------------------------------
+
+export type SnapKind = 'corner' | 'edge' | 'mid' | 'intersection';
+
+export interface SnapPoint {
+  x: number;
+  z: number;
+  kind: SnapKind;
+  cabinetId?: string;
+}
+
+/**
+ * Zbiera wszystkie punkty chwytne w projekcie:
+ *  - 4 narożniki każdej szafki
+ *  - środki 4 krawędzi
+ *  - przecięcia przedłużonych krawędzi (siatka linii X i Z)
+ */
+export function collectSnapPoints(cabinets: Cabinet[]): SnapPoint[] {
+  const pts: SnapPoint[] = [];
+  const xs = new Set<number>();
+  const zs = new Set<number>();
+
+  for (const c of cabinets) {
+    const r = cabinetRect(c);
+    // narożniki
+    for (const [x, z] of [
+      [r.x0, r.z0],
+      [r.x1, r.z0],
+      [r.x1, r.z1],
+      [r.x0, r.z1],
+    ] as [number, number][]) {
+      pts.push({ x, z, kind: 'corner', cabinetId: c.id });
+    }
+    // środki krawędzi
+    pts.push({ x: (r.x0 + r.x1) / 2, z: r.z0, kind: 'mid', cabinetId: c.id });
+    pts.push({ x: (r.x0 + r.x1) / 2, z: r.z1, kind: 'mid', cabinetId: c.id });
+    pts.push({ x: r.x0, z: (r.z0 + r.z1) / 2, kind: 'mid', cabinetId: c.id });
+    pts.push({ x: r.x1, z: (r.z0 + r.z1) / 2, kind: 'mid', cabinetId: c.id });
+    xs.add(r.x0); xs.add(r.x1); xs.add((r.x0 + r.x1) / 2);
+    zs.add(r.z0); zs.add(r.z1); zs.add((r.z0 + r.z1) / 2);
+  }
+
+  // przecięcia wszystkich linii X i Z (siatka odniesienia)
+  for (const x of xs) {
+    for (const z of zs) {
+      const exists = pts.some((p) => Math.abs(p.x - x) < 0.5 && Math.abs(p.z - z) < 0.5);
+      if (!exists) pts.push({ x, z, kind: 'intersection' });
+    }
+  }
+  return pts;
+}
+
+/** Najbliższy punkt chwytny w promieniu tol (mm). */
+export function nearestSnap(
+  points: SnapPoint[],
+  x: number,
+  z: number,
+  tol = 120,
+): SnapPoint | null {
+  let best: SnapPoint | null = null;
+  let bestD = tol;
+  for (const p of points) {
+    const d = Math.hypot(p.x - x, p.z - z);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/**
+ * Dopasowanie linii: jeśli współrzędna jest blisko linii odniesienia,
+ * przyciąga do niej i zwraca informację do narysowania prowadnicy.
+ */
+export function snapToLines(
+  points: SnapPoint[],
+  x: number,
+  z: number,
+  tol = 60,
+): {
+  x: number;
+  z: number;
+  guides: { axis: 'x' | 'z'; value: number; from: number; to: number }[];
+} {
+  const guides: { axis: 'x' | 'z'; value: number; from: number; to: number }[] = [];
+  let nx = x;
+  let nz = z;
+
+  const xs = [...new Set(points.map((p) => p.x))];
+  const zs = [...new Set(points.map((p) => p.z))];
+
+  for (const vx of xs) {
+    if (Math.abs(vx - x) < tol) {
+      nx = vx;
+      const minZ = Math.min(...points.map((p) => p.z));
+      const maxZ = Math.max(...points.map((p) => p.z));
+      guides.push({ axis: 'x', value: vx, from: minZ, to: maxZ });
+      break;
+    }
+  }
+  for (const vz of zs) {
+    if (Math.abs(vz - z) < tol) {
+      nz = vz;
+      const minX = Math.min(...points.map((p) => p.x));
+      const maxX = Math.max(...points.map((p) => p.x));
+      guides.push({ axis: 'z', value: vz, from: minX, to: maxX });
+      break;
+    }
+  }
+  return { x: nx, z: nz, guides };
+}
 
 export interface SnapResult {
   x: number;
