@@ -35,6 +35,7 @@ export interface RoomBox {
   color: string;
   opacity?: number;
   kind: 'floor' | 'wall' | 'window' | 'door';
+  mat?: 'wood' | 'wood-dark' | 'laminate' | 'stone' | 'glass' | 'metal' | 'grass' | 'cobble' | 'plaster' | 'roof' | 'foliage' | 'deck' | 'brick';
 }
 
 /** Geometria pomieszczenia: podłoga + ściany z otworami (jako segmenty). */

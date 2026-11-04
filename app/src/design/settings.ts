@@ -72,7 +72,7 @@ export interface Settings {
   client: ClientData;
 }
 
-const KEY = 'aplikacja-sprzedazowa:settings:v1';
+const KEY = 'aplikacja-sprzedazowa:settings:v2';
 
 export function defaultSettings(): Settings {
   return {
@@ -82,8 +82,8 @@ export function defaultSettings(): Settings {
     units: 'mm',
     precision: 1,
     engine: 'three',
-    worktop: { enabled: true, thickness: 38, overhang: 20, color: '#3a3f47' },
-    plinth: { enabled: true, height: 150, mode: 'recessed', setback: 40, color: '#22262c' },
+    worktop: { enabled: true, thickness: 38, overhang: 20, color: '#e9e5dd' },
+    plinth: { enabled: true, height: 150, mode: 'recessed', setback: 40, color: '#2b2b2b' },
     shortcuts: Object.fromEntries(ACTIONS.map((a) => [a.id, a.defaultKey])),
     client: { name: '', phone: '', email: '', address: '', notes: '' },
   };
@@ -101,6 +101,8 @@ export function loadSettings(): Settings {
       camera: { ...base.camera, ...(parsed.camera ?? {}) },
       client: { ...base.client, ...(parsed.client ?? {}) },
       shortcuts: { ...base.shortcuts, ...(parsed.shortcuts ?? {}) },
+      worktop: { ...base.worktop, ...(parsed.worktop ?? {}) },
+      plinth: { ...base.plinth, ...(parsed.plinth ?? {}) },
     };
   } catch {
     return defaultSettings();

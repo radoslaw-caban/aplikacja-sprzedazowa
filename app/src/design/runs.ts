@@ -117,6 +117,7 @@ export function worktopBoxes(runs: RunSpec[], p: WorktopParams): SceneBox[] {
         rotationY: r.rotation,
         color: p.color,
         outline: true,
+        mat: 'stone' as const,
       };
     });
 }

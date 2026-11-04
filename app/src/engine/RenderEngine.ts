@@ -63,6 +63,7 @@ export interface RenderEngine {
   clearGuides?(): void;
   highlightCabinet?(cabinetId: string | null): void;
   setCloudVisible?(visible: boolean): void;
+  setWallGhost?(on: boolean): void;
   highlightElement?(elementId: string | null): void;
   disposeDesign?(): void;
   getDebugInfo?(): Record<string, unknown>;

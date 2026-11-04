@@ -122,10 +122,12 @@ export interface SceneBox {
   rotationY?: number;
   rotationZ?: number;
   color?: string;
-  shape?: 'box' | 'cylinder';
+  shape?: 'box' | 'cylinder' | 'sphere';
   opacity?: number;
   /** rysuj kontur krawędzi */
   outline?: boolean;
+  /** rodzaj materiału PBR (tekstura proceduralna) */
+  mat?: 'wood' | 'wood-dark' | 'laminate' | 'stone' | 'glass' | 'metal' | 'grass' | 'cobble' | 'plaster' | 'roof' | 'foliage' | 'deck' | 'brick';
 }
 
 export const PANEL = 18;

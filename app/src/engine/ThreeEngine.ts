@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { texturesFor, materialProps, textureScale, matKindFor } from './textures';
 import type { ProductConfig, RenderEngine } from './RenderEngine';
 
 /**
@@ -39,24 +41,110 @@ export class ThreeEngine implements RenderEngine {
   private frontsVisible = true;
   /** true, gdy użytkownik ręcznie nadpisuje materiał modelu (demo kolorów) */
   forceColor = false;
+  private matCache = new Map<string, THREE.Material>();
+  /** ściany półprzezroczyste — widok roboczy wnętrza */
+  private wallGhost = true;
+
+  /** Gradientowe niebo jako tło sceny. */
+  private skyTexture(): THREE.Texture {
+    const c = document.createElement('canvas');
+    c.width = 32;
+    c.height = 256;
+    const ctx = c.getContext('2d')!;
+    const g = ctx.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, '#7fa8cc');
+    g.addColorStop(0.45, '#bcd3e6');
+    g.addColorStop(0.7, '#e6eef4');
+    g.addColorStop(1, '#c9c3b6');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 32, 256);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    return t;
+  }
+
+  /**
+   * Materiał PBR dla bryły: tekstura proceduralna w realnej skali (m),
+   * odpowiednia chropowatość i metaliczność. Cache po rodzaju + kolorze.
+   */
+  private materialFor(b: import('./RenderEngine').SceneBox): THREE.Material {
+    const wire = this.renderMode === 'wireframe';
+    if (wire) {
+      return new THREE.MeshStandardMaterial({
+        color: new THREE.Color(b.color ?? '#c9a06a'),
+        roughness: 0.6,
+        metalness: 0.02,
+        transparent: true,
+        opacity: 0.1,
+      });
+    }
+
+    const kind = b.mat ?? matKindFor(b.kind);
+    const key = `${kind}|${b.color ?? ''}|${b.opacity ?? 1}`;
+    const cached = this.matCache.get(key);
+    if (cached) return cached;
+
+    const props = materialProps(kind);
+    const tex = texturesFor(kind);
+    const [, sy, sz] = b.size;
+    // skala tekstury: metry / metr-na-kafel
+    const scaleM = textureScale(kind);
+    const map = tex.map.clone();
+    map.needsUpdate = true;
+    map.repeat.set(
+      Math.max(0.25, (Math.max(b.size[0], sz) / 1000) / scaleM),
+      Math.max(0.25, (Math.max(sy, sz) / 1000) / scaleM),
+    );
+
+    const useTex = kind !== 'glass' && kind !== 'metal';
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(b.color ?? props.color),
+      roughness: props.roughness,
+      metalness: props.metalness,
+      map: useTex ? map : undefined,
+      transparent: props.transparent || (b.opacity ?? 1) < 1,
+      opacity: props.opacity ?? b.opacity ?? 1,
+      envMapIntensity: 0.9,
+    });
+    this.matCache.set(key, mat);
+    return mat;
+  }
 
   async init(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#111318');
+    this.scene.background = this.skyTexture();
+    this.scene.fog = new THREE.Fog('#cfd8e0', 40, 160);
 
-    this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
     this.camera.position.set(2.4, 1.6, 3.2);
 
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-    const dir = new THREE.DirectionalLight(0xffffff, 1.4);
-    dir.position.set(4, 6, 4);
-    this.scene.add(dir, new THREE.AmbientLight(0xffffff, 0.4));
+    // słońce z cieniami
+    const sun = new THREE.DirectionalLight(0xfff4e2, 2.6);
+    sun.position.set(-6, 15, 9);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.02;
+    const cam = sun.shadow.camera;
+    cam.left = -18; cam.right = 18; cam.top = 18; cam.bottom = -18;
+    cam.near = 1; cam.far = 60;
+    cam.updateProjectionMatrix();
+
+    // światło niebios (góra chłodna, dół ciepły od gruntu)
+    const hemi = new THREE.HemisphereLight(0xdfefff, 0x6b5a44, 0.85);
+    this.scene.add(sun, hemi, new THREE.AmbientLight(0xffffff, 0.18));
 
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -356,17 +444,39 @@ export class ThreeEngine implements RenderEngine {
     const mm = 0.001;
     for (const b of boxes) {
       const geom = new THREE.BoxGeometry(b.size[0] * mm, b.size[1] * mm, b.size[2] * mm);
+      // materiał wg rodzaju: podłoga z desek, ściany tynk, szyba szkło
+      const kind =
+        b.mat ??
+        (b.kind === 'floor' ? 'deck' : b.kind === 'window' ? 'glass' : ('plaster' as const));
+      const props = materialProps(kind);
+      const tex = texturesFor(kind);
+      const scaleM = textureScale(kind);
+      const map = tex.map.clone();
+      map.needsUpdate = true;
+      map.repeat.set(
+        Math.max(0.5, (Math.max(b.size[0], b.size[2]) / 1000) / scaleM),
+        Math.max(0.5, (Math.max(b.size[1], b.size[2]) / 1000) / scaleM),
+      );
       const mat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(b.color),
-        roughness: b.kind === 'window' ? 0.1 : b.kind === 'floor' ? 0.75 : 0.9,
-        metalness: b.kind === 'window' ? 0.1 : 0,
-        transparent: (b.opacity ?? 1) < 1,
-        opacity: b.opacity ?? 1,
+        roughness: props.roughness,
+        metalness: props.metalness,
+        map: kind === 'glass' ? undefined : map,
+        transparent: props.transparent || (b.opacity ?? 1) < 1,
+        opacity: props.opacity ?? b.opacity ?? 1,
         side: THREE.DoubleSide,
+        envMapIntensity: 0.85,
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(b.position[0] * mm, b.position[1] * mm, b.position[2] * mm);
       mesh.userData = { kind: 'room-' + b.kind };
+      if (b.kind === 'wall' && this.wallGhost) {
+        mat.transparent = true;
+        mat.opacity = 0.16;
+        mat.depthWrite = false;
+      }
+      mesh.receiveShadow = b.kind !== 'wall';
+      mesh.castShadow = b.kind === 'wall' && !this.wallGhost;
       this.roomGroup.add(mesh);
     }
     this.renderer?.render(this.scene, this.camera!);
@@ -421,6 +531,21 @@ export class ThreeEngine implements RenderEngine {
     }
   }
 
+  /** Ściany przezroczyste (widok roboczy) albo pełne. */
+  setWallGhost(on: boolean) {
+    this.wallGhost = on;
+    for (const o of this.roomGroup.children) {
+      const m = o as THREE.Mesh;
+      if (m.userData?.kind !== 'room-wall') continue;
+      const mat = m.material as THREE.MeshStandardMaterial;
+      mat.transparent = on;
+      mat.opacity = on ? 0.16 : 1;
+      mat.depthWrite = !on;
+      mat.needsUpdate = true;
+    }
+    this.renderer?.render(this.scene!, this.camera!);
+  }
+
   /** Pokaż/ukryj chmurę punktów. */
   setCloudVisible(visible: boolean) {
     if (this.pointCloud) this.pointCloud.visible = visible;
@@ -454,20 +579,13 @@ export class ThreeEngine implements RenderEngine {
       const [sx, sy, sz] = b.size;
       const geom =
         b.shape === 'cylinder'
-          ? new THREE.CylinderGeometry((sx * mm) / 2, (sx * mm) / 2, sy * mm, 16)
+          ? new THREE.CylinderGeometry((sx * mm) / 2, (sx * mm) / 2, sy * mm, 20)
+          : b.shape === 'sphere'
+          ? new THREE.SphereGeometry((sx * mm) / 2, 18, 14)
+          : b.kind === 'front' || b.kind === 'panel' || b.kind === 'shelf' || b.kind === 'drawer'
+          ? new RoundedBoxGeometry(sx * mm, sy * mm, sz * mm, 2, Math.min(0.0015, (Math.min(sx, sy, sz) * mm) / 6))
           : new THREE.BoxGeometry(sx * mm, sy * mm, sz * mm);
-      const baseColor = new THREE.Color(b.color ?? '#c9a06a');
-      const isPanel = b.kind === 'panel';
-      const wire = this.renderMode === 'wireframe';
-      const mat = new THREE.MeshStandardMaterial({
-        color: baseColor,
-        roughness: isPanel ? 0.65 : 0.45,
-        metalness: b.kind === 'handle' ? 0.6 : 0.05,
-        // fronty PEŁNE (nieprzezroczyste) — widoczność wnętrza zapewnia ich otwieranie
-        transparent: wire || (b.opacity ?? 1) < 1,
-        opacity: wire ? 0.06 : b.opacity ?? 1,
-        wireframe: wire,
-      });
+      const mat = this.materialFor(b);
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(
         (b.position[0] + cabinetsOrigin.x) * mm,
@@ -482,8 +600,9 @@ export class ThreeEngine implements RenderEngine {
         kind: b.kind,
         boxId: b.id,
       };
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
+      const solid = b.kind !== 'hole' && b.mat !== 'glass';
+      mesh.castShadow = solid && b.kind !== 'scene';
+      mesh.receiveShadow = solid;
       this.designGroup.add(mesh);
 
       // kontur krawędzi — czytelność bryły (panel/front), pomijany dla drobnych elementów

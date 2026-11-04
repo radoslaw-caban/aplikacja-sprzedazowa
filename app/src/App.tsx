@@ -62,6 +62,7 @@ export default function App() {
   const [cloudVisible, setCloudVisible] = useState(true);
   const [exterior, setExterior] = useState(true);
   const [roof, setRoof] = useState(false);
+  const [wallGhost, setWallGhost] = useState(true);
 
   const active = cabinets.find((c) => c.id === selectedId) ?? undefined;
   const selElement = active?.elements.find((e) => e.id === selectedElement);
@@ -118,7 +119,8 @@ export default function App() {
       frontsVisible: settings.showFronts,
     });
     engineRef.current?.setCloudVisible?.(cloudVisible);
-  }, [settings, cloudVisible]);
+    engineRef.current?.setWallGhost?.(wallGhost);
+  }, [settings, cloudVisible, wallGhost]);
 
   // ---- render ----
   const boxes = useCallback(() => {
@@ -513,6 +515,13 @@ export default function App() {
             onClick={() => setExterior((v) => !v)}
           >
             🏡 Otoczenie {exterior ? 'WŁ' : 'WYŁ'}
+          </button>
+          <button
+            className={`chip ${wallGhost ? 'on' : ''}`}
+            title="Ściany półprzezroczyste — widok roboczy wnętrza"
+            onClick={() => setWallGhost((v) => !v)}
+          >
+            ▤ Ściany {wallGhost ? 'duch' : 'pełne'}
           </button>
           <button
             className={`chip ${roof ? 'on' : ''}`}
