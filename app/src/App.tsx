@@ -236,9 +236,12 @@ export default function App() {
   useEffect(() => {
     if (!ready) return;
     const spec = styleById(style);
-    if (spec.materials === 'pbr') {
+    if (spec.materials !== 'pbr') return;
+    // HDRI po chwili — nie blokuje pierwszego renderu
+    const t = window.setTimeout(() => {
       engineRef.current?.loadHDRI?.(`${import.meta.env.BASE_URL}hdri/sky.hdr`);
-    }
+    }, 800);
+    return () => window.clearTimeout(t);
   }, [ready, style, engineEpoch]);
 
   // ---- GESTY: pion = projekt, poziom = styl widoku ----
