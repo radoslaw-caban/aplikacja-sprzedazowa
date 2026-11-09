@@ -5,6 +5,8 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { PostFX } from './PostFX';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { texturesFor, materialProps, textureScale, matKindFor, bumpScale, normalMapFor, roughnessMapFor } from './textures';
 import type { ProductConfig, RenderEngine } from './RenderEngine';
 
@@ -31,6 +33,10 @@ export class ThreeEngine implements RenderEngine {
   private model?: THREE.Object3D;
   private modelHolder?: THREE.Group;
   private pointCloud?: THREE.Points;
+  /** grupa transformacji chmury (jednostka + obrót + przesunięcie skanu) */
+  private cloudHolder = new THREE.Group();
+  /** lokalny bbox chmury (przed transformacją) — liczony raz przy wczytaniu */
+  private cloudLocalBox?: THREE.Box3;
   private gizmo?: TransformControls;
   private designGroup = new THREE.Group();
   private roomGroup = new THREE.Group();
@@ -176,7 +182,7 @@ export class ThreeEngine implements RenderEngine {
       normalMap: useTex ? normal.clone() : undefined,
       roughnessMap: useTex ? rough.clone() : undefined,
       normalScale: new THREE.Vector2(0.45, 0.45),
-      envMapIntensity: 1.15,
+      envMapIntensity: (b.color ?? '').toLowerCase() < '#606060' ? 0.35 : 1.0,
       emissive: b.emissive ? new THREE.Color(b.emissive) : new THREE.Color('#000000'),
       emissiveIntensity: b.emissiveIntensity ?? (b.emissive ? 2 : 0),
     });
@@ -238,6 +244,8 @@ export class ThreeEngine implements RenderEngine {
     this.scene.add(this.designGroup);
     this.scene.add(this.roomGroup);
     this.scene.add(this.guideGroup);
+    this.cloudHolder.name = 'cloud-holder';
+    this.scene.add(this.cloudHolder);
 
     this.resize();
     // post-processing: AO + bloom + korekcja + SMAA
@@ -292,7 +300,8 @@ export class ThreeEngine implements RenderEngine {
     }
     this.pointCloud = new THREE.Points(geom, mat);
     this.pointCloud.frustumCulled = false;
-    this.scene.add(this.pointCloud);
+    this.pointCloud.name = 'point-cloud';
+    this.cloudHolder.add(this.pointCloud);
     // kamera na bbox — policzony z przefiltrowanych danych (bbox z pliku może być NaN)
     let m0 = Infinity, m1 = Infinity, m2 = Infinity, M0 = -Infinity, M1 = -Infinity, M2 = -Infinity;
     for (let i = 0; i < n; i++) {
@@ -300,14 +309,15 @@ export class ThreeEngine implements RenderEngine {
       if (x < m0) m0 = x; if (y < m1) m1 = y; if (z < m2) m2 = z;
       if (x > M0) M0 = x; if (y > M1) M1 = y; if (z > M2) M2 = z;
     }
-    const c = new THREE.Vector3((m0 + M0) / 2, (m1 + M1) / 2, (m2 + M2) / 2);
+    // bbox LOKALNY (przed transformacją jednostki) — potrzebny do kadrowania
+    // i do pokazania wymiarów skanu w UI
+    this.cloudLocalBox = new THREE.Box3(
+      new THREE.Vector3(m0, m1, m2),
+      new THREE.Vector3(M0, M1, M2),
+    );
     const r = Math.max(M0 - m0, M1 - m1, M2 - m2) || 1;
-    this.setPointSize(Math.max(r / 1500, 0.002));
-    if (firstCloud) {
-      this.camera!.position.set(c.x + r, c.y + r * 0.6, c.z + r);
-      this.controls!.target.copy(c);
-      this.controls!.update();
-    }
+    this.setPointSize(Math.max((r * this.cloudHolder.scale.x) / 1500, 0.002));
+    if (firstCloud) this.frameCloud();
     return () => this.pointCloud?.removeFromParent();
   }
 
@@ -747,6 +757,98 @@ export class ThreeEngine implements RenderEngine {
     if (this.pointCloud) this.pointCloud.visible = visible;
   }
 
+  /**
+   /** Usuwa chmurę punktów (przy imporcie siatki — jedna geometria naraz). */
+   clearCloud() {
+     this.pointCloud?.removeFromParent();
+     this.pointCloud?.geometry.dispose();
+     this.pointCloud = undefined;
+     this.cloudLocalBox = undefined;
+     this.draw();
+   }
+
+   /** Transformacja chmury: jednostka pliku (m/cm/mm), obrót wokół Y i przesunięcie.
+   * Skala i obrót idą na grupę-chwytak — pojedyncze punkty zostają nietknięte,
+   * więc zmiana jednostki jest natychmiastowa (bez ponownego parsowania).
+   */
+  setCloudTransform(t: import('./RenderEngine').CloudTransform) {
+    this.cloudHolder.position.set(t.offset[0], t.offset[1], t.offset[2]);
+    this.cloudHolder.rotation.set(0, (t.rotationY * Math.PI) / 180, 0);
+    this.cloudHolder.scale.setScalar(t.scale);
+    this.cloudHolder.updateMatrixWorld(true);
+    // rozmiar punktu w metrach sceny — po skali jednostki
+    const local = this.cloudLocalBox;
+    if (local && !local.isEmpty()) {
+      const size = local.getSize(new THREE.Vector3());
+      const r = Math.max(size.x * t.scale, size.y * t.scale, size.z * t.scale) || 1;
+      this.setPointSize(Math.max(r / 1500, 0.0015));
+    }
+    this.draw();
+  }
+
+  /** Bbox chmury PO transformacji (metry) — pokazywane wymiary skanu. */
+  getCloudBounds() {
+    const local = this.cloudLocalBox;
+    if (!local || local.isEmpty()) return null;
+    this.cloudHolder.updateMatrixWorld(true);
+    const world = local.clone().applyMatrix4(this.cloudHolder.matrixWorld);
+    return {
+      min: [world.min.x, world.min.y, world.min.z] as [number, number, number],
+      max: [world.max.x, world.max.y, world.max.z] as [number, number, number],
+    };
+  }
+
+  /** Kadruje kamerę na chmurę (po transformacji). */
+  frameCloud() {
+    if (!this.camera || !this.controls) return;
+    const b = this.getCloudBounds();
+    if (!b) return;
+    const center = new THREE.Vector3(
+      (b.min[0] + b.max[0]) / 2,
+      (b.min[1] + b.max[1]) / 2,
+      (b.min[2] + b.max[2]) / 2,
+    );
+    const r = Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]) || 1;
+    this.camera.position.set(center.x + r * 0.8, center.y + r * 0.5, center.z + r * 0.8);
+    this.controls.target.copy(center);
+    this.controls.update();
+  }
+
+  /**
+   * Import siatki z pliku w pamięci (GLB/GLTF/OBJ/STL) — bez serwera.
+   * Realizuje scenariusz „skan z iPada”: apka eksportuje model, użytkownik
+   * wybiera plik, model ląduje w scenie obok szafek.
+   */
+  async loadMeshBuffer(buffer: ArrayBuffer, ext: string, name = 'skan') {
+    if (!this.scene) throw new Error('Engine not initialized');
+    const e = ext.toLowerCase();
+    let root: THREE.Object3D;
+    if (e === 'glb' || e === 'gltf') {
+      root = await new Promise<THREE.Object3D>((resolve, reject) => {
+        new GLTFLoader().parse(buffer, '', (gltf) => resolve(gltf.scene), reject);
+      });
+    } else if (e === 'obj' || e === 'stl') {
+      const text = new TextDecoder().decode(new Uint8Array(buffer));
+      const Loader = e === 'obj' ? OBJLoader : STLLoader;
+      const parsed = new Loader().parse(text);
+      root = e === 'obj' ? (parsed as THREE.Group) : new THREE.Mesh(parsed as THREE.BufferGeometry, this.scanMeshMaterial());
+    } else {
+      throw new Error(`Nieobsługiwany format siatki: ${ext}`);
+    }
+    root.name = name;
+    return this.setModel(root);
+  }
+
+  /** Neutralny materiał dla siatek ze skanu (bez tekstur, lekko matowy). */
+  private scanMeshMaterial() {
+    return new THREE.MeshStandardMaterial({
+      color: 0xbfc7cf,
+      roughness: 0.85,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+  }
+
   /** Podświetla całą szafkę (zaznaczenie). */
   highlightCabinet(cabinetId: string | null) {
     for (const o of this.designGroup.children) {
@@ -903,6 +1005,9 @@ export class ThreeEngine implements RenderEngine {
         ? [this.modelHolder.position.x, this.modelHolder.position.y, this.modelHolder.position.z]
         : null,
       modelScale: this.modelHolder?.scale.x ?? null,
+      cloudScale: this.cloudHolder.scale.x,
+      cloudRotationY: (this.cloudHolder.rotation.y * 180) / Math.PI,
+      cloudOffset: [this.cloudHolder.position.x, this.cloudHolder.position.y, this.cloudHolder.position.z],
       sceneChildren: this.scene?.children.length ?? 0,
     };
   }
@@ -956,6 +1061,8 @@ export class ThreeEngine implements RenderEngine {
 
   dispose() {
     cancelAnimationFrame(this.raf);
+    this.pointCloud?.geometry.dispose();
+    this.cloudHolder.clear();
     window.removeEventListener('resize', this.resize);
     this.post?.dispose();
     this.renderer?.dispose();

@@ -430,6 +430,40 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
 .modal-actions .ghost { background: transparent; border: 1px solid #2a313a; color: #c7cdd4; border-radius: 9px; padding: 8px 14px; cursor: pointer; }
 .modal-actions .primary { background: #2f6f4f; border: 1px solid #3d8a63; color: #eafff3; border-radius: 9px; padding: 8px 16px; cursor: pointer; }
 
+/* ---- import skanu z iPada ---- */
+.scan-modal { width: min(640px, 94vw); max-height: 92vh; overflow: auto; }
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 1.5px dashed #3d4b59; border-radius: 14px; padding: 22px 16px;
+  background: #10161c; cursor: pointer; text-align: center; transition: .2s ease;
+}
+.dropzone:hover, .dropzone.over { border-color: #3d8a63; background: #12211a; }
+.dropzone strong { font-size: .9rem; color: #e8eaed; }
+.dropzone span { font-size: .74rem; color: #8b949e; }
+.dropzone .dropzone-hint { color: #6b7684; }
+.scan-progress { margin-top: 12px; font-size: .76rem; color: #c7cdd4; }
+.scan-progress .bar {
+  height: 5px; background: #1b232b; border-radius: 99px; margin-top: 6px; overflow: hidden;
+}
+.scan-progress .bar i { display: block; height: 100%; background: #3d8a63; transition: width .2s ease; }
+.scan-error { color: #f87171; font-size: .78rem; margin: 10px 0 0; }
+.scan-info { display: flex; flex-wrap: wrap; gap: 10px; font-size: .76rem; color: #c7cdd4; }
+.scan-info .mono { font-family: ui-monospace, monospace; color: #c9a227; }
+.scan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.scan-grid label { display: flex; flex-direction: column; gap: 4px; font-size: .7rem; color: #9aa3ae; }
+.scan-grid input {
+  background: #141a21; border: 1px solid #2a313a; border-radius: 8px;
+  padding: 6px 8px; color: #e8eaed; font-size: .78rem; width: 100%;
+}
+.seg { display: inline-flex; border: 1px solid #2a313a; border-radius: 9px; overflow: hidden; }
+.seg button {
+  background: #141a21; border: 0; color: #c7cdd4; padding: 7px 16px;
+  font-size: .78rem; cursor: pointer;
+}
+.seg button + button { border-left: 1px solid #2a313a; }
+.seg button.on { background: #22303f; color: #eaf4ff; }
+@media (max-width: 560px) { .scan-grid { grid-template-columns: repeat(2, 1fr); } }
+
 /* ---- biblioteka: etykiety dwuliniowe, bez ucinania ---- */
 .sb-item { min-height: 30px; }
 .sb-item .sb-label,
@@ -459,12 +493,14 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
 .inspect .precise label { width: 68px; font-size: .68rem; }
 
 /* ---- auto-ukrywanie pasków ---- */
-.app.ui-hidden .header,
-.app.ui-hidden .sidebar,
-.app.ui-hidden .inspect,
-.app.ui-hidden .chips,
-.app.ui-hidden .hint { opacity: 0; pointer-events: none; transition: opacity .35s ease; }
-.app .header, .app .sidebar, .app .inspect, .app .chips, .app .hint { transition: opacity .35s ease; }
+.app header,
+.app .sidebar,
+.app .inspect,
+.app .hint { transition: opacity .3s ease, transform .3s ease; }
+.app.ui-hidden header { opacity: 0; transform: translateY(-100%); pointer-events: none; }
+.app.ui-hidden .sidebar { opacity: 0; transform: translateX(-100%); pointer-events: none; }
+.app.ui-hidden .inspect { opacity: 0; transform: translateX(100%); pointer-events: none; }
+.app.ui-hidden .hint { opacity: 0; pointer-events: none; }
 .app.ui-hidden::after {
   content: ''; position: fixed; inset: 0; pointer-events: none;
   box-shadow: inset 0 0 0 1px rgba(201,162,39,.18);
@@ -487,3 +523,32 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
 .prop-head .primary { padding: 6px 12px; font-size: .74rem; }
 .prop-desc { font-size: .74rem; color: #a9b2bd; margin-top: 6px; line-height: 1.45; }
 .prop-trend { font-size: .68rem; color: #c9a227; margin-top: 6px; }
+
+/* ---- tabela rozczytanych części modelu ---- */
+.part-table { margin-top: 12px; border: 1px solid #2a313a; border-radius: 10px; overflow: hidden; }
+.part-row {
+  display: grid; grid-template-columns: 1fr 130px 60px 70px; gap: 10px;
+  padding: 6px 10px; font-size: .72rem; align-items: center;
+  border-bottom: 1px solid #1e242c; color: #c7cdd4;
+}
+.part-head { background: #171d24; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: #8b949e; }
+.part-scroll { max-height: 44vh; overflow: auto; }
+.part-name { display: flex; flex-direction: column; gap: 3px; }
+.part-name select {
+  background: #141a21; border: 1px solid #2a313a; color: #cfd6de;
+  border-radius: 6px; font-size: .68rem; padding: 2px 4px; max-width: 150px;
+}
+.part-name b { font-weight: 500; color: #e8eaed; }
+.part-row .ok { color: #6cc08a; }
+.part-row .mid { color: #d8b04a; }
+.part-row .low { color: #d9776a; }
+.chip input[type=file] { display: none; }
+
+/* ---- wybór szafki z modelu ---- */
+.cluster-bar { margin: 10px 0 4px; font-size: .72rem; color: #a9b2bd; }
+.cluster-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cluster-list button {
+  background: #171d24; border: 1px solid #2a313a; color: #cfd6de;
+  border-radius: 8px; padding: 5px 9px; font-size: .68rem; cursor: pointer;
+}
+.cluster-list button:hover { border-color: #3d6b8f; color: #eaf4ff; }

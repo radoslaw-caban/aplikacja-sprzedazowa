@@ -63,6 +63,16 @@ export interface RenderEngine {
   clearGuides?(): void;
   highlightCabinet?(cabinetId: string | null): void;
   setCloudVisible?(visible: boolean): void;
+  /** transformacja chmury punktów: jednostka (m 1 / cm 0.01 / mm 0.001), obrót i przesunięcie w METRACH */
+  setCloudTransform?(t: CloudTransform): void;
+  /** bbox chmury po transformacji (metry) — do pokazania wymiarów skanu */
+  getCloudBounds?(): { min: [number, number, number]; max: [number, number, number] } | null;
+  /** usuwa chmurę punktów ze sceny */
+  clearCloud?(): void;
+  /** kadrowanie kamery na chmurę punktów */
+  frameCloud?(): void;
+  /** wczytanie siatki (GLB/GLTF/OBJ/STL) z bufora pliku — import z iPada */
+  loadMeshBuffer?(buffer: ArrayBuffer, ext: string, name?: string): Promise<() => void>;
   setWallGhost?(on: boolean): void;
   setQuality?(level: 'low' | 'medium' | 'high'): void;
   setControlsEnabled?(on: boolean): void;
@@ -86,6 +96,16 @@ export interface RenderEngine {
   applyConfig(config: ProductConfig): void;
   screenshot(): Promise<Blob>;
   dispose(): void;
+}
+
+/** Transformacja chmury: skala z jednostki pliku + obrót + przesunięcie (metry). */
+export interface CloudTransform {
+  /** mnożnik: 1 = metry, 0.01 = centymetry, 0.001 = milimetry */
+  scale: number;
+  /** obrót wokół osi Y w stopniach */
+  rotationY: number;
+  /** przesunięcie w metrach */
+  offset: [number, number, number];
 }
 
 export interface PointCloudData {

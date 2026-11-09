@@ -181,17 +181,22 @@ export function parseCabinetParts(
     width: Math.round(W),
     height: Math.round(H),
     depth: Math.round(D),
-    panel: Math.round(median(out.map((p) => p.thickness)) ?? panel),
+    panel: detectPanelThickness(out) ?? panel,
     parts: out,
     elements,
     warnings,
   };
 }
 
-function median(v: number[]): number | null {
-  if (!v.length) return null;
-  const s = [...v].sort((a, b) => a - b);
-  return s[Math.floor(s.length / 2)];
+/** Grubość płyty: najczęstsza wartość w zakresie 12–26 mm (moda, nie mediana). */
+function detectPanelThickness(parts: ParsedPart[]): number | null {
+  const buckets = new Map<number, number>();
+  for (const p of parts) {
+    const t = Math.round(p.thickness);
+    if (t >= 12 && t <= 26) buckets.set(t, (buckets.get(t) ?? 0) + 1);
+  }
+  if (!buckets.size) return null;
+  return [...buckets.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
 function labelFor(role: PartRole, shelfNo: number, drawerNo: number, original?: string): string {

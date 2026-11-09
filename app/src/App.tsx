@@ -23,18 +23,25 @@ import { LIGHT_TEMPLATES, type LightTemplate } from './design/lighting';
 import { LIGHTING_PROPOSALS, recommendation } from './design/lightingPlan';
 import { styleById, nextStyle, type ViewStyle } from './design/viewStyles';
 import { loadProjects, saveProjects, makeProject, type Project } from './design/projects';
+import { parseGlb, type Cluster } from './design/parseGLB';
+import { toCabinet, ROLE_OPTIONS, parseCabinetParts, type ParsedCabinet } from './design/parseModel';
 import { HANDLE_SPECS, RUNNER_SPECS } from './design/hardware';
 import { stepFromPrecision, toUnit, fromUnit } from './design/units';
 import OrganizerPanel from './ui/OrganizerPanel';
 import SettingsPanel from './ui/SettingsPanel';
 import CabinetThumb from './ui/CabinetThumb';
 import CutoutMenu from './ui/CutoutMenu';
+import ScanPanel, { type ScanMeta } from './ui/ScanPanel';
+import { detectFormat } from './engine/scanFormats';
+import type { CloudTransform } from './engine/RenderEngine';
 import { makeLayout } from './design/organizer';
 import { isTyping, loadSettings, matchesKey, saveSettings, type Settings } from './design/settings';
 import { downloadJSON, parseProject, serializeProject } from './design/project';
 import './App.css';
 
 const CLOUD_URL = `${import.meta.env.BASE_URL}dom-chmura.ply`;
+/** domyślna transformacja skanu (metry, bez obrotu) */
+const NO_TRANSFORM: CloudTransform = { scale: 1, rotationY: 0, offset: [0, 0, 0] };
 const COLORS = ['#e8e2d8', '#c9a06a', '#b08968', '#2f3437', '#5b6b73', '#8d9b6a'];
 
 type Tab = 'layout' | 'interior' | 'lights';
@@ -65,6 +72,11 @@ export default function App() {
   const [carrying, setCarrying] = useState<string | null>(null);
   const [engineEpoch, setEngineEpoch] = useState(0);
   const [cloudVisible, setCloudVisible] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanFile, setScanFile] = useState<File | null>(null);
+  const [scanMeta, setScanMeta] = useState<ScanMeta | null>(null);
+  const [cloudTransform, setCloudTransform] = useState<CloudTransform>(NO_TRANSFORM);
+  const [cloudDims, setCloudDims] = useState<{ x: number; y: number; z: number } | null>(null);
   const [exterior, setExterior] = useState(true);
   const [roof, setRoof] = useState(false);
   const [wallGhost, setWallGhost] = useState(true);
@@ -75,6 +87,13 @@ export default function App() {
   const [uiHidden, setUiHidden] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [lightPanel, setLightPanel] = useState(false);
+  const [parsed, setParsed] = useState<ParsedCabinet | null>(null);
+  const [parseNote, setParseNote] = useState<string | null>(null);
+  const [clusters, setClusters] = useState<Cluster[]>([]);
+
+  /** Rozczytuje pojedynczą szafkę wybraną z modelu. */
+  const parseCabinetPartsFromCluster = (cl: Cluster): ParsedCabinet =>
+    parseCabinetParts(cl.parts, { up: 'y' });
 
   const active = cabinets.find((c) => c.id === selectedId) ?? undefined;
   const selElement = active?.elements.find((e) => e.id === selectedElement);
@@ -112,8 +131,10 @@ export default function App() {
       const d = e.data;
       if (d.type === 'done') {
         engineRef.current?.loadPointCloud(d as PointCloudData).then(() => {
+          engineRef.current?.setCloudTransform?.(cloudTransform);
           engineRef.current?.setCloudVisible?.(cloudVisible);
           setStatus(`Skan: ${d.pointCount.toLocaleString('pl-PL')} pkt`);
+          setCloudDims(dimsOf());
         });
       }
       worker.terminate();
@@ -123,6 +144,78 @@ export default function App() {
       .then((b) => worker.postMessage({ buffer: b }, [b]))
       .catch(() => worker.terminate());
   }, [ready, cloudVisible]);
+
+  /** Wymiary chmury po transformacji (metry → do panelu). */
+  const dimsOf = useCallback(() => {
+    const b = engineRef.current?.getCloudBounds?.();
+    if (!b) return null;
+    return {
+      x: b.max[0] - b.min[0],
+      y: b.max[1] - b.min[1],
+      z: b.max[2] - b.min[2],
+    };
+  }, []);
+
+  /** Import skanu z iPada: chmura punktów już sparsowana w workerze. */
+  const applyScanCloud = useCallback(
+    (cloud: { positions: Float32Array; colors?: Uint8Array; pointCount: number }, meta: ScanMeta, t: CloudTransform) => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      cloudLoaded.current = true; // nie nadpisuj plikiem demo
+      engine
+        .loadPointCloud(cloud as PointCloudData)
+        .then(() => {
+          engine.setCloudTransform?.(t);
+          engine.setCloudVisible?.(true);
+          engine.frameCloud?.();
+          setCloudTransform(t);
+          setScanMeta(meta);
+          setCloudVisible(true);
+          setCloudDims(dimsOf());
+          setStatus(`${meta.name} · ${meta.pointCount.toLocaleString('pl-PL')} pkt · ${meta.format}`);
+        })
+        .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    },
+    [dimsOf],
+  );
+
+  /** Import siatki (GLB/OBJ/STL) — skan z apki, która eksportuje model. */
+  const applyScanMesh = useCallback(
+    (file: File) => {
+      const format = detectFormat(file.name);
+      const engine = engineRef.current;
+      if (!engine || !format) return;
+      // skan z iPada to albo chmura, albo siatka — nie oba naraz
+      engine.clearCloud?.();
+      cloudLoaded.current = true;
+      setCloudVisible(false);
+      file
+        .arrayBuffer()
+        .then((buf) => engine.loadMeshBuffer?.(buf, format, file.name))
+        .then(() => {
+          setScanMeta({
+            name: file.name,
+            format,
+            pointCount: 0,
+            rawCount: 0,
+            stride: 1,
+            bboxMin: [0, 0, 0],
+            bboxMax: [0, 0, 0],
+          });
+          setStatus(`Siatka: ${file.name}`);
+        })
+        .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    },
+    [],
+  );
+
+  /** Transformacja skanu → silnik (jednostka, obrót, przesunięcie). */
+  useEffect(() => {
+    if (!ready) return;
+    engineRef.current?.setCloudTransform?.(cloudTransform);
+    const t = window.setTimeout(() => setCloudDims(dimsOf()), 60);
+    return () => window.clearTimeout(t);
+  }, [cloudTransform, ready, engineEpoch, dimsOf]);
 
   // ---- poziom detalu okuć: zastosuj do wszystkich szafek ----
   useEffect(() => {
@@ -513,6 +606,59 @@ export default function App() {
   const patchCabinet = (id: string, patch: Partial<Cabinet>) =>
     setCabinets((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
+  /** Import modelu szafki → rozczytanie części i parametryzacja. */
+  const importCabinetModel = async (file: File) => {
+    try {
+      setStatus('Rozczytuję model…');
+      const buf = await file.arrayBuffer();
+      const res = await parseGlb(buf);
+      setParsed(res.parsed);
+      setParseNote(res.unitNote ?? null);
+      setClusters(res.clusters);
+      setStatus(
+        `Rozczytano ${res.parsed.parts.length} brył: ${res.parsed.width}×${res.parsed.height}×${res.parsed.depth} mm`,
+      );
+    } catch (e) {
+      setStatus(`Nie udało się rozczytać: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  // import modelu z adresu URL: ?cabinetGlb=https://...
+  useEffect(() => {
+    if (!ready) return;
+    const url = new URLSearchParams(window.location.search).get('cabinetGlb');
+    if (!url) return;
+    (async () => {
+      try {
+        setStatus('Pobieram model…');
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        const r = await parseGlb(buf);
+        setParsed(r.parsed);
+        setParseNote(r.unitNote ?? null);
+        setClusters(r.clusters);
+        setStatus(`Rozczytano ${r.parsed.parts.length} brył`);
+      } catch (e) {
+        setStatus(`Model z URL: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })();
+  }, [ready, engineEpoch]);
+
+  /** Zamienia rozczytany model na szafkę w projekcie. */
+  const useParsedCabinet = () => {
+    if (!parsed) return;
+    const cab = toCabinet(parsed, `Model ${cabinets.length + 1}`, `c${Date.now().toString(36)}`);
+    const ref = active ?? cabinets[cabinets.length - 1];
+    const placed = ref
+      ? { ...cab, x: ref.x + (ref.width + cab.width) / 2, z: ref.z, rotation: ref.rotation }
+      : cab;
+    setCabinets((cs) => [...cs, placed]);
+    setSelectedId(placed.id);
+    setParsed(null);
+    setStatus('Szafka utworzona z modelu — sprawdź wymiary i elementy');
+  };
+
   /** Dodaje oprawę oświetleniową nad zaznaczoną szafką (albo w środku pokoju). */
   const addLight = (t: LightTemplate) => {
     const base = active;
@@ -745,6 +891,13 @@ export default function App() {
             ☁ {cloudVisible ? 'Chmura WŁ' : 'Chmura WYŁ'}
           </button>
           <button
+            className={`chip ${scanMeta ? 'on' : ''}`}
+            title="Import skanu z iPada/telefonu — PLY, PCD, XYZ, GLB, OBJ, STL"
+            onClick={() => setScanOpen(true)}
+          >
+            ⇪ Skan
+          </button>
+          <button
             className={`chip ${settings.autoRotate ? 'on' : ''}`}
             title="Auto-orbitowanie pola roboczego (O)"
             onClick={() => setSettings((s) => ({ ...s, autoRotate: !s.autoRotate }))}
@@ -768,6 +921,19 @@ export default function App() {
           <button className="chip" title="Automat oświetlenia sufitowego" onClick={() => setLightPanel(true)}>
             ✦ Auto-światło
           </button>
+          <label className="chip" title="Import modelu szafki (GLB) — automatyczne rozczytanie części">
+            ⇩ Model szafki
+            <input
+              type="file"
+              accept=".glb,.gltf"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void importCabinetModel(f);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
           <button className="chip" title="Rysuj pomieszczenie" onClick={() => setRoomDialog(true)}>
             ▭ Pomieszczenie
           </button>
@@ -885,9 +1051,20 @@ export default function App() {
           onDrop={(e) => {
             e.preventDefault();
             const key = e.dataTransfer.getData('text/cabinet');
-            if (!key) return;
-            const t = LIBRARY_GROUPS.flatMap((g) => byGroup(g)).find((x) => x.key === key);
-            if (t) addCabinet(t, 'right');
+            if (key) {
+              const t = LIBRARY_GROUPS.flatMap((g) => byGroup(g)).find((x) => x.key === key);
+              if (t) addCabinet(t, 'right');
+              return;
+            }
+            // plik skanu przeciągnięty na scenę — panel dostanie go i wczyta od razu
+            const f = e.dataTransfer.files?.[0];
+            if (!f) return;
+            if (!detectFormat(f.name)) {
+              setStatus(`Nieznany plik: ${f.name}`);
+              return;
+            }
+            setScanFile(f);
+            setScanOpen(true);
           }}
         >
           <canvas ref={canvasRef} />
@@ -1059,6 +1236,81 @@ export default function App() {
 
       {toast && <div className="toast">{toast}</div>}
 
+      {parsed && (
+        <div className="modal-backdrop" onClick={() => setParsed(null)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>Rozczytany model szafki</h2>
+            <p className="modal-sub">
+              {parsed.width} × {parsed.height} × {parsed.depth} mm · płyta {parsed.panel} mm ·{' '}
+              {parsed.parts.length} brył
+              {parseNote ? ` · ${parseNote}` : ''}
+            </p>
+            {parsed.warnings.length > 0 && (
+              <p className="modal-hint" style={{ color: '#e0a33c' }}>
+                {parsed.warnings.join(' · ')}
+              </p>
+            )}
+            {clusters.length > 1 && (
+              <div className="cluster-bar">
+                <span>Model zawiera {clusters.length} szafek — wybierz jedną:</span>
+                <div className="cluster-list">
+                  {clusters.slice(0, 12).map((cl) => (
+                    <button
+                      key={cl.id}
+                      onClick={() => {
+                        const sub = parseCabinetPartsFromCluster(cl);
+                        setParsed(sub);
+                      }}
+                    >
+                      {cl.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="part-table">
+              <div className="part-row part-head">
+                <span>Element</span><span>Wymiary [mm]</span><span>Grub.</span><span>Pewność</span>
+              </div>
+              <div className="part-scroll">
+                {parsed.parts.map((pt, i) => (
+                  <div className="part-row" key={i}>
+                    <span className="part-name">
+                      <select
+                        value={pt.role}
+                        onChange={(e) => {
+                          const role = e.target.value as typeof pt.role;
+                          setParsed({
+                            ...parsed,
+                            parts: parsed.parts.map((x, k) => (k === i ? { ...x, role } : x)),
+                          });
+                        }}
+                      >
+                        {ROLE_OPTIONS.map((r) => (
+                          <option key={r.id} value={r.id}>{r.label}</option>
+                        ))}
+                      </select>
+                      <b>{pt.label}</b>
+                    </span>
+                    <span>
+                      {Math.round(pt.size[0])}×{Math.round(pt.size[1])}×{Math.round(pt.size[2])}
+                    </span>
+                    <span>{pt.thickness.toFixed(1)}</span>
+                    <span className={pt.confidence > 0.8 ? 'ok' : pt.confidence > 0.55 ? 'mid' : 'low'}>
+                      {Math.round(pt.confidence * 100)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button className="ghost" onClick={() => setParsed(null)}>Anuluj</button>
+              <button className="primary" onClick={useParsedCabinet}>Utwórz szafkę parametryczną</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {lightPanel && (
         <div className="modal-backdrop" onClick={() => setLightPanel(false)}>
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
@@ -1108,6 +1360,21 @@ export default function App() {
             setRoomDialog(false);
             setStatus(`Pomieszczenie: ${d.name} · ${(d.width * d.depth / 1e6).toFixed(2)} m² · ${d.purpose}`);
           }}
+        />
+      )}
+
+      {scanOpen && (
+        <ScanPanel
+          pendingFile={scanFile}
+          onPendingConsumed={() => setScanFile(null)}
+          meta={scanMeta}
+          transform={cloudTransform}
+          dims={cloudDims}
+          onCloud={applyScanCloud}
+          onMesh={applyScanMesh}
+          onTransform={setCloudTransform}
+          onFrame={() => engineRef.current?.frameCloud?.()}
+          onClose={() => setScanOpen(false)}
         />
       )}
 
