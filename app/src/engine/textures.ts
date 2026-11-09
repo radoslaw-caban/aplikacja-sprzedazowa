@@ -353,9 +353,9 @@ export function textureScale(kind: MatKind): number {
   switch (kind) {
     case 'wood':
     case 'wood-dark':
-      return 0.7;
+      return 0.32;
     case 'laminate':
-      return 0.9;
+      return 0.5;
     case 'stone':
       return 1.2;
     case 'cobble':

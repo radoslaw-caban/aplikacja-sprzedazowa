@@ -86,6 +86,7 @@ export default function App() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [style, setStyle] = useState<ViewStyle>('realistic');
   const [uiHidden, setUiHidden] = useState(false);
+  const [barsPinned, setBarsPinned] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [lightPanel, setLightPanel] = useState(false);
   const [parsed, setParsed] = useState<ParsedCabinet | null>(null);
@@ -408,32 +409,42 @@ export default function App() {
     };
   }, [switchProject, switchFile]);
 
-  // ---- UKRYWANIE PASKÓW: chowamy po 3,5 s, pokazujemy przy krawędzi ekranu ----
+  // ---- PASKÓW NIE CHOWAMY, JEŚLI UŻYTKOWNIK JE PRZYPIĄŁ ----
   useEffect(() => {
+    if (barsPinned) setUiHidden(false);
+  }, [barsPinned]);
+
+  // ---- AUTO-UKRYWANIE: chowamy po 7 s bezczynności, wracają przy każdym dotknięciu ----
+  useEffect(() => {
+    if (barsPinned) return;
     let timer: number | undefined;
+    let lastReveal = 0;
     const arm = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setUiHidden(true), 3500);
+      timer = window.setTimeout(() => setUiHidden(true), 7000);
     };
-    const reveal = (e: MouseEvent | TouchEvent) => {
-      const y = 'touches' in e ? e.touches[0]?.clientY ?? 0 : (e as MouseEvent).clientY;
-      const x = 'touches' in e ? e.touches[0]?.clientX ?? 0 : (e as MouseEvent).clientX;
-      const nearEdge =
-        y < 56 || y > window.innerHeight - 56 || x < 64 || x > window.innerWidth - 64;
-      if (nearEdge) {
-        setUiHidden(false);
-        arm();
-      }
+    const reveal = () => {
+      const now = Date.now();
+      if (now - lastReveal < 300) return; // nie zalewamy setState przy ruchu
+      lastReveal = now;
+      setUiHidden(false);
+      arm();
     };
-    window.addEventListener('mousemove', reveal);
+    window.addEventListener('pointermove', reveal, { passive: true });
+    window.addEventListener('pointerdown', reveal, { passive: true });
     window.addEventListener('touchstart', reveal, { passive: true });
+    window.addEventListener('wheel', reveal, { passive: true });
+    window.addEventListener('keydown', reveal);
     arm();
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener('mousemove', reveal);
+      window.removeEventListener('pointermove', reveal);
+      window.removeEventListener('pointerdown', reveal);
       window.removeEventListener('touchstart', reveal);
+      window.removeEventListener('wheel', reveal);
+      window.removeEventListener('keydown', reveal);
     };
-  }, []);
+  }, [barsPinned]);
 
   // ---- tryb przesuwania: kamera zablokowana, żeby nie uciekała z szafką ----
   useEffect(() => {
@@ -924,11 +935,19 @@ export default function App() {
   const unitLabel = settings.units;
 
   return (
-    <div className={`app${uiHidden ? ' ui-hidden' : ''}`}>
+    <div className={`app${uiHidden && !barsPinned ? ' ui-hidden' : ''}`}>
       <input
         ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) loadProject(f); e.target.value = ''; }}
       />
+
+      <button
+        className={`ui-handle ${barsPinned ? 'pinned' : ''}`}
+        title="Paski narzędzi (H) — przypnij, żeby nie znikały"
+        onClick={() => setBarsPinned((v) => !v)}
+      >
+        {barsPinned ? '▣' : '☰'}
+      </button>
 
       <header>
         <button className="gear" title="Ustawienia (S)" onClick={() => setSettingsOpen(true)}>⚙</button>
