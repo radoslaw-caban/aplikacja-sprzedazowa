@@ -195,11 +195,14 @@ export default function ScanPanel({
               <span><b>{meta.name}</b></span>
               <span className="mono">{meta.format}</span>
               <span>
-                {meta.pointCount.toLocaleString('pl-PL')} pkt
-                {meta.stride > 1 ? ` z ${meta.rawCount.toLocaleString('pl-PL')} (krok ${meta.stride})` : ''}
+                {meta.pointCount > 0
+                  ? `${meta.pointCount.toLocaleString('pl-PL')} pkt${meta.stride > 1 ? ` z ${meta.rawCount.toLocaleString('pl-PL')} (krok ${meta.stride})` : ''}`
+                  : 'siatka trójkątów (bez chmury punktów)'}
               </span>
             </div>
 
+            {meta.pointCount > 0 && (
+            <>
             <div className="modal-section">Jednostka pliku</div>
             <div className="seg">
               {(['m', 'cm', 'mm'] as const).map((u) => (
@@ -257,6 +260,8 @@ export default function ScanPanel({
                 />
               </label>
             </div>
+            </>
+            )}
             {dims && (
               <p className="modal-hint">
                 Wymiary skanu: <b>{mm(dims.x)} × {mm(dims.y)} × {mm(dims.z)} mm</b> — porównaj z realnym pomieszczeniem.
@@ -266,10 +271,16 @@ export default function ScanPanel({
         )}
 
         <div className="modal-actions">
-          {meta && <button className="ghost" onClick={onFrame}>Kadruj na skan</button>}
-          <button className="ghost" onClick={() => { onTransform({ scale: 1, rotationY: 0, offset: [0, 0, 0] }); }}>
-            Reset transformacji
-          </button>
+          {meta && (
+            <button className="ghost" onClick={onFrame}>
+              {meta.pointCount > 0 ? 'Kadruj na skan' : 'Kadruj na siatkę'}
+            </button>
+          )}
+          {meta && meta.pointCount > 0 && (
+            <button className="ghost" onClick={() => onTransform({ scale: 1, rotationY: 0, offset: [0, 0, 0] })}>
+              Reset transformacji
+            </button>
+          )}
           <button className="primary" onClick={onClose}>Zamknij</button>
         </div>
       </div>

@@ -67,6 +67,8 @@ export interface RenderEngine {
   setCloudTransform?(t: CloudTransform): void;
   /** bbox chmury po transformacji (metry) — do pokazania wymiarów skanu */
   getCloudBounds?(): { min: [number, number, number]; max: [number, number, number] } | null;
+  /** bbox wstawionej siatki (metry) */
+  getModelBounds?(): { min: [number, number, number]; max: [number, number, number] } | null;
   /** usuwa chmurę punktów ze sceny */
   clearCloud?(): void;
   /** kadrowanie kamery na chmurę punktów */

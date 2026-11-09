@@ -143,11 +143,12 @@ export default function App() {
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`PLY ${r.status}`))))
       .then((b) => worker.postMessage({ buffer: b }, [b]))
       .catch(() => worker.terminate());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, cloudVisible]);
 
   /** Wymiary chmury po transformacji (metry → do panelu). */
   const dimsOf = useCallback(() => {
-    const b = engineRef.current?.getCloudBounds?.();
+    const b = engineRef.current?.getCloudBounds?.() ?? engineRef.current?.getModelBounds?.();
     if (!b) return null;
     return {
       x: b.max[0] - b.min[0],
@@ -202,11 +203,12 @@ export default function App() {
             bboxMin: [0, 0, 0],
             bboxMax: [0, 0, 0],
           });
+          setCloudDims(dimsOf());
           setStatus(`Siatka: ${file.name}`);
         })
         .catch((e) => setError(e instanceof Error ? e.message : String(e)));
     },
-    [],
+    [dimsOf],
   );
 
   /** Transformacja skanu → silnik (jednostka, obrót, przesunięcie). */
@@ -1373,7 +1375,9 @@ export default function App() {
           onCloud={applyScanCloud}
           onMesh={applyScanMesh}
           onTransform={setCloudTransform}
-          onFrame={() => engineRef.current?.frameCloud?.()}
+          onFrame={() =>
+            (scanMeta?.pointCount ? engineRef.current?.frameCloud?.() : engineRef.current?.frameDesign?.())
+          }
           onClose={() => setScanOpen(false)}
         />
       )}

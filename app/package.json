@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test:scan": "node tools/test-scan-import.mts",
     "preview": "vite preview"
   },
   "dependencies": {

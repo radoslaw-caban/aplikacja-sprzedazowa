@@ -334,6 +334,17 @@ export class ThreeEngine implements RenderEngine {
     return this.setModel(gltf.scene);
   }
 
+  /** Bbox wstawionego modelu (metry) — wymiary siatki ze skanu. */
+  getModelBounds() {
+    if (!this.modelHolder) return null;
+    const box = new THREE.Box3().setFromObject(this.modelHolder);
+    if (box.isEmpty()) return null;
+    return {
+      min: [box.min.x, box.min.y, box.min.z] as [number, number, number],
+      max: [box.max.x, box.max.y, box.max.z] as [number, number, number],
+    };
+  }
+
   /** Wstawia gotowy obiekt (np. przeciągnięty plik .glb z dysku). */
   setModel(root: THREE.Object3D) {
     if (!this.scene) throw new Error('Engine not initialized');
@@ -483,6 +494,8 @@ export class ThreeEngine implements RenderEngine {
       box.expandByObject(obj);
     }
     if (box.isEmpty()) box.setFromObject(this.designGroup);
+    // siatka ze skanu (import z iPada) też jest częścią „projektu” do wykadrowania
+    if (this.modelHolder) box.expandByObject(this.modelHolder);
     if (box.isEmpty()) return;
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
