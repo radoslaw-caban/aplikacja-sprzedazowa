@@ -86,7 +86,7 @@ export default function App() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [style, setStyle] = useState<ViewStyle>('realistic');
   const [uiHidden, setUiHidden] = useState(false);
-  const [barsPinned, setBarsPinned] = useState(false);
+  const [barsPinned, setBarsPinned] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [lightPanel, setLightPanel] = useState(false);
   const [parsed, setParsed] = useState<ParsedCabinet | null>(null);
