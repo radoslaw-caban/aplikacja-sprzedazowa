@@ -102,7 +102,7 @@ export class PostFX {
     this.composer.addPass(this.gtao);
 
     // --- bloom (delikatny) ---
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1024, 1024), 0.14, 0.5, 0.95);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1024, 1024), 0.12, 0.45, 1.15);
     this.composer.addPass(this.bloom);
 
     // --- korekcja barw + winieta ---

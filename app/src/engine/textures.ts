@@ -326,7 +326,7 @@ export function materialProps(kind: MatKind): {
     case 'laminate':
       return { color: '#ffffff', roughness: 0.42, metalness: 0.02 };
     case 'stone':
-      return { color: '#f2efe9', roughness: 0.22, metalness: 0.04 };
+      return { color: '#d9d5cc', roughness: 0.48, metalness: 0.02 };
     case 'glass':
       return { color: '#a8d4e6', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 };
     case 'metal':

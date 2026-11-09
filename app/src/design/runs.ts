@@ -137,5 +137,6 @@ export function plinthBoxes(runs: RunSpec[], p: PlinthParams): SceneBox[] {
       rotationY: r.rotation,
       color: p.color,
       outline: true,
+      mat: 'plaster' as const,
     }));
 }

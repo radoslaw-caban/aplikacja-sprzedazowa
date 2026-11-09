@@ -184,7 +184,7 @@ export class ThreeEngine implements RenderEngine {
       normalMap: useTex ? normal.clone() : undefined,
       roughnessMap: useTex ? rough.clone() : undefined,
       normalScale: new THREE.Vector2(0.45, 0.45),
-      envMapIntensity: (b.color ?? '').toLowerCase() < '#606060' ? 0.35 : 1.0,
+      envMapIntensity: (b.color ?? '').toLowerCase() < '#606060' ? 0.12 : 0.9,
       emissive: b.emissive ? new THREE.Color(b.emissive) : new THREE.Color('#000000'),
       emissiveIntensity: b.emissiveIntensity ?? (b.emissive ? 2 : 0),
     });

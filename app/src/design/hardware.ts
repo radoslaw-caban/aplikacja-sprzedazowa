@@ -138,7 +138,7 @@ export function hingeBoxes(
       kind: 'handle',
       cabinetId,
       size: [35, 35, 13],
-      position: [cupX, y, zFront - 6],
+      position: [cupX, y, zFront - 24],
       color: '#9aa0a6',
       mat: 'metal',
       shape: 'cylinder',
