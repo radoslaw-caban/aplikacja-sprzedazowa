@@ -24,6 +24,7 @@ import { LIGHTING_PROPOSALS, recommendation } from './design/lightingPlan';
 import { styleById, nextStyle, type ViewStyle } from './design/viewStyles';
 import { loadProjects, saveProjects, makeProject, type Project } from './design/projects';
 import { parseGlb, type Cluster } from './design/parseGLB';
+import { loadFiles, addFile, humanSize, FILE_KINDS, type ClientFile } from './design/files';
 import { toCabinet, ROLE_OPTIONS, parseCabinetParts, type ParsedCabinet } from './design/parseModel';
 import { HANDLE_SPECS, RUNNER_SPECS } from './design/hardware';
 import { stepFromPrecision, toUnit, fromUnit } from './design/units';
@@ -90,6 +91,11 @@ export default function App() {
   const [parsed, setParsed] = useState<ParsedCabinet | null>(null);
   const [parseNote, setParseNote] = useState<string | null>(null);
   const [clusters, setClusters] = useState<Cluster[]>([]);
+  const [frozen, setFrozen] = useState(false);
+  const [files, setFiles] = useState<ClientFile[]>([]);
+  const [fileIdx, setFileIdx] = useState(0);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [locked, setLocked] = useState(true);
 
   /** Rozczytuje pojedynczą szafkę wybraną z modelu. */
   const parseCabinetPartsFromCluster = (cl: Cluster): ParsedCabinet =>
@@ -244,12 +250,12 @@ export default function App() {
       setProjects((list) =>
         list.map((p) =>
           p.id === id
-            ? { ...p, updatedAt: Date.now(), data: { cabinets, lights, room } }
+            ? { ...p, updatedAt: Date.now(), locked, data: { cabinets, lights, room } }
             : p,
         ),
       );
     },
-    [cabinets, lights, room],
+    [cabinets, lights, room, locked],
   );
 
   useEffect(() => {
@@ -286,6 +292,7 @@ export default function App() {
         setProjectId(p.id);
         setCabinets([]);
         setLights([]);
+        setLocked(true);
         flash(`Nowy: ${p.name}`);
         return;
       }
@@ -295,17 +302,35 @@ export default function App() {
         setProjectId(p.id);
         setCabinets([]);
         setLights([]);
+        setLocked(true);
         flash(`Nowy: ${p.name}`);
         return;
       }
       const target = projects[next];
       setProjectId(target.id);
+      setLocked(target.locked ?? true);
       setCabinets(target.data.cabinets);
       setLights(target.data.lights);
       setRoom(target.data.room);
       flash(`${target.name}`);
     },
     [projects, projectId, room, cabinets, lights],
+  );
+
+  /** Przełącza plik klienta (kierunek: +1 w prawo, -1 w lewo). */
+  const switchFile = useCallback(
+    (dir: 1 | -1) => {
+      if (!files.length) {
+        flash('Brak plików — dodaj umowę, skan lub rzut');
+        return;
+      }
+      setFileIdx((i) => {
+        const n = (i + dir + files.length) % files.length;
+        flash(files[n].name);
+        return n;
+      });
+    },
+    [files],
   );
 
   /** Przełącza styl widoku. */
@@ -319,6 +344,21 @@ export default function App() {
     },
     [],
   );
+
+  // ---- pliki klienta: wczytanie dla aktywnego projektu ----
+  useEffect(() => {
+    if (!projectId) return;
+    setFiles(loadFiles(projectId));
+    setFileIdx(0);
+  }, [projectId]);
+
+  // ---- zamrożenie obrazu ----
+  useEffect(() => {
+    engineRef.current?.setFrozen?.(frozen);
+    engineRef.current?.setControlsEnabled?.(!frozen && !moveMode);
+  }, [frozen, moveMode, ready, engineEpoch]);
+
+  const currentFile = files[fileIdx] ?? null;
 
   // ---- styl widoku → silnik ----
   useEffect(() => {
@@ -358,7 +398,7 @@ export default function App() {
       const dx = t.clientX - sx;
       const dy = t.clientY - sy;
       if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 70) switchProject(dy > 0 ? -1 : 1);
-      else if (Math.abs(dx) > 70) switchStyle(dx > 0 ? -1 : 1);
+      else if (Math.abs(dx) > 70) switchFile(dx > 0 ? -1 : 1);
     };
     el.addEventListener('touchstart', down, { passive: true });
     el.addEventListener('touchend', up, { passive: true });
@@ -366,7 +406,7 @@ export default function App() {
       el.removeEventListener('touchstart', down);
       el.removeEventListener('touchend', up);
     };
-  }, [switchProject, switchStyle]);
+  }, [switchProject, switchFile]);
 
   // ---- UKRYWANIE PASKÓW: chowamy po 3,5 s, pokazujemy przy krawędzi ekranu ----
   useEffect(() => {
@@ -605,6 +645,14 @@ export default function App() {
   }, [ready, moveMode, cabinets, room, carrying]);
 
   // ---- operacje ----
+  const guardLocked = () => {
+    if (locked) {
+      flash('Projekt zablokowany — odblokuj, żeby edytować');
+      return false;
+    }
+    return true;
+  };
+
   const patchCabinet = (id: string, patch: Partial<Cabinet>) =>
     setCabinets((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
@@ -679,6 +727,7 @@ export default function App() {
   };
 
   const addCabinet = (t: CabinetTemplate, side: 'left' | 'right' = 'right') => {
+    if (!guardLocked()) return;
     const c = t.make();
     // Punkt odniesienia: zaznaczona szafka, inaczej ostatnia dodana.
     const ref = cabinets.find((x) => x.id === selectedId) ?? cabinets[cabinets.length - 1];
@@ -919,6 +968,26 @@ export default function App() {
             onClick={() => switchProject(1)}
           >
             ▤ {projects.find((p) => p.id === projectId)?.name ?? 'Projekt 1'} ({projects.length || 1})
+          </button>
+          <button
+            className={`chip ${frozen ? 'on' : ''}`}
+            title="Zamroź obraz — potem przesuwaj w górę/dół (projekty) i w lewo/prawo (pliki)"
+            onClick={() => setFrozen((v) => !v)}
+          >
+            {frozen ? '❄ Zamrożone' : '❄ Zamroź'}
+          </button>
+          <button
+            className={`chip ${locked ? 'on' : ''}`}
+            title="Blokada projektu — chroni przed przypadkową edycją"
+            onClick={() => {
+              setLocked((v) => !v);
+              flash(locked ? 'Projekt odblokowany' : 'Projekt zablokowany');
+            }}
+          >
+            {locked ? '🔒 Zablokowany' : '🔓 Otwarty'}
+          </button>
+          <button className="chip" title="Pliki klienta: umowy, skany, rzuty" onClick={() => setFilesOpen(true)}>
+            📎 Pliki ({files.length})
           </button>
           <button className="chip" title="Automat oświetlenia sufitowego" onClick={() => setLightPanel(true)}>
             ✦ Auto-światło
@@ -1237,6 +1306,76 @@ export default function App() {
       </div>
 
       {toast && <div className="toast">{toast}</div>}
+
+      {frozen && (
+        <div className="frozen-badge">
+          ❄ obraz zamrożony · ↕ projekt · ↔ plik
+        </div>
+      )}
+
+      {filesOpen && (
+        <div className="modal-backdrop" onClick={() => setFilesOpen(false)}>
+          <div className="modal modal-wide glass" onClick={(e) => e.stopPropagation()}>
+            <h2>Pliki klienta</h2>
+            <p className="modal-sub">
+              Umowy, skany pomieszczeń, rzuty, zdjęcia i pomiary. Gest w poziomie przełącza pliki.
+            </p>
+
+            <label className="drop-zone">
+              + Dodaj plik (PDF, E57, DWG, JPG…)
+              <input
+                type="file"
+                multiple
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const list = e.target.files;
+                  if (!list || !projectId) return;
+                  for (const f of Array.from(list)) await addFile(projectId, f);
+                  const fresh = loadFiles(projectId);
+                  setFiles(fresh);
+                  setFileIdx(0);
+                  flash(`Dodano ${list.length} plik(ów)`);
+                  e.currentTarget.value = '';
+                }}
+              />
+            </label>
+
+            <div className="file-list">
+              {files.length === 0 && <div className="file-empty">Brak plików w tym projekcie</div>}
+              {files.map((f, i) => (
+                <div
+                  key={f.id}
+                  className={`file-row ${i === fileIdx ? 'sel' : ''}`}
+                  onClick={() => setFileIdx(i)}
+                >
+                  <span className="file-icon">
+                    {FILE_KINDS.find((k) => k.id === f.kind)?.icon ?? '◇'}
+                  </span>
+                  <span className="file-name">{f.name}</span>
+                  <span className="file-kind">{FILE_KINDS.find((k) => k.id === f.kind)?.label}</span>
+                  <span className="file-size">{humanSize(f.size)}</span>
+                </div>
+              ))}
+            </div>
+
+            {currentFile?.dataUrl && (
+              <div className="file-preview">
+                {currentFile.dataUrl.startsWith('data:image') ? (
+                  <img src={currentFile.dataUrl} alt={currentFile.name} />
+                ) : (
+                  <a href={currentFile.dataUrl} download={currentFile.name} target="_blank" rel="noreferrer">
+                    Otwórz {currentFile.name}
+                  </a>
+                )}
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button className="ghost" onClick={() => setFilesOpen(false)}>Zamknij</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {parsed && (
         <div className="modal-backdrop" onClick={() => setParsed(null)}>

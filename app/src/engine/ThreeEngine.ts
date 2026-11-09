@@ -61,6 +61,8 @@ export class ThreeEngine implements RenderEngine {
   private degraded = 0;
   /** ściany półprzezroczyste — widok roboczy wnętrza */
   private wallGhost = true;
+  /** zamrożenie obrazu — scena przestaje się renderować */
+  private frozen = false;
 
   /**
    * Niebo equirect: gradient zenitu, horyzont, ciepły pas przy horyzoncie
@@ -652,6 +654,22 @@ export class ThreeEngine implements RenderEngine {
     }
   }
 
+  /** Zamraża obraz: scena przestaje się przerysowywać (oszczędza GPU przy przeglądaniu). */
+  setFrozen(on: boolean) {
+    this.frozen = on;
+    if (!on) this.draw();
+  }
+
+  /** Zrzut aktualnego obrazu (PNG data URL) — do podglądu/miniatury projektu. */
+  snapshot(): string | null {
+    try {
+      this.draw();
+      return this.renderer?.domElement.toDataURL('image/png') ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Włącz/wyłącz sterowanie kamerą (przy przesuwaniu szafki kamera ma stać). */
   setControlsEnabled(on: boolean) {
     if (this.controls) this.controls.enabled = on;
@@ -1100,6 +1118,7 @@ export class ThreeEngine implements RenderEngine {
 
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
+    if (this.frozen) return;
 
     // pomiar płynności: przy klatkach > 45 ms obniżamy jakość (maks. 2 razy)
     const now = performance.now();

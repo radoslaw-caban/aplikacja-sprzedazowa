@@ -78,6 +78,8 @@ export interface RenderEngine {
   setWallGhost?(on: boolean): void;
   setQuality?(level: 'low' | 'medium' | 'high'): void;
   setControlsEnabled?(on: boolean): void;
+  setFrozen?(on: boolean): void;
+  snapshot?(): string | null;
   applyStyle?(spec: {
     materials: 'pbr' | 'flat' | 'wire';
     shadows: boolean;

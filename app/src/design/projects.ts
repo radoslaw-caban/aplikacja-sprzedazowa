@@ -19,6 +19,8 @@ export interface Project {
   id: string;
   name: string;
   updatedAt: number;
+  /** każdy projekt domyślnie zablokowany (ochrona przed edycją) */
+  locked?: boolean;
   data: ProjectData;
 }
 
@@ -70,6 +72,7 @@ export function makeProject(name: string, room: Room, cabinets: Cabinet[] = [], 
     id: newId(),
     name,
     updatedAt: Date.now(),
+    locked: true,
     data: { cabinets, lights, room },
   };
 }

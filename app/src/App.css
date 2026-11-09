@@ -65,6 +65,71 @@ h1 { font-size: 1rem; margin: 0; font-weight: 600; }
 
 .stage { position: relative; flex: 1; min-height: 0; }
 canvas { width: 100% !important; height: 100% !important; display: block; touch-action: none; }
+
+/* ---- pełny ekran: bez tła narzędzi, scenografia na całą powierzchnię ---- */
+html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #0b0e12; }
+.app {
+  position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  box-sizing: border-box; overflow: hidden;
+}
+.app > canvas, .app .stage, .app .viewport { position: absolute; inset: 0; }
+
+/* ---- panel szklany (glassmorphism) ---- */
+.app header,
+.app .sidebar,
+.app .inspect,
+.modal.glass {
+  background: rgba(18, 23, 30, 0.55);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+}
+.app header { border-radius: 0 0 14px 14px; }
+.app .sidebar, .app .inspect { border-radius: 14px; }
+
+/* ---- chipy jako szkło ---- */
+.chip {
+  background: rgba(24, 30, 38, 0.55);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+.chip.on { background: rgba(201, 162, 39, 0.22); border-color: rgba(201, 162, 39, 0.55); }
+
+/* ---- wskaźnik zamrożenia ---- */
+.frozen-badge {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  background: rgba(20, 26, 33, 0.7); border: 1px solid rgba(140, 200, 255, 0.35);
+  color: #cfe6ff; font-size: .74rem; padding: 7px 14px; border-radius: 999px;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); z-index: 70;
+}
+
+/* ---- pliki klienta ---- */
+.drop-zone {
+  display: block; text-align: center; padding: 16px; margin: 10px 0;
+  border: 1px dashed rgba(255,255,255,.22); border-radius: 12px;
+  font-size: .78rem; color: #b9c3cf; cursor: pointer;
+  background: rgba(255,255,255,.03);
+}
+.drop-zone:hover { border-color: rgba(201,162,39,.6); color: #f0e2b6; }
+.file-list { max-height: 40vh; overflow: auto; display: grid; gap: 4px; }
+.file-row {
+  display: grid; grid-template-columns: 26px 1fr 130px 70px; gap: 8px; align-items: center;
+  padding: 7px 10px; border-radius: 9px; font-size: .74rem; color: #c7cdd4;
+  border: 1px solid transparent; cursor: pointer;
+}
+.file-row:hover { background: rgba(255,255,255,.04); }
+.file-row.sel { background: rgba(201,162,39,.14); border-color: rgba(201,162,39,.5); color: #fff; }
+.file-icon { color: #c9a227; text-align: center; }
+.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-kind, .file-size { color: #8b949e; font-size: .68rem; text-align: right; }
+.file-empty { padding: 18px; text-align: center; color: #8b949e; font-size: .76rem; }
+.file-preview { margin-top: 10px; max-height: 30vh; overflow: auto; }
+.file-preview img { max-width: 100%; border-radius: 10px; }
+.file-preview a { color: #8fc4ff; font-size: .76rem; }
+
 .loader {
   position: absolute; inset: 0; display: grid; place-items: center;
   color: #8a919c; pointer-events: none; padding: 0 20px; text-align: center;
