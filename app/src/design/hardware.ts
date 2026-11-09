@@ -46,33 +46,34 @@ export function handleBoxes(
 
   if (type === 'bar') {
     const len = Math.min(Math.max(w * 0.55, 128), 320);
-    // reling
+    // reling: cylinder obrócony w osi X (poziomo wzdłuż frontu)
     out.push({
       id: `${frontId}:handle`,
       kind: 'handle',
       cabinetId: frontId.split('-')[0],
       frontId,
-      size: [len, 12, 12],
-      position: [x, y, z + 32],
+      size: [12, len, 12],
+      position: [x, y, z + 30],
       color,
       mat: 'metal',
       shape: 'cylinder',
       outline: false,
       rotationZ: 90,
     });
-    // trzpienie
+    // trzpienie: cylinder w osi Z (od frontu do relingu)
     for (const s of [-1, 1]) {
       out.push({
         id: `${frontId}:handle-post${s > 0 ? 'r' : 'l'}`,
         kind: 'handle',
         cabinetId: frontId.split('-')[0],
         frontId,
-        size: [10, 10, 32],
-        position: [x + (s * len) / 2.2, y, z + 16],
+        size: [10, 26, 10],
+        position: [x + (s * len) / 2.2, y, z + 14],
         color,
         mat: 'metal',
         shape: 'cylinder',
         outline: false,
+        rotationX: 90,
       });
     }
   } else if (type === 'knob') {
@@ -81,8 +82,8 @@ export function handleBoxes(
       kind: 'handle',
       cabinetId: frontId.split('-')[0],
       frontId,
-      size: [30, 30, 28],
-      position: [x, y, z + 20],
+      size: [30, 34, 30],
+      position: [x, y, z + 17],
       color,
       mat: 'metal',
       shape: 'cylinder',
@@ -94,8 +95,8 @@ export function handleBoxes(
       kind: 'handle',
       cabinetId: frontId.split('-')[0],
       frontId,
-      size: [96, 14, 26],
-      position: [x, y, z + 13],
+      size: [96, 16, 24],
+      position: [x, y, z + 12],
       color,
       mat: 'metal',
       outline: false,
@@ -136,8 +137,8 @@ export function hingeBoxes(
       id: `${cabinetId}:hinge-cup-${side}-${y}`,
       kind: 'handle',
       cabinetId,
-      size: [35, 35, 11.5],
-      position: [cupX, y, zFront + 6],
+      size: [35, 35, 13],
+      position: [cupX, y, zFront - 6],
       color: '#9aa0a6',
       mat: 'metal',
       shape: 'cylinder',

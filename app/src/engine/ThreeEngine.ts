@@ -177,14 +177,14 @@ export class ThreeEngine implements RenderEngine {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.95;
+    this.renderer.toneMappingExposure = 1.06;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     this.scene = new THREE.Scene();
     this.scene.background = this.skyTexture();
-    this.scene.fog = new THREE.Fog('#cfd8e0', 40, 160);
+    this.scene.fog = new THREE.Fog('#dfe7ee', 70, 260);
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
     this.camera.position.set(2.4, 1.6, 3.2);
@@ -196,20 +196,20 @@ export class ThreeEngine implements RenderEngine {
     this.scene.environmentIntensity = 1.0;
 
     // słońce z cieniami
-    const sun = new THREE.DirectionalLight(0xfff8ee, 1.85);
+    const sun = new THREE.DirectionalLight(0xfff6e8, 3.1);
     sun.position.set(-6, 15, 9);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.bias = -0.0004;
-    sun.shadow.normalBias = 0.02;
+    sun.shadow.bias = -0.0006;
+    sun.shadow.normalBias = 0.035;
     const cam = sun.shadow.camera;
     cam.left = -18; cam.right = 18; cam.top = 18; cam.bottom = -18;
     cam.near = 1; cam.far = 60;
     cam.updateProjectionMatrix();
 
     // światło niebios (góra chłodna, dół ciepły od gruntu)
-    const hemi = new THREE.HemisphereLight(0xdceaf7, 0x6f6656, 0.62);
-    this.scene.add(sun, hemi, new THREE.AmbientLight(0xffffff, 0.10));
+    const hemi = new THREE.HemisphereLight(0xe8f2ff, 0x8a7f6a, 0.85);
+    this.scene.add(sun, hemi, new THREE.AmbientLight(0xffffff, 0.12));
 
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -449,10 +449,10 @@ export class ThreeEngine implements RenderEngine {
   frameDesign() {
     if (!this.camera || !this.controls) return;
     const box = new THREE.Box3();
-    // pokój + bryły projektu; otoczenie (trawnik, podjazd, drzewa) pomijamy
-    for (const obj of this.roomGroup.children) box.expandByObject(obj);
+    // kadrujemy na bryły projektu (szafki); pokój i ogród zostają jako tło
     for (const obj of this.designGroup.children) {
-      if (obj.userData?.kind === 'scene') continue;
+      const k = obj.userData?.kind;
+      if (k === 'scene' || k === 'light') continue;
       if (!obj.visible) continue;
       box.expandByObject(obj);
     }
@@ -539,21 +539,17 @@ export class ThreeEngine implements RenderEngine {
         map: kind === 'glass' ? undefined : map,
         bumpMap: kind === 'glass' ? undefined : tex.bump?.clone(),
         bumpScale: bumpScale(kind),
-        transparent: props.transparent || (b.opacity ?? 1) < 1,
+        transparent: props.transparent === true,
         opacity: props.opacity ?? b.opacity ?? 1,
-        side: THREE.DoubleSide,
+        // ściany: tylko powierzchnie wewnętrzne (culling) — brak efektu szyby
+        side: b.kind === 'wall' && this.wallGhost ? THREE.BackSide : THREE.FrontSide,
         envMapIntensity: 1.1,
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(b.position[0] * mm, b.position[1] * mm, b.position[2] * mm);
       mesh.userData = { kind: 'room-' + b.kind };
-      if (b.kind === 'wall' && this.wallGhost) {
-        mat.transparent = true;
-        mat.opacity = 0.16;
-        mat.depthWrite = false;
-      }
       mesh.receiveShadow = b.kind !== 'wall';
-      mesh.castShadow = b.kind === 'wall' && !this.wallGhost;
+      mesh.castShadow = b.kind === 'wall';
       this.roomGroup.add(mesh);
     }
     this.draw();
@@ -638,14 +634,16 @@ export class ThreeEngine implements RenderEngine {
 
   /** Ściany przezroczyste (widok roboczy) albo pełne. */
   setWallGhost(on: boolean) {
+    // on = widok roboczy: ściany widoczne tylko od wewnątrz (nie zasłaniają, nie są przezroczyste)
     this.wallGhost = on;
     for (const o of this.roomGroup.children) {
       const m = o as THREE.Mesh;
       if (m.userData?.kind !== 'room-wall') continue;
       const mat = m.material as THREE.MeshStandardMaterial;
-      mat.transparent = on;
-      mat.opacity = on ? 0.16 : 1;
-      mat.depthWrite = !on;
+      mat.side = on ? THREE.BackSide : THREE.DoubleSide;
+      mat.transparent = false;
+      mat.opacity = 1;
+      mat.depthWrite = true;
       mat.needsUpdate = true;
     }
     this.draw();

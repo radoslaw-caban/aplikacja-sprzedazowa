@@ -78,10 +78,12 @@ export function exteriorBoxes(room: Room, opts: { roof?: boolean } = {}): SceneB
     }));
     // korona: kilka nieregularnych brył, żeby nie wyglądała jak kula
     const blobs: [number, number, number, number, string][] = [
-      [h * 0.52, h * 0.30, h * 0.52, 0.50, '#4f8542'],
-      [h * 0.40, h * 0.26, h * 0.40, 0.66, '#5c9550'],
-      [h * 0.32, h * 0.22, h * 0.32, 0.80, '#6aa55c'],
-      [h * 0.26, h * 0.18, h * 0.26, 0.92, '#79b56a'],
+      [h * 0.46, h * 0.26, h * 0.46, 0.46, '#3f6f36'],
+      [h * 0.34, h * 0.22, h * 0.34, 0.60, '#4a7d3e'],
+      [h * 0.28, h * 0.20, h * 0.28, 0.74, '#548a47'],
+      [h * 0.22, h * 0.17, h * 0.22, 0.86, '#5f9850'],
+      [h * 0.18, h * 0.14, h * 0.18, 0.96, '#6aa65a'],
+      [h * 0.20, h * 0.15, h * 0.20, 0.58, '#467a3b'],
     ];
     blobs.forEach(([sx, sy, sz, at, col], k) => {
       out.push(box(`tree-${i}-crown-${k}`, [sx, sy, sz], [

@@ -20,10 +20,10 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 const GradeShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
-    vignette: { value: 0.32 },
-    contrast: { value: 1.075 },
-    saturation: { value: 0.94 },
-    lift: { value: 0.004 },
+    vignette: { value: 0.14 },
+    contrast: { value: 1.02 },
+    saturation: { value: 1.0 },
+    lift: { value: 0.02 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -81,7 +81,7 @@ export class PostFX {
     // --- ambient occlusion ---
     this.gtao = new GTAOPass(scene, camera, 1024, 1024);
     this.gtao.output = GTAOPass.OUTPUT.Default;
-    this.gtao.blendIntensity = 1.0;
+    this.gtao.blendIntensity = 0.55;
     this.gtao.updateGtaoMaterial({
       radius: 0.42,
       distanceExponent: 1.4,
@@ -102,7 +102,7 @@ export class PostFX {
     this.composer.addPass(this.gtao);
 
     // --- bloom (delikatny) ---
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1024, 1024), 0.22, 0.55, 0.92);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1024, 1024), 0.14, 0.5, 0.95);
     this.composer.addPass(this.bloom);
 
     // --- korekcja barw + winieta ---

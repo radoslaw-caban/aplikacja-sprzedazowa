@@ -110,7 +110,7 @@ function stoneTexture(): HTMLCanvasElement {
 function grassTexture(): HTMLCanvasElement {
   const size = 512;
   const [c, ctx] = canvas(size);
-  ctx.fillStyle = '#2c5227';
+  ctx.fillStyle = '#2f4d28';
   ctx.fillRect(0, 0, size, size);
   // nierównomierne plamy — naturalna trawa nie jest jednolita
   for (let i = 0; i < 220; i++) {
@@ -130,7 +130,7 @@ function grassTexture(): HTMLCanvasElement {
     const x = Math.random() * size;
     const y = Math.random() * size;
     const h = 1.5 + Math.random() * 3.5;
-    const g = 70 + Math.random() * 80;
+    const g = 62 + Math.random() * 62;
     ctx.strokeStyle = `rgba(${25 + Math.random() * 40}, ${g}, ${25 + Math.random() * 30}, .85)`;
     ctx.lineWidth = 0.5 + Math.random() * 0.7;
     ctx.beginPath();

@@ -448,3 +448,12 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
   border: 1px solid #2a313a;
 }
 .sb-group { margin-bottom: 10px; }
+
+/* ---- panel inspekcji: czytelny, bez ucinania wartości ---- */
+.inspect { width: 280px; }
+.inspect .precise select {
+  flex: 1 1 auto; min-width: 0; width: 100%;
+  background: #141a21; border: 1px solid #2a313a; border-radius: 7px;
+  padding: 5px 6px; color: #e8eaed; font-size: .72rem;
+}
+.inspect .precise label { width: 68px; font-size: .68rem; }

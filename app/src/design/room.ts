@@ -47,7 +47,7 @@ export function roomBoxes(r: Room): RoomBox[] {
   const T = r.wallThickness;
 
   // podłoga
-  out.push({ kind: 'floor', size: [W, 20, D], position: [0, -10, 0], color: '#6b5844' });
+  out.push({ kind: 'floor', size: [W, 120, D], position: [0, -60, 0], color: '#9a7550', mat: 'deck' });
 
   // ściana północna (z = -D/2), z oknem
   out.push(...wallWithHole('north', r, W, D, H, T));
@@ -55,11 +55,11 @@ export function roomBoxes(r: Room): RoomBox[] {
   out.push(...wallWithHole('south', r, W, D, H, T));
   // wschodnia (x = +W/2)
   out.push({
-    kind: 'wall', size: [T, H, D], position: [W / 2 + T / 2, H / 2, 0], color: '#8e8a82',
+    kind: 'wall', size: [T, H, D], position: [W / 2 + T / 2, H / 2, 0], color: '#cfc7ba',
   });
   // zachodnia (x = -W/2)
   out.push({
-    kind: 'wall', size: [T, H, D], position: [-W / 2 - T / 2, H / 2, 0], color: '#8e8a82',
+    kind: 'wall', size: [T, H, D], position: [-W / 2 - T / 2, H / 2, 0], color: '#cfc7ba',
   });
 
   return out;

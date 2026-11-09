@@ -118,27 +118,24 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
 
   // --- OKUCIA: uchwyty na frontach, zawiasy, nóżki, wieszaki ---
   const handleType = c.handle ?? (c.type === 'wall' ? 'edge' : 'bar');
+  const zFront = Dp / 2 + GAP + D; // zewnętrzna płaszczyzna frontu
   for (const f of c.fronts) {
     const fw = f.x1 - f.x0;
     const fh = f.y1 - f.y0;
     const cx = -W / 2 + (f.x0 + f.x1) / 2;
-    const cy = bodyBottom(c) + (f.y0 + f.y1) / 2;
-    // front otwarty = uchwyt jedzie razem z drzwiami (uproszczenie: zostaje na miejscu)
+    // uchwyt: górna krawędź frontu (drzwi) albo górna listwa (szuflada)
+    const handleY = f.kind === 'drawer'
+      ? bodyBottom(c) + f.y1 - 30
+      : bodyBottom(c) + f.y1 - 45;
     boxes.push(
-      ...handleBoxes(
-        c.id,
-        handleType,
-        [fw, fh],
-        [cx, f.kind === 'drawer' ? cy : bodyBottom(c) + f.y1 - 40, c.depth / 2 + 9],
-        c.color ?? '#b9bcc1',
-      ),
+      ...handleBoxes(c.id, handleType, [fw, fh], [cx, handleY, zFront], c.color ?? '#b9bcc1'),
     );
-    // zawiasy tylko dla skrzydeł
+    // zawiasy tylko dla skrzydeł w trybie pełnego detalu
     if (c.detail === 'full' && f.kind === 'door' && fw > 300) {
-      const hingeY = [bodyBottom(c) + f.y0 + 100, bodyBottom(c) + f.y1 - 100];
+      const hingeY = [bodyBottom(c) + f.y0 + 110, bodyBottom(c) + f.y1 - 110];
       for (const hy of hingeY) {
-        boxes.push(...hingeBoxes(c.id, 'left', -W / 2 + f.x0 + 2, hy, c.depth / 2, c.depth));
-        boxes.push(...hingeBoxes(c.id, 'right', -W / 2 + f.x1 - 2, hy, c.depth / 2, c.depth));
+        boxes.push(...hingeBoxes(c.id, 'left', -W / 2 + f.x0 + 21, hy, zFront, Dp));
+        boxes.push(...hingeBoxes(c.id, 'right', -W / 2 + f.x1 - 21, hy, zFront, Dp));
       }
     }
   }
@@ -259,17 +256,9 @@ function buildFront(c: Cabinet, f: Front): SceneBox[] {
     add('front', [w, h, D], [rx, cy, rz], {
       rotationY: (angle * 180) / Math.PI,
     });
-    // uchwyt przy krawędzi przeciwnej do zawiasu
-    const hx = w / 2 - 40;
-    add('handle', [120, 12, 12], [
-      rx + hx * Math.cos(angle),
-      f.y1 - 70,
-      rz + hx * Math.sin(angle) + 12,
-    ], { rotationY: (angle * 180) / Math.PI, color: '#8a8f98' });
   } else {
     const slide = (f.open ?? 0) * drawerNL(c) * 0.9;
     add('front', [w, h, D], [cx, cy, zFront + slide]);
-    add('handle', [120, 12, 12], [cx, f.y1 - 30, zFront + slide + 12], { color: '#8a8f98' });
   }
   return out;
 }
