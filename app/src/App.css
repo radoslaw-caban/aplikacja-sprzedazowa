@@ -457,3 +457,33 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
   padding: 5px 6px; color: #e8eaed; font-size: .72rem;
 }
 .inspect .precise label { width: 68px; font-size: .68rem; }
+
+/* ---- auto-ukrywanie pasków ---- */
+.app.ui-hidden .header,
+.app.ui-hidden .sidebar,
+.app.ui-hidden .inspect,
+.app.ui-hidden .chips,
+.app.ui-hidden .hint { opacity: 0; pointer-events: none; transition: opacity .35s ease; }
+.app .header, .app .sidebar, .app .inspect, .app .chips, .app .hint { transition: opacity .35s ease; }
+.app.ui-hidden::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(201,162,39,.18);
+}
+
+/* ---- toast ---- */
+.toast {
+  position: fixed; left: 50%; top: 18px; transform: translateX(-50%);
+  background: rgba(20,26,33,.94); border: 1px solid #3d6b8f; color: #eaf4ff;
+  padding: 8px 16px; border-radius: 999px; font-size: .78rem; z-index: 90;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+
+/* ---- panel propozycji oświetlenia ---- */
+.modal-wide { width: min(720px, 94vw); }
+.prop-list { display: grid; gap: 10px; max-height: 58vh; overflow: auto; }
+.prop { border: 1px solid #2a313a; border-radius: 12px; padding: 12px; background: #141a21; }
+.prop-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.prop-head b { font-size: .84rem; }
+.prop-head .primary { padding: 6px 12px; font-size: .74rem; }
+.prop-desc { font-size: .74rem; color: #a9b2bd; margin-top: 6px; line-height: 1.45; }
+.prop-trend { font-size: .68rem; color: #c9a227; margin-top: 6px; }

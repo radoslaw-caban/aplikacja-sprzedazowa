@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { PostFX } from './PostFX';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { texturesFor, materialProps, textureScale, matKindFor, bumpScale, normalMapFor, roughnessMapFor } from './textures';
 import type { ProductConfig, RenderEngine } from './RenderEngine';
 
@@ -43,6 +44,10 @@ export class ThreeEngine implements RenderEngine {
   forceColor = false;
   private matCache = new Map<string, THREE.Material>();
   private post?: PostFX;
+  /** tryb materiałów: pbr (tekstury) / flat (płaskie) / wire (szkic) */
+  private materialMode: 'pbr' | 'flat' | 'wire' = 'pbr';
+  private sunLight?: THREE.DirectionalLight;
+  private hemiLight?: THREE.HemisphereLight;
   /** 'low' | 'medium' | 'high' — wpływa na AO/bloom */
   private quality: 'low' | 'medium' | 'high' = 'high';
   private frameTimes: number[] = [];
@@ -116,7 +121,7 @@ export class ThreeEngine implements RenderEngine {
    * odpowiednia chropowatość i metaliczność. Cache po rodzaju + kolorze.
    */
   private materialFor(b: import('./RenderEngine').SceneBox): THREE.Material {
-    const wire = this.renderMode === 'wireframe';
+    const wire = this.renderMode === 'wireframe' || this.materialMode === 'wire';
     if (wire) {
       return new THREE.MeshStandardMaterial({
         color: new THREE.Color(b.color ?? '#c9a06a'),
@@ -132,6 +137,15 @@ export class ThreeEngine implements RenderEngine {
     const cached = this.matCache.get(key);
     if (cached) return cached;
 
+    // tryb techniczny: płaskie kolory bez tekstur
+    if (this.materialMode === 'flat') {
+      return new THREE.MeshStandardMaterial({
+        color: new THREE.Color(b.color ?? '#d9d4c9'),
+        roughness: 0.85,
+        metalness: 0.02,
+        flatShading: false,
+      });
+    }
     const props = materialProps(kind);
     const tex = texturesFor(kind);
     const [, sy, sz] = b.size;
@@ -209,6 +223,8 @@ export class ThreeEngine implements RenderEngine {
 
     // światło niebios (góra chłodna, dół ciepły od gruntu)
     const hemi = new THREE.HemisphereLight(0xe8f2ff, 0x8a7f6a, 0.85);
+    this.sunLight = sun;
+    this.hemiLight = hemi;
     this.scene.add(sun, hemi, new THREE.AmbientLight(0xffffff, 0.12));
 
     this.controls = new OrbitControls(this.camera, canvas);
@@ -523,7 +539,16 @@ export class ThreeEngine implements RenderEngine {
       const kind =
         b.mat ??
         (b.kind === 'floor' ? 'deck' : b.kind === 'window' ? 'glass' : ('plaster' as const));
-      const props = materialProps(kind);
+      // tryb techniczny: płaskie kolory bez tekstur
+    if (this.materialMode === 'flat') {
+      return new THREE.MeshStandardMaterial({
+        color: new THREE.Color(b.color ?? '#d9d4c9'),
+        roughness: 0.85,
+        metalness: 0.02,
+        flatShading: false,
+      });
+    }
+    const props = materialProps(kind);
       const tex = texturesFor(kind);
       const scaleM = textureScale(kind);
       const map = tex.map.clone();
@@ -632,6 +657,74 @@ export class ThreeEngine implements RenderEngine {
     }
   }
 
+  /** Wczytuje HDRI (equirect .hdr) jako tło i źródło odbić. */
+  async loadHDRI(url: string) {
+    if (!this.renderer || !this.scene) return;
+    try {
+      const tex = await new RGBELoader().loadAsync(url);
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const env = pmrem.fromEquirectangular(tex).texture;
+      this.scene.environment = env;
+      this.scene.background = tex;
+      this.scene.environmentIntensity = 1.0;
+      tex.dispose();
+    } catch (e) {
+      console.warn('HDRI nie wczytane:', e);
+    }
+  }
+
+  /** Ustawia słońce: wysokość i azymut w stopniach, kolor i moc. */
+  setSun(elevationDeg: number, color = '#fff6e8', intensity = 3, azimuthDeg = 35) {
+    if (!this.sunLight) return;
+    const el = (Math.max(0.5, elevationDeg) * Math.PI) / 180;
+    const az = (azimuthDeg * Math.PI) / 180;
+    const r = 22;
+    this.sunLight.position.set(
+      Math.cos(el) * Math.sin(az) * r,
+      Math.sin(el) * r,
+      Math.cos(el) * Math.cos(az) * r,
+    );
+    this.sunLight.color = new THREE.Color(color);
+    this.sunLight.intensity = intensity;
+    this.sunLight.visible = intensity > 0.01;
+    if (this.hemiLight) this.hemiLight.intensity = 0.5 + Math.min(1, intensity / 3) * 0.6;
+    this.draw();
+  }
+
+  /** Styl widoku: materiały, cienie, AO, tło, ekspozycja. */
+  applyStyle(spec: {
+    materials: 'pbr' | 'flat' | 'wire';
+    shadows: boolean;
+    ao: boolean;
+    bloom: boolean;
+    background: string;
+    sun: number;
+    sunColor: string;
+    sunElevation: number;
+    exposure: number;
+    skyTint: string;
+  }) {
+    this.materialMode = spec.materials;
+    if (this.renderer) {
+      this.renderer.shadowMap.enabled = spec.shadows;
+      this.renderer.toneMappingExposure = spec.exposure;
+    }
+    if (this.scene) {
+      if (!this.scene.background || !(this.scene.background as THREE.Texture).isTexture) {
+        this.scene.background = new THREE.Color(spec.background);
+      }
+      const fog = this.scene.fog as THREE.Fog | null;
+      if (fog) fog.color = new THREE.Color(spec.skyTint);
+    }
+    this.setSun(spec.sunElevation, spec.sunColor, spec.sun);
+    this.setQuality(spec.ao ? (spec.bloom ? 'high' : 'medium') : 'low');
+    // przebuduj materiały
+    this.matCache.clear();
+    if (this.lastBoxes) this.renderBoxes(this.lastBoxes);
+    this.draw();
+  }
+
   /** Ściany przezroczyste (widok roboczy) albo pełne. */
   setWallGhost(on: boolean) {
     // on = widok roboczy: ściany widoczne tylko od wewnątrz (nie zasłaniają, nie są przezroczyste)
@@ -668,8 +761,11 @@ export class ThreeEngine implements RenderEngine {
   }
 
   /** Buduje/podmienia całą scenę z listy brył (mm → metry). */
+  private lastBoxes?: import('./RenderEngine').SceneBox[];
+
   renderBoxes(boxes: import('./RenderEngine').SceneBox[], cabinetsOrigin: { x: number; z: number } = { x: 0, z: 0 }) {
     if (!this.scene) throw new Error('Engine not initialized');
+    this.lastBoxes = boxes;
     // usuń poprzednie bryły
     for (const o of [...this.designGroup.children]) {
       o.removeFromParent();

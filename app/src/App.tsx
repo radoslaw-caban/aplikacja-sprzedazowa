@@ -20,6 +20,9 @@ import { computeRuns, worktopBoxes, plinthBoxes } from './design/runs';
 import { exteriorBoxes } from './design/exterior';
 import RoomDialog, { type RoomDraft } from './ui/RoomDialog';
 import { LIGHT_TEMPLATES, type LightTemplate } from './design/lighting';
+import { LIGHTING_PROPOSALS, recommendation } from './design/lightingPlan';
+import { styleById, nextStyle, type ViewStyle } from './design/viewStyles';
+import { loadProjects, saveProjects, makeProject, type Project } from './design/projects';
 import { HANDLE_SPECS, RUNNER_SPECS } from './design/hardware';
 import { stepFromPrecision, toUnit, fromUnit } from './design/units';
 import OrganizerPanel from './ui/OrganizerPanel';
@@ -66,6 +69,12 @@ export default function App() {
   const [roof, setRoof] = useState(false);
   const [wallGhost, setWallGhost] = useState(true);
   const [lights, setLights] = useState<SceneBox[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [style, setStyle] = useState<ViewStyle>('realistic');
+  const [uiHidden, setUiHidden] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [lightPanel, setLightPanel] = useState(false);
 
   const active = cabinets.find((c) => c.id === selectedId) ?? undefined;
   const selElement = active?.elements.find((e) => e.id === selectedElement);
@@ -123,6 +132,170 @@ export default function App() {
         : cs.map((c) => ({ ...c, detail: settings.hardwareDetail })),
     );
   }, [settings.hardwareDetail]);
+
+  // ---- PROJEKTY: wczytanie, zapis, przełączanie gestem ----
+  useEffect(() => {
+    const list = loadProjects();
+    if (list.length) {
+      setProjects(list);
+      setProjectId(list[0].id);
+    }
+  }, []);
+
+  /** Zapisuje bieżący stan do listy projektów. */
+  const snapshot = useCallback(
+    (id: string | null) => {
+      if (!id) return;
+      setProjects((list) =>
+        list.map((p) =>
+          p.id === id
+            ? { ...p, updatedAt: Date.now(), data: { cabinets, lights, room } }
+            : p,
+        ),
+      );
+    },
+    [cabinets, lights, room],
+  );
+
+  useEffect(() => {
+    if (!projectId) return;
+    const t = setTimeout(() => snapshot(projectId), 600);
+    return () => clearTimeout(t);
+  }, [projectId, cabinets, lights, room, snapshot]);
+
+  useEffect(() => {
+    if (projects.length) saveProjects(projects);
+  }, [projects]);
+
+  const flash = (msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 1800);
+  };
+
+  /** Przełącza projekt (kierunek: +1 w dół, -1 w górę). */
+  const switchProject = useCallback(
+    (dir: 1 | -1) => {
+      if (!projects.length) {
+        const p = makeProject('Projekt 1', room, cabinets, lights);
+        setProjects([p]);
+        setProjectId(p.id);
+        flash('Utworzono Projekt 1');
+        return;
+      }
+      const i = projects.findIndex((p) => p.id === projectId);
+      const next = (i < 0 ? 0 : i) + dir;
+      if (next < 0) {
+        // nowy projekt na początku
+        const p = makeProject(`Projekt ${projects.length + 1}`, room);
+        setProjects((l) => [...l, p]);
+        setProjectId(p.id);
+        setCabinets([]);
+        setLights([]);
+        flash(`Nowy: ${p.name}`);
+        return;
+      }
+      if (next >= projects.length) {
+        const p = makeProject(`Projekt ${projects.length + 1}`, room);
+        setProjects((l) => [...l, p]);
+        setProjectId(p.id);
+        setCabinets([]);
+        setLights([]);
+        flash(`Nowy: ${p.name}`);
+        return;
+      }
+      const target = projects[next];
+      setProjectId(target.id);
+      setCabinets(target.data.cabinets);
+      setLights(target.data.lights);
+      setRoom(target.data.room);
+      flash(`${target.name}`);
+    },
+    [projects, projectId, room, cabinets, lights],
+  );
+
+  /** Przełącza styl widoku. */
+  const switchStyle = useCallback(
+    (dir: 1 | -1) => {
+      setStyle((cur) => {
+        const nx = nextStyle(cur, dir);
+        flash(styleById(nx).label);
+        return nx;
+      });
+    },
+    [],
+  );
+
+  // ---- styl widoku → silnik ----
+  useEffect(() => {
+    const spec = styleById(style);
+    engineRef.current?.applyStyle?.(spec);
+    engineRef.current?.setWallGhost?.(spec.wallGhost);
+  }, [style, ready, engineEpoch]);
+
+  // ---- HDRI (realizm) ----
+  useEffect(() => {
+    if (!ready) return;
+    const spec = styleById(style);
+    if (spec.materials === 'pbr') {
+      engineRef.current?.loadHDRI?.(`${import.meta.env.BASE_URL}hdri/sky.hdr`);
+    }
+  }, [ready, style, engineEpoch]);
+
+  // ---- GESTY: pion = projekt, poziom = styl widoku ----
+  useEffect(() => {
+    const el = canvasRef.current?.parentElement ?? canvasRef.current;
+    if (!el) return;
+    let sx = 0, sy = 0, active = false;
+
+    const down = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      active = true;
+      sx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      sy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+    };
+    const up = (e: TouchEvent) => {
+      if (!active) return;
+      active = false;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 70) switchProject(dy > 0 ? -1 : 1);
+      else if (Math.abs(dx) > 70) switchStyle(dx > 0 ? -1 : 1);
+    };
+    el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchend', up, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchend', up);
+    };
+  }, [switchProject, switchStyle]);
+
+  // ---- UKRYWANIE PASKÓW: chowamy po 3,5 s, pokazujemy przy krawędzi ekranu ----
+  useEffect(() => {
+    let timer: number | undefined;
+    const arm = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setUiHidden(true), 3500);
+    };
+    const reveal = (e: MouseEvent | TouchEvent) => {
+      const y = 'touches' in e ? e.touches[0]?.clientY ?? 0 : (e as MouseEvent).clientY;
+      const x = 'touches' in e ? e.touches[0]?.clientX ?? 0 : (e as MouseEvent).clientX;
+      const nearEdge =
+        y < 56 || y > window.innerHeight - 56 || x < 64 || x > window.innerWidth - 64;
+      if (nearEdge) {
+        setUiHidden(false);
+        arm();
+      }
+    };
+    window.addEventListener('mousemove', reveal);
+    window.addEventListener('touchstart', reveal, { passive: true });
+    arm();
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('mousemove', reveal);
+      window.removeEventListener('touchstart', reveal);
+    };
+  }, []);
 
   // ---- tryb przesuwania: kamera zablokowana, żeby nie uciekała z szafką ----
   useEffect(() => {
@@ -533,6 +706,12 @@ export default function App() {
       }
       else if (hit('cloud.toggle')) { setCloudVisible((v) => !v); e.preventDefault(); }
       else if (hit('orbit.toggle')) { setSettings((s) => ({ ...s, autoRotate: !s.autoRotate })); e.preventDefault(); }
+      // projekty i style widoku
+      else if (e.key === 'PageDown') { switchProject(1); e.preventDefault(); }
+      else if (e.key === 'PageUp') { switchProject(-1); e.preventDefault(); }
+      else if (e.key === ']') { switchStyle(1); e.preventDefault(); }
+      else if (e.key === '[') { switchStyle(-1); e.preventDefault(); }
+      else if (e.key.toLowerCase() === 'h') { setUiHidden((v) => !v); e.preventDefault(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -545,7 +724,7 @@ export default function App() {
   const unitLabel = settings.units;
 
   return (
-    <div className="app">
+    <div className={`app${uiHidden ? ' ui-hidden' : ''}`}>
       <input
         ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) loadProject(f); e.target.value = ''; }}
@@ -568,6 +747,23 @@ export default function App() {
             onClick={() => setSettings((s) => ({ ...s, autoRotate: !s.autoRotate }))}
           >
             ⟳ {settings.autoRotate ? 'Orbita WŁ' : 'Orbita WYŁ'}
+          </button>
+          <button
+            className="chip"
+            title="Styl widoku — gest poziomy lub klawisz ] (następny) / [ (poprzedni)"
+            onClick={() => switchStyle(1)}
+          >
+            ◐ {styleById(style).label}
+          </button>
+          <button
+            className="chip"
+            title="Projekt — gest pionowy lub klawisz PageDown / PageUp"
+            onClick={() => switchProject(1)}
+          >
+            ▤ {projects.find((p) => p.id === projectId)?.name ?? 'Projekt 1'} ({projects.length || 1})
+          </button>
+          <button className="chip" title="Automat oświetlenia sufitowego" onClick={() => setLightPanel(true)}>
+            ✦ Auto-światło
           </button>
           <button className="chip" title="Rysuj pomieszczenie" onClick={() => setRoomDialog(true)}>
             ▭ Pomieszczenie
@@ -857,6 +1053,41 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {toast && <div className="toast">{toast}</div>}
+
+      {lightPanel && (
+        <div className="modal-backdrop" onClick={() => setLightPanel(false)}>
+          <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <h2>Automat oświetlenia sufitowego</h2>
+            <p className="modal-sub">{recommendation(room).note}</p>
+            <div className="prop-list">
+              {LIGHTING_PROPOSALS.map((pr) => (
+                <div key={pr.id} className="prop">
+                  <div className="prop-head">
+                    <b>{pr.name}</b>
+                    <button
+                      className="primary"
+                      onClick={() => {
+                        const made = pr
+                          .lights(active?.x ?? 0, room.wallHeight - 30, active?.z ?? 0, active?.width ?? 600)
+                          .map((b) => ({ ...b, id: `${b.id}-${Math.random().toString(36).slice(2, 6)}` }));
+                        setLights((ls) => [...ls.filter((l) => l.cabinetId !== 'auto'), ...made.map((b) => ({ ...b, cabinetId: 'auto' }))]);
+                        setLightPanel(false);
+                        flash(`Zastosowano: ${pr.name}`);
+                      }}
+                    >
+                      Zastosuj
+                    </button>
+                  </div>
+                  <div className="prop-desc">{pr.description}</div>
+                  <div className="prop-trend">Trend: {pr.trend}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {roomDialog && (
         <RoomDialog

@@ -66,6 +66,20 @@ export interface RenderEngine {
   setWallGhost?(on: boolean): void;
   setQuality?(level: 'low' | 'medium' | 'high'): void;
   setControlsEnabled?(on: boolean): void;
+  applyStyle?(spec: {
+    materials: 'pbr' | 'flat' | 'wire';
+    shadows: boolean;
+    ao: boolean;
+    bloom: boolean;
+    background: string;
+    sun: number;
+    sunColor: string;
+    sunElevation: number;
+    exposure: number;
+    skyTint: string;
+  }): void;
+  loadHDRI?(url: string): Promise<void>;
+  setSun?(elevationDeg: number, color?: string, intensity?: number, azimuthDeg?: number): void;
   highlightElement?(elementId: string | null): void;
   disposeDesign?(): void;
   getDebugInfo?(): Record<string, unknown>;

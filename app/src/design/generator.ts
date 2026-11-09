@@ -118,21 +118,21 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
 
   // --- OKUCIA: uchwyty na frontach, zawiasy, nóżki, wieszaki ---
   const handleType = c.handle ?? (c.type === 'wall' ? 'edge' : 'bar');
-  const zFront = Dp / 2 + GAP + D; // zewnętrzna płaszczyzna frontu
+  const zFront = Dp / 2 + GAP + D / 2; // zewnętrzna płaszczyzna frontu
   for (const f of c.fronts) {
     const fw = f.x1 - f.x0;
     const fh = f.y1 - f.y0;
     const cx = -W / 2 + (f.x0 + f.x1) / 2;
     // uchwyt: górna krawędź frontu (drzwi) albo górna listwa (szuflada)
     const handleY = f.kind === 'drawer'
-      ? bodyBottom(c) + f.y1 - 30
-      : bodyBottom(c) + f.y1 - 45;
+      ? f.y1 - 32
+      : f.y1 - 70;
     boxes.push(
       ...handleBoxes(c.id, handleType, [fw, fh], [cx, handleY, zFront], c.color ?? '#b9bcc1'),
     );
     // zawiasy tylko dla skrzydeł w trybie pełnego detalu
     if (c.detail === 'full' && f.kind === 'door' && fw > 300) {
-      const hingeY = [bodyBottom(c) + f.y0 + 110, bodyBottom(c) + f.y1 - 110];
+      const hingeY = [f.y0 + 110, f.y1 - 110];
       for (const hy of hingeY) {
         boxes.push(...hingeBoxes(c.id, 'left', -W / 2 + f.x0 + 21, hy, zFront, Dp));
         boxes.push(...hingeBoxes(c.id, 'right', -W / 2 + f.x1 - 21, hy, zFront, Dp));
