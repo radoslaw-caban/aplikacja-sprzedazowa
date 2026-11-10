@@ -7,7 +7,7 @@ import { PostFX } from './PostFX';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
-import { texturesFor, materialProps, textureScale, matKindFor, bumpScale, normalMapFor, roughnessMapFor } from './textures';
+import { texturesFor, materialProps, textureScale, matKindFor, bumpScale, normalMapFor, roughnessMapFor, grassBladeTexture } from './textures';
 import type { ProductConfig, RenderEngine } from './RenderEngine';
 
 /**
@@ -140,6 +140,18 @@ export class ThreeEngine implements RenderEngine {
       });
     }
 
+    if (b.shape === 'tuft') {
+      const gm = new THREE.MeshStandardMaterial({
+        map: grassBladeTexture(),
+        transparent: false,
+        alphaTest: 0.42,
+        side: THREE.DoubleSide,
+        roughness: 0.9,
+        metalness: 0,
+        color: new THREE.Color('#8fbf74'),
+      });
+      return gm;
+    }
     const kind = b.mat ?? matKindFor(b.kind);
     const key = `${kind}|${b.color ?? ''}|${b.opacity ?? 1}`;
     const cached = this.matCache.get(key);
@@ -176,7 +188,7 @@ export class ThreeEngine implements RenderEngine {
     const normal = normalMapFor(kind);
     const rough = roughnessMapFor(kind);
 
-    const useTex = kind !== 'glass' && kind !== 'metal';
+    const useTex = kind !== 'glass' && kind !== 'metal' && kind !== 'rock';
     const mat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(b.color ?? props.color),
       roughness: props.roughness,
@@ -209,7 +221,7 @@ export class ThreeEngine implements RenderEngine {
 
     this.scene = new THREE.Scene();
     this.scene.background = this.skyTexture();
-    this.scene.fog = new THREE.Fog('#dfe7ee', 70, 260);
+    this.scene.fog = new THREE.Fog('#cfdae6', 160, 1400);
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
     this.camera.position.set(2.4, 1.6, 3.2);
@@ -887,6 +899,29 @@ export class ThreeEngine implements RenderEngine {
     }
   }
 
+  /** Kępa trawy: trzy skrzyżowane płaszczyzny z teksturą źdźbeł. */
+  private tuftGeometry(w: number, h: number, d: number): THREE.BufferGeometry {
+    const g = new THREE.BufferGeometry();
+    const planes = 3;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    for (let p = 0; p < planes; p++) {
+      const a = (p / planes) * Math.PI;
+      const cx = Math.cos(a) * (w / 2);
+      const cz = Math.sin(a) * (d / 2);
+      const base = positions.length / 3;
+      positions.push(-cx, -h / 2, -cz, cx, -h / 2, cz, cx, h / 2, cz, -cx, h / 2, -cz);
+      uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+      indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    g.setIndex(indices);
+    g.computeVertexNormals();
+    return g;
+  }
+
   /** Buduje/podmienia całą scenę z listy brył (mm → metry). */
   private lastBoxes?: import('./RenderEngine').SceneBox[];
 
@@ -905,7 +940,11 @@ export class ThreeEngine implements RenderEngine {
       const [sx, sy, sz] = b.size;
       const geom =
         b.shape === 'cylinder'
-          ? new THREE.CylinderGeometry((sx * mm) / 2, (sx * mm) / 2, sy * mm, 20)
+          ? new THREE.CylinderGeometry((sx * mm) / 2, (sx * mm) / 2, sy * mm, b.detail ?? 20)
+          : b.shape === 'cone'
+          ? new THREE.ConeGeometry((sx * mm) / 2, sy * mm, b.detail ?? 8, 1)
+          : b.shape === 'tuft'
+          ? this.tuftGeometry(sx * mm, sy * mm, sz * mm)
           : b.shape === 'sphere'
           ? new THREE.SphereGeometry((sx * mm) / 2, 18, 14)
           : b.kind === 'front' || b.kind === 'panel' || b.kind === 'shelf' || b.kind === 'drawer'

@@ -129,7 +129,8 @@ export interface SceneBox {
   rotationZ?: number;
   rotationX?: number;
   color?: string;
-  shape?: 'box' | 'cylinder' | 'sphere';
+  shape?: 'box' | 'cylinder' | 'sphere' | 'cone' | 'tuft';
+  detail?: number;
   opacity?: number;
   /** rysuj kontur krawędzi */
   outline?: boolean;
@@ -139,7 +140,7 @@ export interface SceneBox {
   /** realne źródło światła w tym miejscu */
   light?: { color: string; intensity: number; distance: number; y?: number };
   /** rodzaj materiału PBR (tekstura proceduralna) */
-  mat?: 'wood' | 'wood-dark' | 'laminate' | 'stone' | 'glass' | 'metal' | 'grass' | 'cobble' | 'plaster' | 'roof' | 'foliage' | 'deck' | 'brick';
+  mat?: 'wood' | 'wood-dark' | 'laminate' | 'stone' | 'glass' | 'metal' | 'grass' | 'cobble' | 'plaster' | 'roof' | 'foliage' | 'deck' | 'brick' | 'rock';
 }
 
 export const PANEL = 18;

@@ -1,5 +1,6 @@
 import type { SceneBox } from './types';
 import type { Room } from './room';
+import { treeBoxes } from './terrain';
 
 /**
  * Otoczenie domu: podjazd z ulicy, kostka brukowa, trawa, taras, drzewa, dach.
@@ -70,28 +71,10 @@ export function exteriorBoxes(room: Room, opts: { roof?: boolean } = {}): SceneB
     [-W / 2 - 10500, D / 2 + 7000, 6400],
     [W / 2 + 11000, D / 2 + 8500, 7600],
   ];
+  // drzewa: realistyczne modele iglaste i liściaste (proceduralne, skala 1:1)
+  const kinds: ('pine' | 'spruce' | 'deciduous')[] = ['spruce', 'pine', 'deciduous', 'spruce'];
   trees.forEach(([x, z, h], i) => {
-    const base = -170;
-    // pień (stożkowy, węższy u góry)
-    out.push(box(`tree-${i}-trunk`, [h * 0.055, h * 0.52, h * 0.055], [x, base + h * 0.26, z], '#5d4430', {
-      shape: 'cylinder', mat: 'wood-dark',
-    }));
-    // korona: kilka nieregularnych brył, żeby nie wyglądała jak kula
-    const blobs: [number, number, number, number, string][] = [
-      [h * 0.46, h * 0.26, h * 0.46, 0.46, '#3f6f36'],
-      [h * 0.34, h * 0.22, h * 0.34, 0.60, '#4a7d3e'],
-      [h * 0.28, h * 0.20, h * 0.28, 0.74, '#548a47'],
-      [h * 0.22, h * 0.17, h * 0.22, 0.86, '#5f9850'],
-      [h * 0.18, h * 0.14, h * 0.18, 0.96, '#6aa65a'],
-      [h * 0.20, h * 0.15, h * 0.20, 0.58, '#467a3b'],
-    ];
-    blobs.forEach(([sx, sy, sz, at, col], k) => {
-      out.push(box(`tree-${i}-crown-${k}`, [sx, sy, sz], [
-        x + (k % 2 ? h * 0.06 : -h * 0.05),
-        base + h * at,
-        z + (k % 3 === 0 ? h * 0.04 : -h * 0.03),
-      ], col, { shape: 'sphere', mat: 'foliage' }));
-    });
+    out.push(...treeBoxes(x, z, h, kinds[i % kinds.length], i + 3));
   });
 
   // --- dach (opcjonalny: domyślnie off, żeby nie zasłaniał wnętrza) ---

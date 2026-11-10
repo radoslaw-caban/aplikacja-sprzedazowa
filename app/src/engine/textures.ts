@@ -19,7 +19,8 @@ export type MatKind =
   | 'roof'
   | 'foliage'
   | 'deck'
-  | 'brick';
+  | 'brick'
+  | 'rock';
 
 function canvas(size = 512): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
@@ -296,6 +297,7 @@ export function texturesFor(kind: MatKind): { map: THREE.Texture; bump?: THREE.T
     case 'deck':
       cv = deckTexture();
       break;
+    case 'rock':
     case 'brick':
     case 'plaster':
     default:
@@ -345,6 +347,8 @@ export function materialProps(kind: MatKind): {
       return { color: '#ffffff', roughness: 0.7, metalness: 0.02 };
     case 'brick':
       return { color: '#ffffff', roughness: 0.8, metalness: 0 };
+    case 'rock':
+      return { color: '#6f7c8c', roughness: 0.95, metalness: 0 };
   }
 }
 
@@ -519,5 +523,38 @@ export function roughnessMapFor(kind: MatKind): THREE.Texture {
   t.colorSpace = THREE.NoColorSpace;
   t.anisotropy = 8;
   roughCache.set(kind, t);
+  return t;
+}
+
+/** Tekstura kępy trawy z przezroczystym tłem (do billboardów). */
+let bladeTex: THREE.Texture | null = null;
+export function grassBladeTexture(): THREE.Texture {
+  if (bladeTex) return bladeTex;
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.clearRect(0, 0, size, size);
+  for (let i = 0; i < 90; i++) {
+    const x = size * (0.08 + Math.random() * 0.84);
+    const h = size * (0.35 + Math.random() * 0.6);
+    const w = 1.2 + Math.random() * 2.4;
+    const bend = (Math.random() - 0.5) * 26;
+    const g = 92 + Math.random() * 88;
+    const grad = ctx.createLinearGradient(x, size, x, size - h);
+    grad.addColorStop(0, `rgba(${26 + Math.random() * 20}, ${Math.round(g * 0.55)}, 24, 1)`);
+    grad.addColorStop(1, `rgba(${70 + Math.random() * 50}, ${g}, ${45 + Math.random() * 40}, 1)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(x, size);
+    ctx.quadraticCurveTo(x + bend * 0.5, size - h * 0.55, x + bend, size - h);
+    ctx.quadraticCurveTo(x + bend * 0.5 + w, size - h * 0.55, x + w, size);
+    ctx.closePath();
+    ctx.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  bladeTex = t;
   return t;
 }

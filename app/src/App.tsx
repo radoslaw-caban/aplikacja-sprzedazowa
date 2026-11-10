@@ -18,6 +18,7 @@ import { defaultRoom, roomBoxes, snapToWalls, cornerSnap, type WallSide } from '
 import { GROUP_LABELS } from './design/library';
 import { computeRuns, worktopBoxes, plinthBoxes } from './design/runs';
 import { exteriorBoxes } from './design/exterior';
+import { landscapeBoxes } from './design/terrain';
 import RoomDialog, { type RoomDraft } from './ui/RoomDialog';
 import { LIGHT_TEMPLATES, type LightTemplate } from './design/lighting';
 import { LIGHTING_PROPOSALS, recommendation } from './design/lightingPlan';
@@ -538,6 +539,7 @@ export default function App() {
       ...worktopBoxes(runs, settings.worktop),
       ...plinthBoxes(runs, settings.plinth),
       ...(exterior ? exteriorBoxes(room, { roof }) : []),
+      ...(exterior ? landscapeBoxes(room) : []),
       ...lights,
     ];
   }, [cabinets, settings.showFronts, settings.worktop, settings.plinth, exterior, roof, room, lights]);
