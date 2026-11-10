@@ -9,17 +9,23 @@ let package = Package(
     ],
     products: [
         .library(name: "KitchenCore", targets: ["KitchenCore"]),
+        .library(name: "KitchenScene", targets: ["KitchenScene"]),
         .executable(name: "KitchenApp", targets: ["KitchenApp"]),
         .executable(name: "KitchenChecks", targets: ["KitchenChecks"]),
     ],
     targets: [
         .target(name: "KitchenCore"),
+        .target(name: "KitchenScene", dependencies: ["KitchenCore"]),
         .executableTarget(
             name: "KitchenApp",
-            dependencies: ["KitchenCore"]
+            dependencies: ["KitchenCore", "KitchenScene"]
         ),
         .executableTarget(
             name: "KitchenChecks",
+            dependencies: ["KitchenCore", "KitchenScene"]
+        ),
+        .testTarget(
+            name: "KitchenCoreTests",
             dependencies: ["KitchenCore"]
         ),
     ]

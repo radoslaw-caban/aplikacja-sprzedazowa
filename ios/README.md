@@ -23,7 +23,10 @@ ios/
 │   │   ├── Generator.swift    # korpus, fronty, wyposażenie
 │   │   ├── Runs.swift         # biegi, blat, cokół, cień kontaktowy
 │   │   ├── Collision.swift    # kolizje, wolne miejsce, punkty chwytu
-│   │   └── Library.swift      # szablony produkcyjne
+│   │   ├── Library.swift      # szablony produkcyjne
+│   │   └── PointCloud.swift   # parser PLY (ASCII + binarny), decymacja
+│   ├── KitchenScene/          # budowa sceny RealityKit (mm → metry)
+│   │   └── SceneBuilder.swift
 │   ├── KitchenApp/            # SwiftUI + RealityKit
 │   │   ├── App.swift          # widok: biblioteka + scena
 │   │   └── SceneView.swift    # RealityKit: mm → metry
@@ -33,10 +36,11 @@ ios/
 
 ## Uruchomienie
 
-**Mac (bez Xcode):**
+**Mac:**
 ```bash
 cd ios
-swift run KitchenChecks   # 25 warunków, kod wyjścia 1 przy błędzie
+swift run KitchenChecks   # 42 warunki, kod wyjścia 1 przy błędzie
+swift test                # 9 testów XCTest
 swift run KitchenApp      # okno z biblioteką i sceną 3D
 ```
 
@@ -58,12 +62,15 @@ TestFlight: po wgraniu build pojawia się w App Store Connect → TestFlight.
 - [x] Biegi: blat na korpusie (739 mm), cokół cofnięty 40 mm, cień kontaktowy
 - [x] Kolizje, dokładanie w rzędzie, wolne miejsce na szufladę
 - [x] Biblioteka szablonów (dolne, wiszące, stojące)
-- [x] Scena RealityKit z bryłami, światłem kierunkowym i podłogą
+- [x] Scena RealityKit (`KitchenScene`): bryły w metrach, światło, podłoga, kadr
+- [x] Parser PLY (ASCII + binary_little_endian) — realny skan 491 953 pkt w 0,30 s
+- [x] Decymacja chmury i obrys z percentyli (odporny na punkty odstające
 - [x] Projekt Xcode (iOS + macOS) generowany przez XcodeGen
+- [x] Build na iOS Simulator SDK przechodzi (`xcodebuild ... BUILD SUCCEEDED`)
 
 ## Co zostaje do przeniesienia
 
-- [ ] Chmura punktów: dekoder PLY (łatwe) i E57 (własny parser lub bridge C++ libE57)
+- [ ] Dekoder E57 (własny parser `CompressedVector` albo bridge do C++ libE57)
 - [ ] Render chmury w RealityKit (Metal point cloud, do 8 mln punktów)
 - [ ] Panele: edycja wnętrza, wycena, oferta PDF, warianty
 - [ ] Oświetlenie: HDRI w bundle + `EnvironmentResource` dla IBL

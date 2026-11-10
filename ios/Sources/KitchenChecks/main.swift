@@ -1,5 +1,6 @@
 import Foundation
 import KitchenCore
+import KitchenScene
 
 /// Samokontrola bez Xcode: te same warunki co testy jednostkowe.
 /// Uruchomienie: `swift run KitchenChecks` — kod wyjścia 1, gdy coś nie przejdzie.
@@ -21,6 +22,7 @@ final class Reporter {
 
 func near(_ a: Double, _ b: Double, _ eps: Double = 0.001) -> Bool { abs(a - b) <= eps }
 
+@MainActor
 func runChecks() {
     let r = Reporter()
 
@@ -94,6 +96,106 @@ func runChecks() {
     } else {
         r.check("dokładanie w rzędzie", false, "zwróciło nil")
     }
+
+    print("\nChmura punktów (PLY)")
+    // 1) ASCII
+    let asciiPLY = """
+    ply
+    format ascii 1.0
+    element vertex 3
+    property float x
+    property float y
+    property float z
+    property uchar red
+    property uchar green
+    property uchar blue
+    end_header
+    0 0 0 255 0 0
+    100 0 0 0 255 0
+    0 50 20 0 0 255
+    """
+    if let cloud = try? PLYParser.parse(data: Data(asciiPLY.utf8)) {
+        r.check("ASCII: 3 punkty", cloud.count == 3, "= \(cloud.count)")
+        r.check("ASCII: obrys 100 × 50 × 20", near(Double(cloud.bounds.max.x), 100) && near(Double(cloud.bounds.max.z), 20))
+        r.check("ASCII: kolory odczytane", cloud.colors?.count == 3)
+    } else {
+        r.check("ASCII: parsowanie", false)
+    }
+
+    // 2) binary_little_endian (jak CloudCompare)
+    var bin = Data("""
+    ply
+    format binary_little_endian 1.0
+    element vertex 2
+    property float x
+    property float y
+    property float z
+    property uchar red
+    property uchar green
+    property uchar blue
+    end_header
+
+    """.utf8)
+    for (x, y, z) in [(Float(10), Float(20), Float(30)), (Float(-5), Float(0), Float(100))] {
+        withUnsafeBytes(of: x.bitPattern.littleEndian) { bin.append(contentsOf: $0) }
+        withUnsafeBytes(of: y.bitPattern.littleEndian) { bin.append(contentsOf: $0) }
+        withUnsafeBytes(of: z.bitPattern.littleEndian) { bin.append(contentsOf: $0) }
+        bin.append(contentsOf: [200, 100, 50])
+    }
+    if let cloud = try? PLYParser.parse(data: bin) {
+        r.check("binarny: 2 punkty", cloud.count == 2, "= \(cloud.count)")
+        r.check("binarny: współrzędne poprawne", cloud.positions[0] == SIMD3<Float>(10, 20, 30), "= \(cloud.positions[0])")
+        r.check("binarny: kolor 200/100/50", cloud.colors?[0] == SIMD3<UInt8>(200, 100, 50))
+    } else {
+        r.check("binarny: parsowanie", false)
+    }
+
+    // 3) realny plik ze skanu (jeśli jest w repo)
+    let realPLY = URL(fileURLWithPath: "\(FileManager.default.currentDirectoryPath)/../app/public/dom-chmura.ply")
+    if FileManager.default.fileExists(atPath: realPLY.path) {
+        let started = Date()
+        if let cloud = try? PLYParser.parse(contentsOf: realPLY) {
+            let seconds = Date().timeIntervalSince(started)
+            r.check("realny skan: 491 953 punkty", cloud.count == 491_953, "= \(cloud.count)")
+            r.check("realny skan: kolory RGB", cloud.colors?.count == cloud.count)
+            let b = cloud.robustBounds()
+            let w = b.max.x - b.min.x, h = b.max.y - b.min.y, d = b.max.z - b.min.z
+            r.check("realny skan: obrys > 0", w > 0 && h > 0 && d > 0,
+                    String(format: "%.0f × %.0f × %.0f", w, h, d))
+            print(String(format: "    czas parsowania: %.2f s (%.0f tys. pkt/s)", seconds, Double(cloud.count) / seconds / 1000))
+            let dec = cloud.decimated(maxPoints: 100_000)
+            r.check("decymacja do 100 tys.", dec.count <= 100_000 && dec.count > 90_000, "= \(dec.count)")
+        } else {
+            r.check("realny skan: parsowanie", false)
+        }
+    } else {
+        print("    (pominięto realny plik — brak dom-chmura.ply)")
+    }
+
+    print("\nScena RealityKit (mm → metry)")
+    let sceneCabinets = [Library.make(Library.base[0], at: -1200, z: -2200),
+                         Library.make(Library.base[0], at: -600, z: -2200)]
+    let built = SceneBuilder.build(cabinets: sceneCabinets)
+    let expectedBoxes = sceneCabinets.reduce(0) { $0 + Generator.build($1).count }
+        + Runs.worktops(Runs.compute(sceneCabinets)).count
+        + Runs.plinths(Runs.compute(sceneCabinets)).count
+    r.check("dwie szafki w scenie", built.bodyCount == 2, "= \(built.bodyCount)")
+    r.check("liczba brył zgodna z domeną", built.totalBoxes == expectedBoxes, "= \(built.totalBoxes) vs \(expectedBoxes)")
+    r.check("korpus w metrach (bok 0,56 m)",
+            near(Double(SceneBuilder.meters(560)), 0.56),
+            "= \(SceneBuilder.meters(560))")
+
+    if let side = sceneCabinets.first.flatMap({ c in
+        Generator.build(c).first { $0.role == .side }
+    }) {
+        r.check("bok korpusu: 18 mm płyty", near(side.size.x, 18), "= \(side.size.x)")
+        r.check("bok korpusu: 570 mm wysokości", near(side.size.y, 570), "= \(side.size.y)")
+        r.check("bok w metrach: 0,018 × 0,570", near(Double(SceneBuilder.meters(side.size.x)), 0.018)
+                && near(Double(SceneBuilder.meters(side.size.y)), 0.57))
+    } else {
+        r.check("bok korpusu istnieje", false)
+    }
+    r.check("szerokość zabudowy 1,24 m (z nawisem blatu)", near(Double(built.widthMeters), 1.24, 0.02), "= \(built.widthMeters)")
 
     let passed = r.checks - r.failures
     print("\n\(passed)/\(r.checks) warunków spełnionych")
