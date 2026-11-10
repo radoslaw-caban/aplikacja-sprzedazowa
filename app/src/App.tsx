@@ -241,6 +241,16 @@ export default function App() {
     if (list.length) {
       setProjects(list);
       setProjectId(list[0].id);
+      setLocked(list[0].locked ?? true);
+      setCabinets(list[0].data.cabinets);
+      setLights(list[0].data.lights);
+      setRoom(list[0].data.room);
+    } else {
+      // brak zapisanych — tworzymy Projekt 1 od razu, żeby pierwszy gest działał
+      const p = makeProject('Projekt 1', room, cabinets, lights);
+      setProjects([p]);
+      setProjectId(p.id);
+      saveProjects([p]);
     }
   }, []);
 
@@ -360,6 +370,8 @@ export default function App() {
   }, [frozen, moveMode, ready, engineEpoch]);
 
   const currentFile = files[fileIdx] ?? null;
+  const hideBars = uiHidden && !barsPinned;
+  const barStyle = hideBars ? { display: 'none' as const } : undefined;
 
   // ---- styl widoku → silnik ----
   useEffect(() => {
@@ -999,7 +1011,7 @@ export default function App() {
         {barsPinned ? '▣' : '☰'}
       </button>
 
-      <header>
+      <header style={barStyle}>
         <button className="gear" title="Ustawienia (S)" onClick={() => setSettingsOpen(true)}>⚙</button>
         <h1>Projektant szafek</h1>
         <div className="header-right">
@@ -1115,7 +1127,7 @@ export default function App() {
 
       <div className="main">
         {libOpen && (
-          <aside className="sidebar">
+          <aside className="sidebar" style={barStyle}>
             {tab === 'lights' && (
               <>
                 {(['podszafkowe', 'cokół', 'sufit', 'ściana', 'wyspa'] as const).map((grp) => {
@@ -1209,7 +1221,7 @@ export default function App() {
           <canvas ref={canvasRef} />
           {!ready && !error && <div className="loader">Ładowanie…</div>}
           {error && <div className="loader error">⚠️ {error}</div>}
-          <p className="hint">
+          <p className="hint" style={barStyle}>
             {tab === 'layout'
               ? `Klik = zaznacz · dwuklik = wnętrze · M = przesuwanie · D = fronty (${settings.showFronts ? 'wid.' : 'ukryte'})`
               : 'Kliknij element, aby go edytować · wycięcia z panelu po lewej'}
@@ -1235,7 +1247,7 @@ export default function App() {
           )}
 
           {tab === 'layout' && active && (
-            <div className="inspect">
+            <div className="inspect" style={barStyle}>
               <div className="inspect-title">{active.name}</div>
               <div className="precise">
                 <label>X [{unitLabel}]</label>
@@ -1351,7 +1363,7 @@ export default function App() {
           )}
 
           {tab === 'interior' && active && selElement && (
-            <div className="inspect">
+            <div className="inspect" style={barStyle}>
               <div className="inspect-title">
                 {ELEMENT_TEMPLATES.find((t) => t.kind === selElement.kind)?.label ?? selElement.kind}
               </div>
