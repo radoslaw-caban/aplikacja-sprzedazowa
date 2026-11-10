@@ -380,34 +380,69 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [ready, style, engineEpoch]);
 
-  // ---- GESTY: pion = projekt, poziom = styl widoku ----
+  // ---- TRYB NAWIGACJI: gdy projekt zablokowany albo obraz zamrożony,
+  //       JEDEN palec przewija projekty (w pionie) i pliki (w poziomie). ----
+  const navMode = frozen || locked;
+
+  useEffect(() => {
+    engineRef.current?.setControlsEnabled?.(!navMode && !moveMode);
+  }, [navMode, moveMode, ready, engineEpoch]);
+
   useEffect(() => {
     const el = canvasRef.current?.parentElement ?? canvasRef.current;
     if (!el) return;
-    let sx = 0, sy = 0, active = false;
+    let sx = 0;
+    let sy = 0;
+    let active = false;
+    let moved = false;
+
+    const takePoint = (t: Touch) => ({ x: t.clientX, y: t.clientY });
 
     const down = (e: TouchEvent) => {
+      // w trybie nawigacji wystarczy jeden palec; w trybie edycji dwa (jeden obraca scenę)
+      if (navMode) {
+        if (e.touches.length !== 1) return;
+        const p = takePoint(e.touches[0]);
+        sx = p.x;
+        sy = p.y;
+        active = true;
+        moved = false;
+        return;
+      }
       if (e.touches.length !== 2) return;
       active = true;
       sx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       sy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
     };
+
+    const move = (e: TouchEvent) => {
+      if (!active || !navMode || !e.touches.length) return;
+      const p = takePoint(e.touches[0]);
+      if (Math.hypot(p.x - sx, p.y - sy) > 12) moved = true;
+    };
+
     const up = (e: TouchEvent) => {
       if (!active) return;
       active = false;
       const t = e.changedTouches[0];
+      if (!t) return;
       const dx = t.clientX - sx;
       const dy = t.clientY - sy;
-      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 70) switchProject(dy > 0 ? -1 : 1);
-      else if (Math.abs(dx) > 70) switchFile(dx > 0 ? -1 : 1);
+      const threshold = navMode ? 45 : 70;
+      if (!navMode && !moved && Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > threshold) switchProject(dy > 0 ? -1 : 1);
+      else if (Math.abs(dx) > threshold) switchFile(dx > 0 ? -1 : 1);
     };
+
     el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchmove', move, { passive: true });
     el.addEventListener('touchend', up, { passive: true });
     return () => {
       el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchmove', move);
       el.removeEventListener('touchend', up);
     };
-  }, [switchProject, switchFile]);
+  }, [switchProject, switchFile, navMode]);
 
   // ---- PASKÓW NIE CHOWAMY, JEŚLI UŻYTKOWNIK JE PRZYPIĄŁ ----
   useEffect(() => {
@@ -669,6 +704,14 @@ export default function App() {
 
   /** Import modelu szafki → rozczytanie części i parametryzacja. */
   const importCabinetModel = async (file: File) => {
+    const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] ?? '').toLowerCase();
+    if (!['.glb', '.gltf'].includes(ext)) {
+      setStatus(
+        `Format ${ext || 'nieznany'} nie jest obsługiwany przy rozczytywaniu. ` +
+          'Wyeksportuj szafkę z SketchUp jako glTF/GLB (Plik → Eksport → glTF) i wczytaj ponownie.',
+      );
+      return;
+    }
     try {
       setStatus('Rozczytuję model…');
       const buf = await file.arrayBuffer();
@@ -944,7 +987,14 @@ export default function App() {
       <button
         className={`ui-handle ${barsPinned ? 'pinned' : ''}`}
         title="Paski narzędzi (H) — przypnij, żeby nie znikały"
-        onClick={() => setBarsPinned((v) => !v)}
+        onClick={() => {
+          setBarsPinned((v) => {
+            const next = !v;
+            setUiHidden(!next ? true : false);
+            flash(next ? 'Paski przypięte' : 'Paski ukryte — dotknij ☰, aby wróciły');
+            return next;
+          });
+        }}
       >
         {barsPinned ? '▣' : '☰'}
       </button>
@@ -1015,7 +1065,6 @@ export default function App() {
             ⇩ Model szafki
             <input
               type="file"
-              accept=".glb,.gltf"
               style={{ display: 'none' }}
               onChange={(e) => {
                 const f = e.target.files?.[0];
