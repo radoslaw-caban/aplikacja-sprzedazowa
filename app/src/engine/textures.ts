@@ -20,7 +20,11 @@ export type MatKind =
   | 'foliage'
   | 'deck'
   | 'brick'
-  | 'rock';
+  | 'rock'
+  | 'fabric'
+  | 'travertine'
+  | 'rug'
+  | 'ceramic';
 
 function canvas(size = 512): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
@@ -297,6 +301,18 @@ export function texturesFor(kind: MatKind): { map: THREE.Texture; bump?: THREE.T
     case 'deck':
       cv = deckTexture();
       break;
+    case 'fabric':
+      cv = fabricTexture('#efe9df');
+      break;
+    case 'rug':
+      cv = rugTexture();
+      break;
+    case 'travertine':
+      cv = travertineTexture();
+      break;
+    case 'ceramic':
+      cv = ceramicTexture();
+      break;
     case 'rock':
     case 'brick':
     case 'plaster':
@@ -349,6 +365,14 @@ export function materialProps(kind: MatKind): {
       return { color: '#ffffff', roughness: 0.8, metalness: 0 };
     case 'rock':
       return { color: '#6f7c8c', roughness: 0.95, metalness: 0 };
+    case 'fabric':
+      return { color: '#ffffff', roughness: 1, metalness: 0 };
+    case 'rug':
+      return { color: '#ffffff', roughness: 1, metalness: 0 };
+    case 'travertine':
+      return { color: '#ffffff', roughness: 0.62, metalness: 0 };
+    case 'ceramic':
+      return { color: '#ffffff', roughness: 0.7, metalness: 0 };
   }
 }
 
@@ -524,6 +548,99 @@ export function roughnessMapFor(kind: MatKind): THREE.Texture {
   t.anisotropy = 8;
   roughCache.set(kind, t);
   return t;
+}
+
+
+/** Bouclé / wełna: drobne pętelki, bez wzoru. */
+function fabricTexture(base: string): HTMLCanvasElement {
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 9000; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const r = 0.8 + Math.random() * 2.6;
+    const v = 0.86 + Math.random() * 0.2;
+    ctx.fillStyle = `rgba(${Math.round(255 * v)},${Math.round(250 * v)},${Math.round(242 * v)},0.5)`;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return c;
+}
+
+/** Dywan: gęsty, krótki włos, widoczne włókna. */
+function rugTexture(): HTMLCanvasElement {
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#e9e2d6';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 26000; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const l = 1 + Math.random() * 4;
+    const v = 0.82 + Math.random() * 0.28;
+    ctx.strokeStyle = `rgba(${Math.round(232 * v)},${Math.round(224 * v)},${Math.round(212 * v)},0.55)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.random() - 0.5) * 1.5, y + l);
+    ctx.stroke();
+  }
+  return c;
+}
+
+/** Trawertyn: poziome warstwy + porowatość. */
+function travertineTexture(): HTMLCanvasElement {
+  const size = 1024;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#ded2bf';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 70; i++) {
+    const y = Math.random() * size;
+    const h = 3 + Math.random() * 26;
+    const v = 0.82 + Math.random() * 0.3;
+    ctx.fillStyle = `rgba(${Math.round(214 * v)},${Math.round(200 * v)},${Math.round(180 * v)},0.5)`;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    for (let x = 0; x <= size; x += 32) ctx.lineTo(x, y + Math.sin(x * 0.01 + i) * 6);
+    ctx.lineTo(size, y + h);
+    for (let x = size; x >= 0; x -= 32) ctx.lineTo(x, y + h + Math.sin(x * 0.01 + i) * 6);
+    ctx.closePath();
+    ctx.fill();
+  }
+  for (let i = 0; i < 2200; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    ctx.fillStyle = `rgba(150,136,116,${0.06 + Math.random() * 0.14})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 0.6 + Math.random() * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return c;
+}
+
+/** Ceramika matowa: bardzo drobna ziarnistość. */
+function ceramicTexture(): HTMLCanvasElement {
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#f7f3ec';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 6000; i++) {
+    const v = 0.9 + Math.random() * 0.14;
+    ctx.fillStyle = `rgba(${Math.round(255 * v)},${Math.round(252 * v)},${Math.round(246 * v)},0.4)`;
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1.2, 1.2);
+  }
+  return c;
 }
 
 /** Tekstura kępy trawy z przezroczystym tłem (do billboardów). */

@@ -131,6 +131,10 @@ export interface SceneBox {
   color?: string;
   shape?: 'box' | 'cylinder' | 'sphere' | 'cone' | 'tuft';
   detail?: number;
+  /** fazowanie krawędzi w mm (miękkie krawędzie = realizm) */
+  bevel?: number;
+  /** spłaszczenie bryły w pionie (np. półkula klosza) */
+  scaleY?: number;
   opacity?: number;
   /** rysuj kontur krawędzi */
   outline?: boolean;
@@ -140,7 +144,7 @@ export interface SceneBox {
   /** realne źródło światła w tym miejscu */
   light?: { color: string; intensity: number; distance: number; y?: number };
   /** rodzaj materiału PBR (tekstura proceduralna) */
-  mat?: 'wood' | 'wood-dark' | 'laminate' | 'stone' | 'glass' | 'metal' | 'grass' | 'cobble' | 'plaster' | 'roof' | 'foliage' | 'deck' | 'brick' | 'rock';
+  mat?: 'wood' | 'wood-dark' | 'laminate' | 'stone' | 'glass' | 'metal' | 'grass' | 'cobble' | 'plaster' | 'roof' | 'foliage' | 'deck' | 'brick' | 'rock' | 'fabric' | 'travertine' | 'rug' | 'ceramic';
 }
 
 export const PANEL = 18;

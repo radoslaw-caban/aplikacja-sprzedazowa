@@ -19,6 +19,7 @@ import { GROUP_LABELS } from './design/library';
 import { computeRuns, worktopBoxes, plinthBoxes, contactShadows } from './design/runs';
 import { exteriorBoxes } from './design/exterior';
 import { landscapeBoxes } from './design/terrain';
+import { stylingBoxes } from './design/styling';
 import RoomDialog, { type RoomDraft } from './ui/RoomDialog';
 import { LIGHT_TEMPLATES, type LightTemplate } from './design/lighting';
 import { LIGHTING_PROPOSALS, recommendation } from './design/lightingPlan';
@@ -79,6 +80,7 @@ export default function App() {
   const [scanMeta, setScanMeta] = useState<ScanMeta | null>(null);
   const [cloudTransform, setCloudTransform] = useState<CloudTransform>(NO_TRANSFORM);
   const [cloudDims, setCloudDims] = useState<{ x: number; y: number; z: number } | null>(null);
+  const [styling, setStyling] = useState(true);
   const [exterior, setExterior] = useState(true);
   const [roof, setRoof] = useState(false);
   const [wallGhost, setWallGhost] = useState(true);
@@ -541,6 +543,7 @@ export default function App() {
       ...contactShadows(runs),
       ...(exterior ? exteriorBoxes(room, { roof }) : []),
       ...(exterior ? landscapeBoxes(room) : []),
+      ...(styling ? stylingBoxes(room) : []),
       ...lights,
     ];
   }, [cabinets, settings.showFronts, settings.worktop, settings.plinth, exterior, roof, room, lights]);
@@ -1095,6 +1098,13 @@ export default function App() {
             onClick={() => setExterior((v) => !v)}
           >
             🏡 Otoczenie {exterior ? 'WŁ' : 'WYŁ'}
+          </button>
+          <button
+            className={`chip ${styling ? 'on' : ''}`}
+            title="Stylizacja wnętrza: dywan, sofa, stolik, oliwka, lampa"
+            onClick={() => setStyling((v) => !v)}
+          >
+            🛋 Stylizacja {styling ? 'WŁ' : 'WYŁ'}
           </button>
           <button
             className={`chip ${wallGhost ? 'on' : ''}`}

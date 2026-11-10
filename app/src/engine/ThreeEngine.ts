@@ -53,6 +53,8 @@ export class ThreeEngine implements RenderEngine {
   /** tryb materiałów: pbr (tekstury) / flat (płaskie) / wire (szkic) */
   private materialMode: 'pbr' | 'flat' | 'wire' = 'pbr';
   private sunLight?: THREE.DirectionalLight;
+  /** miękkie światło okna (RectAreaLight) */
+  public windowLight?: THREE.RectAreaLight;
   private hemiLight?: THREE.HemisphereLight;
   /** 'low' | 'medium' | 'high' — wpływa na AO/bloom */
   private quality: 'low' | 'medium' | 'high' = 'high';
@@ -263,6 +265,22 @@ export class ThreeEngine implements RenderEngine {
     this.sunLight = sun;
     this.hemiLight = hemi;
     this.scene.add(sun, hemi, new THREE.AmbientLight(0xffffff, 0.12));
+
+    // miękkie światło okna — duży, ciepły prostokąt (jak w fotografii wnętrz)
+    try {
+      const lib = await import('three/examples/jsm/lights/RectAreaLightUniformsLib.js');
+      lib.RectAreaLightUniformsLib.init();
+      const wl = new THREE.RectAreaLight(0xfff3e2, 8, 3.4, 2.4);
+      wl.position.set(3.4, 1.75, -1.4);
+      wl.lookAt(0, 0.8, 2.4);
+      this.scene.add(wl);
+      this.windowLight = wl;
+      // słońce słabnie — w środku liczy się okno, nie bezpośrednie słońce
+      sun.intensity = 1.15;
+      sun.shadow.radius = 6;
+    } catch {
+      /* brak modułu — zostaje HDRI i słońce */
+    }
 
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -967,7 +985,13 @@ export class ThreeEngine implements RenderEngine {
           : b.shape === 'sphere'
           ? new THREE.SphereGeometry((sx * mm) / 2, 18, 14)
           : b.kind === 'front' || b.kind === 'panel' || b.kind === 'shelf' || b.kind === 'drawer'
-          ? new RoundedBoxGeometry(sx * mm, sy * mm, sz * mm, 2, Math.min(0.0015, (Math.min(sx, sy, sz) * mm) / 6))
+          ? new RoundedBoxGeometry(
+              sx * mm,
+              sy * mm,
+              sz * mm,
+              3,
+              b.bevel ? b.bevel * mm : Math.min(0.0015, (Math.min(sx, sy, sz) * mm) / 6),
+            )
           : new THREE.BoxGeometry(sx * mm, sy * mm, sz * mm);
       const mat = this.materialFor(b);
       const mesh = new THREE.Mesh(geom, mat);
@@ -976,9 +1000,12 @@ export class ThreeEngine implements RenderEngine {
         b.position[1] * mm,
         (b.position[2] + cabinetsOrigin.z) * mm,
       );
+      if (b.scaleY) mesh.scale.y = b.scaleY;
       if (b.rotationY) mesh.rotation.y = (b.rotationY * Math.PI) / 180;
       if (b.rotationZ) mesh.rotation.z = (b.rotationZ * Math.PI) / 180;
       if (b.rotationX) mesh.rotation.x = (b.rotationX * Math.PI) / 180;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       mesh.userData = {
         cabinetId: b.cabinetId,
         elementId: b.elementId,
