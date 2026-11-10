@@ -371,6 +371,16 @@ export default function App() {
 
   const currentFile = files[fileIdx] ?? null;
   const hideBars = uiHidden && !barsPinned;
+
+  // aktualne akcje dla handlera klawiatury (bez stale closure)
+  const actionsRef = useRef<{
+    project: (d: 1 | -1) => void;
+    file: (d: 1 | -1) => void;
+    style: (d: 1 | -1) => void;
+  }>({ project: () => {}, file: () => {}, style: () => {} });
+  useEffect(() => {
+    actionsRef.current = { project: switchProject, file: switchFile, style: switchStyle };
+  });
   const barStyle = hideBars ? { display: 'none' as const } : undefined;
 
   // ---- styl widoku → silnik ----
@@ -973,15 +983,15 @@ export default function App() {
       else if (hit('cloud.toggle')) { setCloudVisible((v) => !v); e.preventDefault(); }
       else if (hit('orbit.toggle')) { setSettings((s) => ({ ...s, autoRotate: !s.autoRotate })); e.preventDefault(); }
       // strzałki: ↑/↓ projekt, ←/→ plik (działa też przy zablokowanym projekcie)
-      else if (e.key === 'ArrowUp') { switchProject(-1); e.preventDefault(); }
-      else if (e.key === 'ArrowDown') { switchProject(1); e.preventDefault(); }
-      else if (e.key === 'ArrowLeft') { switchFile(-1); e.preventDefault(); }
-      else if (e.key === 'ArrowRight') { switchFile(1); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { actionsRef.current.project(-1); e.preventDefault(); }
+      else if (e.key === 'ArrowDown') { actionsRef.current.project(1); e.preventDefault(); }
+      else if (e.key === 'ArrowLeft') { actionsRef.current.file(-1); e.preventDefault(); }
+      else if (e.key === 'ArrowRight') { actionsRef.current.file(1); e.preventDefault(); }
       // projekty i style widoku
-      else if (e.key === 'PageDown') { switchProject(1); e.preventDefault(); }
-      else if (e.key === 'PageUp') { switchProject(-1); e.preventDefault(); }
-      else if (e.key === ']') { switchStyle(1); e.preventDefault(); }
-      else if (e.key === '[') { switchStyle(-1); e.preventDefault(); }
+      else if (e.key === 'PageDown') { actionsRef.current.project(1); e.preventDefault(); }
+      else if (e.key === 'PageUp') { actionsRef.current.project(-1); e.preventDefault(); }
+      else if (e.key === ']') { actionsRef.current.style(1); e.preventDefault(); }
+      else if (e.key === '[') { actionsRef.current.style(-1); e.preventDefault(); }
       else if (e.key.toLowerCase() === 'h') { setUiHidden((v) => !v); e.preventDefault(); }
     };
     window.addEventListener('keydown', onKey);
@@ -1392,6 +1402,31 @@ export default function App() {
 
       {toast && <div className="toast">{toast}</div>}
 
+      {currentFile && (
+        <div className="file-chip" onClick={() => setFilesOpen(true)} title="Aktywny plik — ← / → zmienia">
+          <span className="file-chip-icon">
+            {FILE_KINDS.find((k) => k.id === currentFile.kind)?.icon ?? '◇'}
+          </span>
+          <span className="file-chip-body">
+            <b>{currentFile.name}</b>
+            <small>
+              {FILE_KINDS.find((k) => k.id === currentFile.kind)?.label} · {humanSize(currentFile.size)} ·{' '}
+              {fileIdx + 1}/{files.length}
+            </small>
+          </span>
+          <span className="file-chip-nav">
+            <button
+              onClick={(e) => { e.stopPropagation(); switchFile(-1); }}
+              title="Poprzedni plik (←)"
+            >‹</button>
+            <button
+              onClick={(e) => { e.stopPropagation(); switchFile(1); }}
+              title="Następny plik (→)"
+            >›</button>
+          </span>
+        </div>
+      )}
+
       {frozen && (
         <div className="frozen-badge">
           ❄ obraz zamrożony · ↕ projekt · ↔ plik
@@ -1419,6 +1454,7 @@ export default function App() {
                   const fresh = loadFiles(projectId);
                   setFiles(fresh);
                   setFileIdx(0);
+                  flash(`Plik aktywny: ${fresh[0]?.name ?? '—'}`);
                   flash(`Dodano ${list.length} plik(ów)`);
                   e.currentTarget.value = '';
                 }}

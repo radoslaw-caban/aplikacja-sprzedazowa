@@ -648,3 +648,30 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
 
 /* pasek tytułu nie zasłania uchwytu */
 .app header { padding-left: 54px; }
+
+/* ---- karta aktywnego pliku klienta ---- */
+.file-chip {
+  position: fixed; left: calc(12px + env(safe-area-inset-left));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: 10px; max-width: 380px;
+  padding: 9px 12px; border-radius: 14px; z-index: 35; cursor: pointer;
+  background: rgba(18, 23, 30, 0.72);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 10px 28px rgba(0,0,0,.4);
+}
+.file-chip-icon { color: #c9a227; font-size: 1.1rem; }
+.file-chip-body { display: flex; flex-direction: column; min-width: 0; }
+.file-chip-body b {
+  font-size: .78rem; color: #e8eaed; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 230px;
+}
+.file-chip-body small { font-size: .66rem; color: #9aa3ae; }
+.file-chip-nav { display: flex; gap: 4px; margin-left: auto; }
+.file-chip-nav button {
+  width: 26px; height: 26px; border-radius: 8px; padding: 0; cursor: pointer;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14);
+  color: #dfe6ee; font-size: .95rem; line-height: 1;
+}
+.file-chip-nav button:hover { background: rgba(201,162,39,.25); border-color: rgba(201,162,39,.6); }
