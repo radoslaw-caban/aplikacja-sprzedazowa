@@ -21,7 +21,7 @@ const GradeShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     vignette: { value: 0.14 },
-    contrast: { value: 1.02 },
+    contrast: { value: 1.06 },
     saturation: { value: 1.0 },
     lift: { value: 0.02 },
   },
@@ -81,9 +81,9 @@ export class PostFX {
     // --- ambient occlusion ---
     this.gtao = new GTAOPass(scene, camera, 1024, 1024);
     this.gtao.output = GTAOPass.OUTPUT.Default;
-    this.gtao.blendIntensity = 0.55;
+    this.gtao.blendIntensity = 0.85;
     this.gtao.updateGtaoMaterial({
-      radius: 0.42,
+      radius: 0.55,
       distanceExponent: 1.4,
       thickness: 1.2,
       scale: 1.0,

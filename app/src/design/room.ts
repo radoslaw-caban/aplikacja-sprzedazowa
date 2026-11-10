@@ -47,7 +47,17 @@ export function roomBoxes(r: Room): RoomBox[] {
   const T = r.wallThickness;
 
   // podłoga
-  out.push({ kind: 'floor', size: [W, 120, D], position: [0, -60, 0], color: '#9a7550', mat: 'deck' });
+  out.push({ kind: 'floor', size: [W, 120, D], position: [0, -60, 0], color: '#7d6650', mat: 'deck' });
+
+  // sufit (zamyka bryłę — bez niego wnętrze wygląda jak makieta)
+  out.push({ kind: 'wall', size: [W, 40, D], position: [0, H + 20, 0], color: '#f2efe9', mat: 'plaster' });
+
+  // listwy przypodłogowe 80 × 20 mm wzdłuż wszystkich ścian
+  const skirting = { color: '#f6f4ef', mat: 'plaster' as const };
+  out.push({ kind: 'wall', size: [W, 80, 20], position: [0, 40, -D / 2 + 10], ...skirting });
+  out.push({ kind: 'wall', size: [W, 80, 20], position: [0, 40, D / 2 - 10], ...skirting });
+  out.push({ kind: 'wall', size: [20, 80, D], position: [-W / 2 + 10, 40, 0], ...skirting });
+  out.push({ kind: 'wall', size: [20, 80, D], position: [W / 2 - 10, 40, 0], ...skirting });
 
   // ściana północna (z = -D/2), z oknem
   out.push(...wallWithHole('north', r, W, D, H, T));

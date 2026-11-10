@@ -140,6 +140,16 @@ export class ThreeEngine implements RenderEngine {
       });
     }
 
+    // cień kontaktowy: czarny, bez tekstury i bez odbić (inaczej wychodzi niebieski)
+    if (b.id.includes(':shadow')) {
+      return new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: b.opacity ?? 0.12,
+        depthWrite: false,
+      });
+    }
+
     if (b.shape === 'tuft') {
       const gm = new THREE.MeshStandardMaterial({
         map: grassBladeTexture(),
@@ -160,7 +170,11 @@ export class ThreeEngine implements RenderEngine {
     // tryb techniczny: płaskie kolory bez tekstur
     // cokół i blat: całkowicie matowe, żeby nie łapały błękitu nieba
     const isPlinth = b.id.includes(':plinth');
-    if (this.materialMode === 'flat' || isPlinth) {
+    if (isPlinth) {
+      // cokół leży w cieniu — materiał bezwpływowy na światło (inaczej łapie błękit nieba)
+      return new THREE.MeshBasicMaterial({ color: new THREE.Color('#333331') });
+    }
+    if (this.materialMode === 'flat') {
       return new THREE.MeshStandardMaterial({
         color: new THREE.Color(b.color ?? '#d9d4c9'),
         roughness: 0.95,
@@ -517,7 +531,12 @@ export class ThreeEngine implements RenderEngine {
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z) * 0.9 || 1;
-    this.camera.position.set(center.x + radius * 1.1, center.y + radius * 0.55, center.z + radius * 1.4);
+    // kadr „hero": oko obserwatora, 3/4, bez patrzenia z góry
+    this.camera.position.set(
+      center.x + radius * 1.15,
+      Math.max(1.45, center.y + radius * 0.22),
+      center.z + radius * 1.55,
+    );
     this.controls.target.copy(center);
     this.controls.update();
   }

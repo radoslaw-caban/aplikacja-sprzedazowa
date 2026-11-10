@@ -55,7 +55,7 @@ export function computeRuns(cabinets: Cabinet[], tol = 20): RunSpec[] {
         rotation: first.rotation,
         hasBase: group.some((c) => c.type === 'base'),
         hasPlinth: group.some((c) => c.type !== 'wall'),
-        bodyTop: Math.max(...group.map((c) => (c.type === 'base' ? c.plinth + c.height : c.height))),
+        bodyTop: Math.max(...group.map((c) => c.height + ((c as { mountHeight?: number }).mountHeight ?? 0))),
       });
       // dla biegu wzdłuż Z środek X to pierwsza szafka
       if (alongZ) {
@@ -122,6 +122,31 @@ export function worktopBoxes(runs: RunSpec[], p: WorktopParams): SceneBox[] {
     });
 }
 
+/** Miękki cień kontaktowy pod szafkami — trzy warstwy o malejącym kryciu. */
+export function contactShadows(runs: RunSpec[]): SceneBox[] {
+  const out: SceneBox[] = [];
+  for (const r of runs) {
+    const layers = [
+      { grow: 10, y: 6, o: 0.28 },
+      { grow: 45, y: 4, o: 0.14 },
+      { grow: 105, y: 2, o: 0.06 },
+    ];
+    for (const [i, l] of layers.entries()) {
+      out.push({
+        id: `${r.id}:shadow-${i}`,
+        kind: 'panel',
+        cabinetId: r.cabinetIds[0],
+        size: [r.length + l.grow * 2, 2, 620 + l.grow * 2],
+        position: [r.cx, l.y, r.cz],
+        color: '#000000',
+        opacity: l.o,
+        outline: false,
+      });
+    }
+  }
+  return out;
+}
+
 /** Bryły cokołów — jeden na bieg; licowany z frontem albo cofnięty o `setback`. */
 export function plinthBoxes(runs: RunSpec[], p: PlinthParams): SceneBox[] {
   if (!p.enabled) return [];
@@ -135,7 +160,7 @@ export function plinthBoxes(runs: RunSpec[], p: PlinthParams): SceneBox[] {
       size: [r.length, p.height, 540 - cof] as [number, number, number],
       position: [r.cx, p.height / 2, r.cz + cof / 2] as [number, number, number],
       rotationY: r.rotation,
-      color: p.color,
+      color: '#3a3a37',
       outline: true,
       mat: 'plaster' as const,
     }));

@@ -43,13 +43,13 @@ function grain(ctx: CanvasRenderingContext2D, size: number, alpha: number, scale
 }
 
 function woodTexture(base: string, dark: string, light: string): HTMLCanvasElement {
-  const size = 512;
+  const size = 1024;
   const [c, ctx] = canvas(size);
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, size, size);
 
   // słoje — poziome, faliste linie
-  for (let i = 0; i < 260; i++) {
+  for (let i = 0; i < 520; i++) {
     const y = Math.random() * size;
     const w = 0.6 + Math.random() * 2.4;
     ctx.strokeStyle = Math.random() > 0.5 ? dark : light;
@@ -83,12 +83,12 @@ function woodTexture(base: string, dark: string, light: string): HTMLCanvasEleme
 }
 
 function stoneTexture(): HTMLCanvasElement {
-  const size = 512;
+  const size = 1024;
   const [c, ctx] = canvas(size);
   ctx.fillStyle = '#e8e6e1';
   ctx.fillRect(0, 0, size, size);
   // żyłki marmuru
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 48; i++) {
     ctx.strokeStyle = i % 3 ? '#b9b4ac' : '#8f8a82';
     ctx.globalAlpha = 0.10 + Math.random() * 0.25;
     ctx.lineWidth = 0.5 + Math.random() * 2.2;
@@ -271,10 +271,10 @@ export function texturesFor(kind: MatKind): { map: THREE.Texture; bump?: THREE.T
   let cv: HTMLCanvasElement;
   switch (kind) {
     case 'wood':
-      cv = woodTexture('#b9a184', '#8a7358', '#d6c6ae');
+      cv = woodTexture('#b8ab97', '#8d8070', '#d8cfc0');
       break;
     case 'wood-dark':
-      cv = woodTexture('#5c4430', '#3d2c1e', '#7d6248');
+      cv = woodTexture('#5f5040', '#403529', '#80715c');
       break;
     case 'laminate':
       cv = woodTexture('#cfc6b8', '#a89c8b', '#e6dfd3');
@@ -328,7 +328,7 @@ export function materialProps(kind: MatKind): {
     case 'laminate':
       return { color: '#ffffff', roughness: 0.42, metalness: 0.02 };
     case 'stone':
-      return { color: '#d9d5cc', roughness: 0.48, metalness: 0.02 };
+      return { color: '#cfccc5', roughness: 0.55, metalness: 0.02 };
     case 'glass':
       return { color: '#a8d4e6', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.35 };
     case 'metal':

@@ -85,7 +85,7 @@ export function defaultSettings(): Settings {
     precision: 1,
     engine: 'three',
     hardwareDetail: 'basic',
-    worktop: { enabled: true, thickness: 38, overhang: 10, color: '#e9e5dd' },
+    worktop: { enabled: true, thickness: 38, overhang: 10, color: '#cfccc5' },
     plinth: { enabled: true, height: 150, mode: 'recessed', setback: 40, color: '#2f2f2d' },
     shortcuts: Object.fromEntries(ACTIONS.map((a) => [a.id, a.defaultKey])),
     client: { name: '', phone: '', email: '', address: '', notes: '' },

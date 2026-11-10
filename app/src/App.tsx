@@ -16,7 +16,7 @@ import { baseCabinet, makeDoors, type Cabinet, type Cutout, type SceneBox } from
 import { collidesWithCabinets, elementCollides, findFreeY, collectSnapPoints, nearestSnap, snapToLines } from './design/collision';
 import { defaultRoom, roomBoxes, snapToWalls, cornerSnap, type WallSide } from './design/room';
 import { GROUP_LABELS } from './design/library';
-import { computeRuns, worktopBoxes, plinthBoxes } from './design/runs';
+import { computeRuns, worktopBoxes, plinthBoxes, contactShadows } from './design/runs';
 import { exteriorBoxes } from './design/exterior';
 import { landscapeBoxes } from './design/terrain';
 import RoomDialog, { type RoomDraft } from './ui/RoomDialog';
@@ -538,6 +538,7 @@ export default function App() {
       ...cab,
       ...worktopBoxes(runs, settings.worktop),
       ...plinthBoxes(runs, settings.plinth),
+      ...contactShadows(runs),
       ...(exterior ? exteriorBoxes(room, { roof }) : []),
       ...(exterior ? landscapeBoxes(room) : []),
       ...lights,

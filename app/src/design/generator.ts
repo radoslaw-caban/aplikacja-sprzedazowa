@@ -226,7 +226,7 @@ function buildFront(c: Cabinet, f: Front): SceneBox[] {
   const cx = f.x0 + w / 2 - c.width / 2;
   const cy = (f.y0 + f.y1) / 2;
   const zFront = c.depth / 2 + GAP + D / 2;
-  const color = c.color ?? '#b08968';
+  const color = c.color ?? '#c8bca9';
 
   const add = (
     kind: SceneBox['kind'],
