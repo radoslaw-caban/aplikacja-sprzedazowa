@@ -26,7 +26,7 @@ public enum SceneBuilder {
 
     /// Składa całą scenę: szafki, blaty, cokoły, podłogę, światło.
     @MainActor
-    public static func build(cabinets: [Cabinet]) -> Built {
+    public static func build(cabinets: [Cabinet], includeFloor: Bool = true) -> Built {
         let root = Entity()
 
         let runs = Runs.compute(cabinets)
@@ -55,6 +55,7 @@ public enum SceneBuilder {
         }
 
         // podłoga
+        if includeFloor {
         let floorMaterial = SimpleMaterial(color: color("#c8b39a"), isMetallic: false)
         let floor = ModelEntity(
             mesh: .generateBox(width: 8, height: 0.02, depth: 8, cornerRadius: 0),
@@ -62,6 +63,7 @@ public enum SceneBuilder {
         )
         floor.position = [0, -0.01, 0]
         root.addChild(floor)
+        }
 
         // szerokość całej zabudowy — do kadrowania kamery
         let minX = boxes.map { meters($0.position.x) - meters($0.size.x) / 2 }.min() ?? 0

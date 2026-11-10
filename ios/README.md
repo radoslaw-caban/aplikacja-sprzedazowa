@@ -71,7 +71,9 @@ TestFlight: po wgraniu build pojawia się w App Store Connect → TestFlight.
 ## Co zostaje do przeniesienia
 
 - [ ] Dekoder E57 (własny parser `CompressedVector` albo bridge do C++ libE57)
-- [ ] Render chmury w RealityKit (Metal point cloud, do 8 mln punktów)
+- [x] Render chmury w RealityKit (LowLevelMesh, kubełki RGB, 0,49 mln pkt na iPadzie)
+- [ ] Wyrównanie skanu do układu projektu (rejestracja chmury)
+- [ ] Większe punkty (geometra Modifier w Metal) — teraz 1 px
 - [ ] Panele: edycja wnętrza, wycena, oferta PDF, warianty
 - [ ] Oświetlenie: HDRI w bundle + `EnvironmentResource` dla IBL
 - [ ] Zapis projektów i plików: SwiftData

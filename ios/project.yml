@@ -23,6 +23,8 @@ targets:
     platform: iOS
     sources:
       - path: Sources/KitchenApp
+      - path: ../app/public/dom-chmura.ply
+        buildPhase: resources
     dependencies:
       - package: KitchenCore
         product: KitchenCore
@@ -53,6 +55,8 @@ targets:
     platform: macOS
     sources:
       - path: Sources/KitchenApp
+      - path: ../app/public/dom-chmura.ply
+        buildPhase: resources
     dependencies:
       - package: KitchenCore
         product: KitchenCore
