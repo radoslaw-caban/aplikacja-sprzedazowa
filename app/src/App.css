@@ -716,11 +716,11 @@ input[type="range"] { flex: 1; accent-color: #c9a227; }
 }
 .fv-bar {
   display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
-  padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.10);
+  padding: 10px 16px calc(10px + env(safe-area-inset-top)); border-bottom: 1px solid rgba(255,255,255,.10);
   background: rgba(18, 23, 30, .8);
 }
 .fv-icon { color: #c9a227; font-size: 1.1rem; }
-.fv-name { font-size: .84rem; color: #e8eaed; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fv-name { flex: 1 1 auto; min-width: 0; font-size: .84rem; color: #e8eaed; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fv-meta { font-size: .7rem; color: #9aa3ae; margin-left: auto; white-space: nowrap; }
 .fv-nav { display: flex; gap: 6px; }
 .fv-nav button {

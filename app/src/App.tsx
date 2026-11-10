@@ -22,7 +22,7 @@ import RoomDialog, { type RoomDraft } from './ui/RoomDialog';
 import { LIGHT_TEMPLATES, type LightTemplate } from './design/lighting';
 import { LIGHTING_PROPOSALS, recommendation } from './design/lightingPlan';
 import { styleById, nextStyle, type ViewStyle } from './design/viewStyles';
-import { loadProjects, saveProjects, makeProject, type Project } from './design/projects';
+import { loadProjects, saveProjects, makeProject, activeProjectId, setActiveProjectId, type Project } from './design/projects';
 import { parseGlb, type Cluster } from './design/parseGLB';
 import { loadFiles, addFile, humanSize, FILE_KINDS, type ClientFile } from './design/files';
 import { toCabinet, ROLE_OPTIONS, parseCabinetParts, type ParsedCabinet } from './design/parseModel';
@@ -238,20 +238,27 @@ export default function App() {
   }, [settings.hardwareDetail]);
 
   // ---- PROJEKTY: wczytanie, zapis, przełączanie gestem ----
+  const didInit = useRef(false);
   useEffect(() => {
+    if (didInit.current) return;
+    didInit.current = true;
     const list = loadProjects();
     if (list.length) {
+      const saved = activeProjectId();
+      const cur = list.find((p) => p.id === saved) ?? list[0];
       setProjects(list);
-      setProjectId(list[0].id);
-      setLocked(list[0].locked ?? true);
-      setCabinets(list[0].data.cabinets);
-      setLights(list[0].data.lights);
-      setRoom(list[0].data.room);
+      setProjectId(cur.id);
+      setActiveProjectId(cur.id);
+      setLocked(cur.locked ?? true);
+      setCabinets(cur.data.cabinets);
+      setLights(cur.data.lights);
+      setRoom(cur.data.room);
     } else {
       // brak zapisanych — tworzymy Projekt 1 od razu, żeby pierwszy gest działał
       const p = makeProject('Projekt 1', room, cabinets, lights);
       setProjects([p]);
       setProjectId(p.id);
+      setActiveProjectId(p.id);
       saveProjects([p]);
     }
   }, []);
@@ -280,6 +287,10 @@ export default function App() {
   useEffect(() => {
     if (projects.length) saveProjects(projects);
   }, [projects]);
+
+  useEffect(() => {
+    if (projectId) setActiveProjectId(projectId);
+  }, [projectId]);
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -1446,7 +1457,7 @@ export default function App() {
         <span className="nav-pad-label">↕ projekt · ↔ plik</span>
       </div>
 
-      {currentFile && (
+      {!fileViewer && currentFile && (
         <div className="file-chip" onClick={() => setFilesOpen(true)} title="Aktywny plik — ← / → zmienia">
           <span className="file-chip-icon">
             {FILE_KINDS.find((k) => k.id === currentFile.kind)?.icon ?? '◇'}
