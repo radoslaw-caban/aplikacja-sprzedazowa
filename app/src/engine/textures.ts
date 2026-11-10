@@ -379,6 +379,7 @@ export function matKindFor(kind: string): MatKind {
     case 'front':
       return 'wood';
     case 'panel':
+      return 'wood'; // widoczne boki korpusu w dekorze frontu
     case 'shelf':
     case 'drawer':
     case 'divider':

@@ -324,6 +324,7 @@ export default function App() {
       setLights(target.data.lights);
       setRoom(target.data.room);
       flash(`${target.name}`);
+      window.setTimeout(() => engineRef.current?.frameDesign?.(), 250);
     },
     [projects, projectId, room, cabinets, lights],
   );
@@ -1401,6 +1402,31 @@ export default function App() {
       </div>
 
       {toast && <div className="toast">{toast}</div>}
+
+      {/* Strzałki na ekranie — iPad nie ma klawiatury */}
+      <div className="nav-pad" aria-label="Nawigacja projektów i plików">
+        <button
+          className="nav-pad-up"
+          title="Poprzedni projekt (↑)"
+          onClick={() => actionsRef.current.project(-1)}
+        >▲</button>
+        <button
+          className="nav-pad-left"
+          title="Poprzedni plik (←)"
+          onClick={() => actionsRef.current.file(-1)}
+        >◀</button>
+        <button
+          className="nav-pad-right"
+          title="Następny plik (→)"
+          onClick={() => actionsRef.current.file(1)}
+        >▶</button>
+        <button
+          className="nav-pad-down"
+          title="Następny projekt (↓)"
+          onClick={() => actionsRef.current.project(1)}
+        >▼</button>
+        <span className="nav-pad-label">↕ projekt · ↔ plik</span>
+      </div>
 
       {currentFile && (
         <div className="file-chip" onClick={() => setFilesOpen(true)} title="Aktywny plik — ← / → zmienia">

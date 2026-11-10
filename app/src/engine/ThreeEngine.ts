@@ -146,11 +146,14 @@ export class ThreeEngine implements RenderEngine {
     if (cached) return cached;
 
     // tryb techniczny: płaskie kolory bez tekstur
-    if (this.materialMode === 'flat') {
+    // cokół i blat: całkowicie matowe, żeby nie łapały błękitu nieba
+    const isPlinth = b.id.includes(':plinth');
+    if (this.materialMode === 'flat' || isPlinth) {
       return new THREE.MeshStandardMaterial({
         color: new THREE.Color(b.color ?? '#d9d4c9'),
-        roughness: 0.85,
-        metalness: 0.02,
+        roughness: 0.95,
+        metalness: 0,
+        envMapIntensity: 0.03,
         flatShading: false,
       });
     }
@@ -230,7 +233,7 @@ export class ThreeEngine implements RenderEngine {
     cam.updateProjectionMatrix();
 
     // światło niebios (góra chłodna, dół ciepły od gruntu)
-    const hemi = new THREE.HemisphereLight(0xe8f2ff, 0x8a7f6a, 0.85);
+    const hemi = new THREE.HemisphereLight(0xf2f2ee, 0x8a8072, 0.72);
     this.sunLight = sun;
     this.hemiLight = hemi;
     this.scene.add(sun, hemi, new THREE.AmbientLight(0xffffff, 0.12));
@@ -564,15 +567,6 @@ export class ThreeEngine implements RenderEngine {
       const kind =
         b.mat ??
         (b.kind === 'floor' ? 'deck' : b.kind === 'window' ? 'glass' : ('plaster' as const));
-      // tryb techniczny: płaskie kolory bez tekstur
-    if (this.materialMode === 'flat') {
-      return new THREE.MeshStandardMaterial({
-        color: new THREE.Color(b.color ?? '#d9d4c9'),
-        roughness: 0.85,
-        metalness: 0.02,
-        flatShading: false,
-      });
-    }
     const props = materialProps(kind);
       const tex = texturesFor(kind);
       const scaleM = textureScale(kind);
