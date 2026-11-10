@@ -392,9 +392,9 @@ export default function App() {
     return () => window.clearTimeout(t);
   }, [ready, style, engineEpoch]);
 
-  // ---- TRYB NAWIGACJI: gdy projekt zablokowany albo obraz zamrożony,
-  //       JEDEN palec przewija projekty (w pionie) i pliki (w poziomie). ----
-  const navMode = frozen || locked;
+  // ---- TRYB NAWIGACJI: tylko przy zamrożonym obrazie jeden palec przewija.
+  //       Blokada projektu NIE rusza kamery — chroni wyłącznie przed edycją. ----
+  const navMode = frozen;
 
   useEffect(() => {
     engineRef.current?.setControlsEnabled?.(!navMode && !moveMode);
@@ -972,6 +972,11 @@ export default function App() {
       }
       else if (hit('cloud.toggle')) { setCloudVisible((v) => !v); e.preventDefault(); }
       else if (hit('orbit.toggle')) { setSettings((s) => ({ ...s, autoRotate: !s.autoRotate })); e.preventDefault(); }
+      // strzałki: ↑/↓ projekt, ←/→ plik (działa też przy zablokowanym projekcie)
+      else if (e.key === 'ArrowUp') { switchProject(-1); e.preventDefault(); }
+      else if (e.key === 'ArrowDown') { switchProject(1); e.preventDefault(); }
+      else if (e.key === 'ArrowLeft') { switchFile(-1); e.preventDefault(); }
+      else if (e.key === 'ArrowRight') { switchFile(1); e.preventDefault(); }
       // projekty i style widoku
       else if (e.key === 'PageDown') { switchProject(1); e.preventDefault(); }
       else if (e.key === 'PageUp') { switchProject(-1); e.preventDefault(); }
