@@ -1,0 +1,53 @@
+name: KitchenConfigurator
+options:
+  bundleIdPrefix: pl.karpatia
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: ""          # wpisz swój Team ID z Apple Developer
+
+targets:
+  KitchenConfigurator:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/KitchenCore
+      - path: Sources/KitchenApp
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Karpatia Konfigurator
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pl.karpatia.konfigurator
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        ENABLE_PREVIEWS: YES
+
+  KitchenConfiguratorMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/KitchenCore
+      - path: Sources/KitchenApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pl.karpatia.konfigurator.mac
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: ""
