@@ -360,6 +360,16 @@ export default function App() {
     [],
   );
 
+  // ---- Esc zamyka podgląd pliku ----
+  useEffect(() => {
+    if (!fileViewer) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFileViewer(false);
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [fileViewer]);
+
   // ---- pliki klienta: wczytanie dla aktywnego projektu ----
   useEffect(() => {
     if (!projectId) return;
