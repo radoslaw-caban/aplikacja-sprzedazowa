@@ -86,7 +86,8 @@ export default function App() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [style, setStyle] = useState<ViewStyle>('realistic');
   const [uiHidden, setUiHidden] = useState(false);
-  const [barsPinned, setBarsPinned] = useState(true);
+  const hideBars = uiHidden;
+  const barStyle = hideBars ? ({ display: 'none' } as const) : undefined;
   const [toast, setToast] = useState<string | null>(null);
   const [lightPanel, setLightPanel] = useState(false);
   const [parsed, setParsed] = useState<ParsedCabinet | null>(null);
@@ -95,6 +96,7 @@ export default function App() {
   const [frozen, setFrozen] = useState(false);
   const [files, setFiles] = useState<ClientFile[]>([]);
   const [fileIdx, setFileIdx] = useState(0);
+  const [fileViewer, setFileViewer] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [locked, setLocked] = useState(true);
 
@@ -336,6 +338,7 @@ export default function App() {
         flash('Brak plików — dodaj umowę, skan lub rzut');
         return;
       }
+      setFileViewer(true);
       setFileIdx((i) => {
         const n = (i + dir + files.length) % files.length;
         flash(files[n].name);
@@ -371,8 +374,6 @@ export default function App() {
   }, [frozen, moveMode, ready, engineEpoch]);
 
   const currentFile = files[fileIdx] ?? null;
-  const hideBars = uiHidden && !barsPinned;
-
   // aktualne akcje dla handlera klawiatury (bez stale closure)
   const actionsRef = useRef<{
     project: (d: 1 | -1) => void;
@@ -382,7 +383,6 @@ export default function App() {
   useEffect(() => {
     actionsRef.current = { project: switchProject, file: switchFile, style: switchStyle };
   });
-  const barStyle = hideBars ? { display: 'none' as const } : undefined;
 
   // ---- styl widoku → silnik ----
   useEffect(() => {
@@ -467,43 +467,8 @@ export default function App() {
     };
   }, [switchProject, switchFile, navMode]);
 
-  // ---- PASKÓW NIE CHOWAMY, JEŚLI UŻYTKOWNIK JE PRZYPIĄŁ ----
-  useEffect(() => {
-    if (barsPinned) setUiHidden(false);
-  }, [barsPinned]);
-
-  // ---- AUTO-UKRYWANIE: chowamy po 7 s bezczynności, wracają przy każdym dotknięciu ----
-  useEffect(() => {
-    if (barsPinned) return;
-    let timer: number | undefined;
-    let lastReveal = 0;
-    const arm = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => setUiHidden(true), 7000);
-    };
-    const reveal = () => {
-      const now = Date.now();
-      if (now - lastReveal < 300) return; // nie zalewamy setState przy ruchu
-      lastReveal = now;
-      setUiHidden(false);
-      arm();
-    };
-    window.addEventListener('pointermove', reveal, { passive: true });
-    window.addEventListener('pointerdown', reveal, { passive: true });
-    window.addEventListener('touchstart', reveal, { passive: true });
-    window.addEventListener('wheel', reveal, { passive: true });
-    window.addEventListener('keydown', reveal);
-    arm();
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('pointermove', reveal);
-      window.removeEventListener('pointerdown', reveal);
-      window.removeEventListener('touchstart', reveal);
-      window.removeEventListener('wheel', reveal);
-      window.removeEventListener('keydown', reveal);
-    };
-  }, [barsPinned]);
-
+  // ---- Paski: jedno źródło prawdy. ☰ / H chowa i pokazuje NATYCHMIAST,
+  //      bez timerów i bez wracania po dotknięciu ekranu. ----
   // ---- tryb przesuwania: kamera zablokowana, żeby nie uciekała z szafką ----
   useEffect(() => {
     engineRef.current?.setControlsEnabled?.(!moveMode);
@@ -1006,25 +971,21 @@ export default function App() {
   const unitLabel = settings.units;
 
   return (
-    <div className={`app${uiHidden && !barsPinned ? ' ui-hidden' : ''}`}>
+    <div className={`app${uiHidden ? ' ui-hidden' : ''}`}>
       <input
         ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) loadProject(f); e.target.value = ''; }}
       />
 
       <button
-        className={`ui-handle ${barsPinned ? 'pinned' : ''}`}
-        title="Paski narzędzi (H) — przypnij, żeby nie znikały"
+        className={`ui-handle ${uiHidden ? '' : 'pinned'}`}
+        title="Pokaż/ukryj paski narzędzi (H)"
         onClick={() => {
-          setBarsPinned((v) => {
-            const next = !v;
-            setUiHidden(!next ? true : false);
-            flash(next ? 'Paski przypięte' : 'Paski ukryte — dotknij ☰, aby wróciły');
-            return next;
-          });
+          setUiHidden((v) => !v);
+          flash(uiHidden ? 'Paski widoczne' : 'Paski ukryte — ☰ przywraca');
         }}
       >
-        {barsPinned ? '▣' : '☰'}
+        {uiHidden ? '☰' : '▣'}
       </button>
 
       <header style={barStyle}>
@@ -1402,6 +1363,53 @@ export default function App() {
       </div>
 
       {toast && <div className="toast">{toast}</div>}
+
+      {fileViewer && currentFile && (
+        <div className="file-viewer">
+          <div className="fv-bar">
+            <span className="fv-icon">
+              {FILE_KINDS.find((k) => k.id === currentFile.kind)?.icon ?? '◇'}
+            </span>
+            <span className="fv-name">{currentFile.name}</span>
+            <span className="fv-meta">
+              {FILE_KINDS.find((k) => k.id === currentFile.kind)?.label} · {humanSize(currentFile.size)} ·{' '}
+              {fileIdx + 1}/{files.length}
+            </span>
+            <span className="fv-nav">
+              <button onClick={() => switchFile(-1)} title="Poprzedni plik (←)">◀</button>
+              <button onClick={() => switchFile(1)} title="Następny plik (→)">▶</button>
+              <button onClick={() => setFileViewer(false)} title="Wróć do sceny (Esc)">✕</button>
+            </span>
+          </div>
+
+          <div className="fv-body">
+            {currentFile.dataUrl?.startsWith('data:image') && (
+              <img src={currentFile.dataUrl} alt={currentFile.name} />
+            )}
+            {currentFile.dataUrl?.startsWith('data:application/pdf') && (
+              <iframe src={currentFile.dataUrl} title={currentFile.name} />
+            )}
+            {!currentFile.dataUrl && (
+              <div className="fv-empty">
+                <div className="fv-big">{FILE_KINDS.find((k) => k.id === currentFile.kind)?.icon ?? '◇'}</div>
+                <h3>{currentFile.name}</h3>
+                <p>
+                  {humanSize(currentFile.size)} · {FILE_KINDS.find((k) => k.id === currentFile.kind)?.label}
+                </p>
+                <p className="fv-note">
+                  Plik jest większy niż 3 MB, więc aplikacja trzyma tylko jego opis
+                  (nie kopiuje danych do pamięci przeglądarki).
+                </p>
+                {currentFile.url && (
+                  <a className="primary" href={currentFile.url} target="_blank" rel="noreferrer">
+                    Otwórz plik
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Strzałki na ekranie — iPad nie ma klawiatury */}
       <div className="nav-pad" aria-label="Nawigacja projektów i plików">
