@@ -132,7 +132,7 @@ public enum SceneBuilder {
         if let scanPlan {
             // Bez stropu, gdy nakładamy chmurę — inaczej nie widać punktów
             // i nie da się ocenić, czy ściany pokrywają się ze skanem.
-            root.addChild(ScanHouseBuilder.entity(plan: scanPlan, includeCeiling: !scanCloud))
+            root.addChild(ScanHouseBuilder.entity(plan: scanPlan, includeCeiling: !scanCloud, ghostWalls: scanCloud))
             return root
         }
 

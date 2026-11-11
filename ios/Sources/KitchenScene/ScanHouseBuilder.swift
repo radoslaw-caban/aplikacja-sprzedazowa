@@ -26,7 +26,7 @@ public enum ScanHouseBuilder {
     /// Grubość stropu/podłogi (m).
     public static let slabThickness: Float = 0.22
 
-    public static func entity(plan: ScanPlan, includeCeiling: Bool = true) -> Entity {
+    public static func entity(plan: ScanPlan, includeCeiling: Bool = true, ghostWalls: Bool = false) -> Entity {
         let root = Entity()
         root.name = "scan-house"
 
@@ -36,7 +36,14 @@ public enum ScanHouseBuilder {
 
         // MARK: materiały
         var plaster = PhysicallyBasedMaterial()
-        plaster.baseColor = .init(tint: ScanColor(red: 0.94, green: 0.93, blue: 0.90, alpha: 1))
+        if ghostWalls {
+            // tryb kontroli: ściany półprzezroczyste, żeby widzieć chmurę
+            // przez elewację i ocenić dopasowanie punktów do płaszczyzn
+            plaster.baseColor = .init(tint: ScanColor(red: 0.94, green: 0.93, blue: 0.90, alpha: 0.18))
+            plaster.blending = .transparent(opacity: .init(floatLiteral: 0.22))
+        } else {
+            plaster.baseColor = .init(tint: ScanColor(red: 0.94, green: 0.93, blue: 0.90, alpha: 1))
+        }
         plaster.roughness = .init(floatLiteral: 0.85)
         plaster.metallic = .init(floatLiteral: 0)
 
@@ -69,69 +76,159 @@ public enum ScanHouseBuilder {
         ceiling.name = "scan-ceiling"
         if includeCeiling { root.addChild(ceiling) }
 
-        // MARK: ściany zewnętrzne z otworami okiennymi
-        // Otwory rozstawiamy co ~2,6 m: bez nich dom jest zamkniętą skrzynią.
-        let windowSill: Float = 0.9
-        let windowTop: Float = 2.1
+        // MARK: ściany zewnętrzne — CIĄGŁE, z otworami okien i drzwiami
+        //
+        // Wcześniej ściana była sklejana z „kawałków wokół okien" i zostawiała
+        // przerwy (dziury w elewacji). Teraz idziemy wzdłuż ściany i pomiędzy
+        // otworami stawiamy pełne segmenty — geometria nie może mieć luk.
+        let sill: Float = 0.95
+        let head: Float = 2.15
+        let windowWidth: Float = 1.40
+        let margin: Float = 0.90
 
-        func exteriorWall(center: SIMD3<Float>, length: Float, alongX: Bool) {
-            let thickness = exteriorThickness
-            let windowWidth: Float = 1.3
-            let pitch: Float = 2.6
-            let count = max(1, Int((length - 0.8) / pitch))
-            let usable = length - 1.0
-            let gap = (usable - Float(count) * windowWidth) / Float(max(1, count + 1))
+        struct Opening {
+            let start: Float
+            let end: Float
+            let bottom: Float
+            let top: Float
+            let isDoor: Bool
+        }
 
-            var cursor = -length / 2 + 0.5 + gap
-            var pieces: [(Float, Float, Float, Float)] = []   // (offset, width, bottom, height)
-            for _ in 0..<count {
-                // słupek między oknami
-                pieces.append((cursor - gap / 2, gap, 0, h))
-                // pod oknem i nad oknem
-                pieces.append((cursor + windowWidth / 2, windowWidth, 0, windowSill))
-                pieces.append((cursor + windowWidth / 2, windowWidth, windowTop, h - windowTop))
-                cursor += windowWidth + gap
+        // szyby: przezroczyste, żeby otwór był oknem, a nie dziurą
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: ScanColor(red: 0.80, green: 0.88, blue: 0.92, alpha: 0.18))
+        glass.blending = .transparent(opacity: .init(floatLiteral: 0.20))
+        glass.roughness = .init(floatLiteral: 0.05)
+        glass.metallic = .init(floatLiteral: 0.10)
+
+        var doorMaterial = PhysicallyBasedMaterial()
+        doorMaterial.baseColor = .init(tint: ScanColor(red: 0.16, green: 0.17, blue: 0.18, alpha: 1))
+        doorMaterial.roughness = .init(floatLiteral: 0.5)
+
+        func windows(count: Int, length: Float) -> [Opening] {
+            guard count > 0 else { return [] }
+            let used = Float(count) * windowWidth
+            let gap = (length - used) / Float(count + 1)
+            var out: [Opening] = []
+            for i in 0..<count {
+                let start = -length / 2 + gap + Float(i) * (windowWidth + gap)
+                out.append(Opening(start: start, end: start + windowWidth,
+                                   bottom: sill, top: head, isDoor: false))
             }
-            pieces.append((length / 2 - 0.5 - gap / 2, gap, 0, h))
+            return out
+        }
 
-            for (offset, width, bottom, height) in pieces {
-                guard width > 0.02, height > 0.02 else { continue }
+        func buildWall(center: SIMD3<Float>, length: Float, alongX: Bool, openings: [Opening]) {
+            let thickness = exteriorThickness
+            // ściana przedłużona o grubość — narożniki muszą się spotkać
+            let fullLength = length + thickness
+
+            func solid(from: Float, to: Float, bottom: Float, top: Float) {
+                let width = to - from
+                guard width > 0.02, top - bottom > 0.02 else { return }
                 let box = ModelEntity(
                     mesh: .generateBox(width: alongX ? width : thickness,
-                                       height: height,
+                                       height: top - bottom,
                                        depth: alongX ? thickness : width),
                     materials: [plaster]
                 )
                 let shift = alongX
-                    ? SIMD3<Float>(offset, bottom + height / 2, 0)
-                    : SIMD3<Float>(0, bottom + height / 2, offset)
+                    ? SIMD3<Float>((from + to) / 2, (bottom + top) / 2, 0)
+                    : SIMD3<Float>(0, (bottom + top) / 2, (from + to) / 2)
                 box.position = center + shift
                 box.name = "scan-wall-exterior"
                 root.addChild(box)
             }
+
+            let sorted = openings.sorted { $0.start < $1.start }
+            var cursor = -fullLength / 2
+            for opening in sorted {
+                if opening.start > cursor { solid(from: cursor, to: opening.start, bottom: 0, top: h) }
+                if opening.bottom > 0.02 { solid(from: opening.start, to: opening.end, bottom: 0, top: opening.bottom) }
+                if opening.top < h - 0.02 { solid(from: opening.start, to: opening.end, bottom: opening.top, top: h) }
+                cursor = opening.end
+            }
+            if cursor < fullLength / 2 { solid(from: cursor, to: fullLength / 2, bottom: 0, top: h) }
+
+            // wypełnienie otworów: szyba albo skrzydło drzwi
+            for opening in sorted {
+                let width = opening.end - opening.start
+                let height = opening.top - opening.bottom
+                let pane = ModelEntity(
+                    mesh: .generateBox(width: alongX ? width : 0.06,
+                                       height: height,
+                                       depth: alongX ? 0.06 : width),
+                    materials: [opening.isDoor ? doorMaterial : glass]
+                )
+                let shift = alongX
+                    ? SIMD3<Float>((opening.start + opening.end) / 2, (opening.bottom + opening.top) / 2, 0)
+                    : SIMD3<Float>(0, (opening.bottom + opening.top) / 2, (opening.start + opening.end) / 2)
+                pane.position = center + shift
+                pane.name = opening.isDoor ? "scan-door" : "scan-window"
+                root.addChild(pane)
+            }
         }
 
-        exteriorWall(center: [0, 0, -d / 2 + exteriorThickness / 2], length: w, alongX: true)
-        exteriorWall(center: [0, 0, d / 2 - exteriorThickness / 2], length: w, alongX: true)
-        exteriorWall(center: [-w / 2 + exteriorThickness / 2, 0, 0], length: d, alongX: false)
-        exteriorWall(center: [w / 2 - exteriorThickness / 2, 0, 0], length: d, alongX: false)
+        // tył i boki: okna; przód: okna + drzwi wejściowe w osi
+        buildWall(center: [0, 0, -d / 2 + exteriorThickness / 2], length: w, alongX: true,
+                  openings: windows(count: 3, length: w))
+        buildWall(center: [-w / 2 + exteriorThickness / 2, 0, 0], length: d, alongX: false,
+                  openings: windows(count: 2, length: d))
+        buildWall(center: [w / 2 - exteriorThickness / 2, 0, 0], length: d, alongX: false,
+                  openings: windows(count: 2, length: d))
 
-        // MARK: ściany wewnętrzne — dokładnie tam, gdzie wykryto je w chmurze
-        for (index, wall) in plan.walls.enumerated() {
-            let length = wall.length
-            guard length > 0.2 else { continue }
-            let mid = (wall.from + wall.to) / 2
-            let box = ModelEntity(
-                mesh: .generateBox(width: wall.axis == "x" ? partitionThickness : length,
-                                   height: h,
-                                   depth: wall.axis == "x" ? length : partitionThickness),
-                materials: [plaster]
+        var frontOpenings = windows(count: 2, length: w)
+        frontOpenings.append(Opening(start: -0.55, end: 0.55, bottom: 0, top: 2.10, isDoor: true))
+        buildWall(center: [0, 0, d / 2 - exteriorThickness / 2], length: w, alongX: true,
+                  openings: frontOpenings)
+
+        // MARK: zabudowa kuchenna z chmury
+        //
+        // Wykryte w skanie odcinki to fronty szafek (tam chmura ma setki
+        // punktów na metr), a nie ściany działowe. Rysujemy je jako korpusy
+        // 0,6 m głębokości i 0,9 m wysokości z blatem — wnętrze pokrywa się
+        // wtedy z tym, co realnie zmierzono.
+        var cabinetBody = PhysicallyBasedMaterial()
+        cabinetBody.baseColor = .init(tint: ScanColor(red: 0.88, green: 0.87, blue: 0.84, alpha: 1))
+        cabinetBody.roughness = .init(floatLiteral: 0.45)
+
+        var worktopMaterial = PhysicallyBasedMaterial()
+        worktopMaterial.baseColor = .init(tint: ScanColor(red: 0.22, green: 0.23, blue: 0.24, alpha: 1))
+        worktopMaterial.roughness = .init(floatLiteral: 0.30)
+        worktopMaterial.metallic = .init(floatLiteral: 0.15)
+
+        let cabinetDepth: Float = 0.60
+        let cabinetHeight: Float = 0.90
+
+        for (index, run) in (plan.cabinets ?? []).enumerated() {
+            let length = run.length
+            guard length > 0.4 else { continue }
+            let mid = (run.from + run.to) / 2
+
+            let body = ModelEntity(
+                mesh: .generateBox(width: run.axis == "x" ? cabinetDepth : length,
+                                   height: cabinetHeight,
+                                   depth: run.axis == "x" ? length : cabinetDepth,
+                                   cornerRadius: 0.012),
+                materials: [cabinetBody]
             )
-            box.position = wall.axis == "x"
-                ? SIMD3<Float>(wall.pos, h / 2, mid)
-                : SIMD3<Float>(mid, h / 2, wall.pos)
-            box.name = "scan-wall-partition-\(index)"
-            root.addChild(box)
+            body.position = run.axis == "x"
+                ? SIMD3<Float>(run.pos, cabinetHeight / 2, mid)
+                : SIMD3<Float>(mid, cabinetHeight / 2, run.pos)
+            body.name = "scan-cabinet-\(index)"
+            root.addChild(body)
+
+            let top = ModelEntity(
+                mesh: .generateBox(width: run.axis == "x" ? cabinetDepth + 0.04 : length,
+                                   height: 0.04,
+                                   depth: run.axis == "x" ? length : cabinetDepth + 0.04),
+                materials: [worktopMaterial]
+            )
+            top.position = run.axis == "x"
+                ? SIMD3<Float>(run.pos, cabinetHeight + 0.02, mid)
+                : SIMD3<Float>(mid, cabinetHeight + 0.02, run.pos)
+            top.name = "scan-worktop-\(index)"
+            root.addChild(top)
         }
 
         return root

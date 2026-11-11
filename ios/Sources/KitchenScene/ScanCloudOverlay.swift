@@ -37,24 +37,39 @@ public enum ScanCloudOverlay {
 
     /// Wczytuje chmurę i przelicza ją do układu sceny (metry).
     /// Zwraca nil, jeśli pliku nie ma albo parser nie da rady.
-    public static func loadSceneCloud(plan: ScanPlan, maxPoints: Int = 260_000) -> PointCloud? {
+    public static func loadSceneCloud(plan: ScanPlan, maxPoints: Int = 420_000) -> PointCloud? {
         guard let url = bundledCloudURL(),
               let data = try? Data(contentsOf: url),
               let cloud = try? PLYParser.parse(data: data) else { return nil }
 
         let scale = cloud.unitScaleToMeters
-        let decimated = cloud.decimated(maxPoints: maxPoints)
-        var positions: [SIMD3<Float>] = []
-        positions.reserveCapacity(decimated.count)
-        for p in decimated.positions {
-            positions.append(plan.scenePoint(p * scale))
+
+        // PRZYCIĘCIE DO POMIESZCZENIA: skan obejmuje więcej niż jedno
+        // pomieszczenie (zakres pionu 7,5 m przy wysokości ścian 2,9 m), więc
+        // bez tego punkty wiszą nad dachem i wystają poza ściany —
+        // „chmura nie pasuje do ścian".
+        let halfW = plan.width / 2 + 0.35
+        let halfD = plan.depth / 2 + 0.35
+        let lowY: Float = -0.35
+        let highY = plan.height + 0.35
+
+        var inside: [SIMD3<Float>] = []
+        inside.reserveCapacity(cloud.count)
+        for raw in cloud.positions {
+            let p = plan.scenePoint(raw * scale)
+            if abs(p.x) <= halfW, abs(p.z) <= halfD, p.y >= lowY, p.y <= highY {
+                inside.append(p)
+            }
         }
-        let colors = decimated.colors
-        return PointCloud(positions: positions, colors: colors)
+
+        // decymacja po przycięciu — punkty spoza pomieszczenia nie zabierają limitu
+        let filtered = PointCloud(positions: inside)
+        let decimated = filtered.decimated(maxPoints: maxPoints)
+        return PointCloud(positions: decimated.positions, colors: nil)
     }
 
     /// Encja chmury w układzie domu — bez dodatkowego centrowania.
-    public static func entity(plan: ScanPlan, maxPoints: Int = 260_000) -> Entity {
+    public static func entity(plan: ScanPlan, maxPoints: Int = 420_000) -> Entity {
         let root = Entity()
         root.name = "scan-overlay"
         guard let cloud = loadSceneCloud(plan: plan, maxPoints: maxPoints) else { return root }

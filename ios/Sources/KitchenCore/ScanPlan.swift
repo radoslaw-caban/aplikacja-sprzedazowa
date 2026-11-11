@@ -26,6 +26,8 @@ public struct ScanPlan: Codable, Sendable {
     public let width: Float
     public let depth: Float
     public let walls: [Wall]
+    /// Odcinki zabudowy kuchennej wykryte w chmurze (szafki, nie ściany).
+    public let cabinets: [Wall]?
 
     /// Wyśrodkowanie planu w chmurze (współrzędne chmury, m).
     /// Pozwala nałożyć chmurę na zbudowany dom 1:1.
@@ -54,13 +56,15 @@ public struct ScanPlan: Codable, Sendable {
     }
 
     public init(source: String, points: Int, height: Float, width: Float, depth: Float,
-                walls: [Wall], center: Center = Center(x: 0, y: 0), floor: Float = 0, up: String = "z") {
+                walls: [Wall], cabinets: [Wall]? = nil,
+                center: Center = Center(x: 0, y: 0), floor: Float = 0, up: String = "z") {
         self.source = source
         self.points = points
         self.height = height
         self.width = width
         self.depth = depth
         self.walls = walls
+        self.cabinets = cabinets
         self.center = center
         self.floor = floor
         self.up = up
