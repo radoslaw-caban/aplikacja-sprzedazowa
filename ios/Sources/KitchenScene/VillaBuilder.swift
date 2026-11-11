@@ -369,7 +369,8 @@ public enum VillaBuilder {
         }
         for (i, spot) in bushSpots.enumerated() {
             // najpierw prawdziwy model rośliny, kula tylko jako zapas
-            if let plant = ModelLibrary.entity(named: "TerracePlant", targetSize: 0.75) {
+            if let plant = ModelLibrary.entity(named: "TerracePlant", targetSize: 0.6 + Float(i % 3) * 0.18) {
+                plant.orientation = simd_quatf(angle: Float(i) * 1.1, axis: [0, 1, 0])
                 plant.position = spot
                 plant.name = "bush-\(i)"
                 root.addChild(plant)

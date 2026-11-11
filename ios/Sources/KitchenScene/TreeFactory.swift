@@ -209,6 +209,21 @@ enum TreeFactory {
             let end = start + direction * length
             trunk.addTube(a: start, b: end, radiusA: radius, radiusB: radius * 0.68, sides: depth == 0 ? 7 : 5)
 
+            // LIŚCIE WZDŁUŻ GAŁĘZI, nie tylko na czubkach — inaczej korona
+            // to kilka kęp na końcach i drzewo wygląda jak palma.
+            if depth >= 2 {
+                let alongCount = 2 + Int(rng.range(0, 3))
+                for _ in 0..<alongCount {
+                    let t = rng.range(0.3, 0.85)
+                    let at = start + direction * (length * t)
+                    let size = baseHeight * rng.range(0.055, 0.115) * spread
+                    let up = normalize(SIMD3(rng.signed(0.9), 1, rng.signed(0.9)))
+                    let right = normalize(cross(up, SIMD3(rng.signed(1), rng.signed(0.4), rng.signed(1))))
+                    foliage.addQuad(center: at + SIMD3(rng.signed(size), rng.signed(size), rng.signed(size)),
+                                    right: right * size, up: up * size)
+                }
+            }
+
             if depth >= 3 || radius < baseHeight * 0.0022 {
                 // koniec gałęzi: kępa liści z kilku kart
                 let count = 6 + Int(rng.range(0, 4))
@@ -301,7 +316,7 @@ enum TreeFactory {
                            baseHeight: baseHeight)
         }
         var white = barkMaterial()
-        white.baseColor = .init(tint: TreeColor(red: 0.94, green: 0.93, blue: 0.88, alpha: 1))
+        white.baseColor = .init(tint: TreeColor(red: 0.80, green: 0.78, blue: 0.72, alpha: 1))
         let leafDesc = foliage.descriptor("birch-leaves")
         let leafMesh = leafDesc.flatMap { try? MeshResource.generate(from: [$0]) }
         return Variant(name: "birch", trunkMesh: trunkMesh, trunkMaterial: white,

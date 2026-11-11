@@ -201,8 +201,20 @@ public enum SceneBuilder {
     /// Kierunkowe światło dzienne jako komponent (na macOS nie ma `.shadow`).
     @MainActor
     public static func sunlight() -> Entity {
+        let sunEntity = makeSun()
+        // Drugie, słabe światło z przeciwnej strony: bez niego zacienione
+        // strony drzew i elewacji były czarne (scena „nocna" w dzień).
+        let fillEntity = makeFill()
+        let root = Entity()
+        root.addChild(sunEntity)
+        root.addChild(fillEntity)
+        return root
+    }
+
+    @MainActor
+    static func makeSun() -> Entity {
         var sun = DirectionalLightComponent()
-        sun.intensity = 3200
+        sun.intensity = 5200
         sun.color = .init(red: 1, green: 0.96, blue: 0.9, alpha: 1)
 
         let entity = Entity()
@@ -212,6 +224,18 @@ public enum SceneBuilder {
         entity.components.set(DirectionalLightComponent.Shadow(maximumDistance: 60, depthBias: 1.0))
         #endif
         entity.orientation = simd_quatf(angle: -.pi / 4, axis: [1, 0, 0])
+        return entity
+    }
+
+    /// Światło wypełniające: chłodne, bez cienia, tylko rozjaśnia mroki.
+    @MainActor
+    static func makeFill() -> Entity {
+        var fill = DirectionalLightComponent()
+        fill.intensity = 900
+        fill.color = .init(red: 0.72, green: 0.80, blue: 0.92, alpha: 1)
+        let entity = Entity()
+        entity.components.set(fill)
+        entity.orientation = simd_quatf(angle: .pi * 0.75, axis: [1, 0, 0])
         return entity
     }
 
