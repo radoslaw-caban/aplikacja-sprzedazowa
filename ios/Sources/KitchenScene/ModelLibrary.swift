@@ -17,10 +17,18 @@ public enum ModelLibrary {
     /// Spis modeli z licencjami (wymóg CC-BY: podanie autora).
     public static let catalog: [Entry] = [
         Entry(name: "IslandTree", license: "CC0", author: "Poly Haven"),
+        Entry(name: "IslandTree_LOD1", license: "CC0", author: "Poly Haven"),
+        Entry(name: "IslandTree_LOD2", license: "CC0", author: "Poly Haven"),
         Entry(name: "TeslaModel3", license: "CC-BY-4.0",
               author: "Ameer Studio · https://sketchfab.com/3d-models/tesla-2018-model-3-5ef9b845aaf44203b6d04e2c677e444f"),
         Entry(name: "TerraceSofa", license: "CC0", author: "Poly Haven · Sofa 01"),
         Entry(name: "TerracePlant", license: "CC0", author: "Poly Haven · Anthurium Botany 01"),
+        Entry(name: "boulder_01", license: "CC0", author: "Poly Haven · Boulder 01"),
+        Entry(name: "stone_01", license: "CC0", author: "Poly Haven · Stone 01"),
+        Entry(name: "fern_02", license: "CC0", author: "Poly Haven · Fern 02"),
+        Entry(name: "nettle_plant", license: "CC0", author: "Poly Haven · Nettle Plant"),
+        Entry(name: "shrub_01", license: "CC0", author: "Poly Haven · Shrub 01"),
+        Entry(name: "grass_medium_01", license: "CC0", author: "Poly Haven · Grass Medium 01"),
     ]
 
     private static var cache: [String: Entity] = [:]

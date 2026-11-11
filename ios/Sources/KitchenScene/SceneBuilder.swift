@@ -223,7 +223,7 @@ public enum SceneBuilder {
         // cień to osobny komponent (macOS SDK go nie ma)
         // Zasięg 60 m kończył się na trawniku — drzewa i willa rzucały cień
         // tylko w promieniu kilkudziesięciu metrów, dalej scena była „płaska".
-        entity.components.set(DirectionalLightComponent.Shadow(maximumDistance: 120, depthBias: 0.5))
+        entity.components.set(DirectionalLightComponent.Shadow(maximumDistance: 45, depthBias: 0.5))
         #endif
         // Słońce z góry-lewej-przodu: cień pada w prawo i do tyłu, jak na
         // zdjęciach architektonicznych (nie „pod światło").

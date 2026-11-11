@@ -13,14 +13,16 @@ public enum EnvironmentBuilder {
 
     public struct Options: Sendable {
         public var radius: Float = 210          // promień terenu z teksturą (m)
-        public var forestTrees: Int = 900       // gęsty las wokół posesji
+        public var forestTrees: Int = 260       // gęsty las; z bliska pełne drzewa, z daleka proxy (LOD)
         public var forestBackdrop: Bool = true  // uproszczone tło lasu (pierścień)
-        public var grassTufts: Int = 9000
-        public var undergrowth: Int = 260   // krzaki w lesie (podszycie)       // kępy trawy przy domu (5 cm)
-        public var fogBanks: Int = 40           // mgła w dolinach
+        public var grassTufts: Int = 700
+        public var undergrowth: Int = 30    // krzaki w lesie (podszycie)
+        public var boulders: Int = 24        // głazy i kamienie
+        public var understoryPlants: Int = 40   // paprocie/pokrzywy/krzewy
+        public var fogBanks: Int = 6            // mgła w dolinach
         public var mountains: Int = 26
         public var birds: Int = 6
-        public var clouds: Int = 34
+        public var clouds: Int = 10
         public var seed: UInt64 = 20261111
         public init() {}
     }
@@ -66,20 +68,18 @@ public enum EnvironmentBuilder {
         root.addChild(hillBackdrop(radius: options.radius * 2.6,
                                    heightRange: 18...54,
                                    tint: (0.30, 0.40, 0.30)))
-        root.addChild(fogRings(radius: options.radius * 3.1, count: 24, height: 4, opacity: 0.05))
         root.addChild(hillBackdrop(radius: options.radius * 4.0,
                                    heightRange: 34...92,
                                    tint: (0.38, 0.47, 0.50)))
-        root.addChild(fogRings(radius: options.radius * 5.0, count: 22, height: 6, opacity: 0.06))
         root.addChild(hillBackdrop(radius: options.radius * 6.2,
                                    heightRange: 60...150,
                                    tint: (0.50, 0.58, 0.64)))
         root.addChild(mountainRange(options: options, rng: &rng))
-        root.addChild(fogRings(radius: options.radius * 2.0, count: 24, height: 4, opacity: 0.05))
         root.addChild(fogRings(radius: options.radius * 2.8, count: 22, height: 22, opacity: 0.18))
-        root.addChild(fogRings(radius: options.radius * 4.2, count: 22, height: 7, opacity: 0.07))
         root.addChild(clouds(options: options, rng: &rng))
         root.addChild(forest(options: options, rng: &rng, room: room))
+        root.addChild(rocks(options: options, rng: &rng, room: room))
+        root.addChild(understory(options: options, rng: &rng, room: room))
         root.addChild(grassTufts(options: options, rng: &rng, room: room))
         root.addChild(fence(room: room))
         root.addChild(sidewalk(room: room))
@@ -652,15 +652,24 @@ public enum EnvironmentBuilder {
             let height = behind ? rng.range(13.0, 30.0) : rng.range(8.0, 21.0)
 
             let variant = variants[Int(rng.next() * Float(variants.count)) % variants.count]
-            let tree = TreeFactory.instance(
-                variant,
-                height: height,
-                rotation: rng.range(0, .pi * 2),
-                squash: rng.range(0.78, 1.22),
-                tilt: rng.signed(0.12)
-            )
+            let rotation = rng.range(0, .pi * 2)
+            let squash = rng.range(0.78, 1.22)
+            let tilt = rng.signed(0.12)
+
+            // LOD: pełne drzewo z bliska, uproszczone (pień + 3 karty) z oddali
+            let tree = Entity()
+            tree.name = "lod-tree-\(placed)"
             tree.position = [x, terrainHeight(x, z), z]
-            tree.name = "tree-\(placed)"
+
+            let full = TreeFactory.instance(variant, height: height, rotation: rotation, squash: squash, tilt: tilt)
+            full.name = "lod0"
+            tree.addChild(full)
+
+            let proxy = TreeFactory.proxy(variant, height: height, rotation: rotation, squash: squash, tilt: tilt)
+            proxy.name = "lod1"
+            proxy.isEnabled = false
+            tree.addChild(proxy)
+
             root.addChild(tree)
             shadowSpots.append((SIMD3(x, terrainHeight(x, z) + 0.03, z), height * 0.24))
             placed += 1
@@ -716,6 +725,82 @@ public enum EnvironmentBuilder {
     /// OGRODZENIE WILLI: murowane słupki + czarne metalowe pręty, pełna brama
     /// dwuskrzydłowa w osi podjazdu. Wcześniej był tu płot drewniany — wyglądał
     /// jak zagroda na konie, nie jak ogrodzenie willi.
+    /// SKAŁY: głazy i kamienie — w lesie, wzdłuż rowu i pojedyncze na łące.
+    /// Wcześniej teren był idealnie gładki, bez żadnego „twardego" elementu.
+    static func rocks(options: Options, rng: inout RNG, room: Room) -> Entity {
+        let root = Entity()
+        root.name = "rocks"
+
+        let houseRadius = max(Float(room.width), Float(room.depth)) / 2000 + 12
+        let boulders = max(0, options.boulders)
+
+        for i in 0..<boulders {
+            let angle = rng.range(0, .pi * 2)
+            let near = rng.next() < 0.6
+            let distance = near ? rng.range(houseRadius + 4, 70) : rng.range(70, options.radius * 0.85)
+            let x = cos(angle) * distance
+            let z = sin(angle) * distance
+
+            // strefa kamery i podjazd — tam skały tylko psują widok
+            if abs(x) < 46 && z > -12 && z < 96 { continue }
+            if z > 30 && abs(x) < 16 { continue }
+
+            let big = rng.next() < 0.6
+            let name = big ? "boulder_01" : "stone_01"
+            let size = big ? rng.range(0.5, 1.9) : rng.range(0.2, 0.7)
+            guard let rock = ModelLibrary.entity(named: name, targetSize: size) else { continue }
+            rock.position = [x, terrainHeight(x, z), z]
+            rock.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
+            rock.name = "rock-\(i)"
+            root.addChild(rock)
+        }
+
+        // pojedyncze kamienie przy rowie i wzdłuż płotu (detal blisko domu)
+        for i in 0..<10 {
+            let side = i % 2 == 0 ? Float(1) : Float(-1)
+            let x = side * rng.range(4, 18)
+            let z = Float(room.depth / 2000) + 14 + rng.range(1.5, 3.2)
+            guard let stone = ModelLibrary.entity(named: "stone_01", targetSize: rng.range(0.25, 0.6)) else { continue }
+            stone.position = [x, terrainHeight(x, z), z]
+            stone.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
+            root.addChild(stone)
+        }
+        return root
+    }
+
+    /// ROŚLINY MIĘDZY DRZEWAMI: paprocie, pokrzywy, krzewy — runo leśne.
+    /// Bez tego las to same pnie na równej trawie.
+    static func understory(options: Options, rng: inout RNG, room: Room) -> Entity {
+        let root = Entity()
+        root.name = "understory"
+
+        let houseRadius = max(Float(room.width), Float(room.depth)) / 2000 + 12
+        let kinds: [(String, ClosedRange<Float>)] = [
+            ("fern_02", 0.35...0.85),
+            ("nettle_plant", 0.4...0.9),
+            ("shrub_01", 0.5...1.4),
+            ("grass_medium_01", 0.4...0.8),
+        ]
+
+        for i in 0..<options.understoryPlants {
+            let angle = rng.range(0, .pi * 2)
+            let near = rng.next() < 0.5
+            let distance = near ? rng.range(houseRadius + 5, 55) : rng.range(55, options.radius * 0.7)
+            let x = cos(angle) * distance
+            let z = sin(angle) * distance
+
+            if abs(x) < 44 && z > -12 && z < 92 { continue }
+
+            let kind = kinds[Int(rng.next() * Float(kinds.count)) % kinds.count]
+            guard let plant = ModelLibrary.entity(named: kind.0, targetSize: rng.range(kind.1.lowerBound, kind.1.upperBound)) else { continue }
+            plant.position = [x, terrainHeight(x, z), z]
+            plant.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
+            plant.name = "understory-\(i)"
+            root.addChild(plant)
+        }
+        return root
+    }
+
     static func fence(room: Room) -> Entity {
         let root = Entity()
         root.name = "fence"

@@ -50,6 +50,14 @@ public struct PreviewCamera: Sendable {
         let d = Float(room.depth / 1000)
         let h = Float(room.height / 1000)
         let distance = max(w, d) * 2.6 + 12
+        // Debug: KITCHEN_CAMERA=back pokazuje kadr od strony lasu
+        // (weryfikacja skał i runa leśnego, których od frontu nie widać).
+        if ProcessInfo.processInfo.environment["KITCHEN_CAMERA"] == "back" {
+            return PreviewCamera(
+                position: [distance * 0.55, h + 9, -(d / 2 + distance)],
+                target: [0, h * 0.45, 0]
+            )
+        }
         return PreviewCamera(
             position: [-distance * 0.55, h + 9, d / 2 + distance],
             target: [0, h * 0.45, 0]

@@ -57,6 +57,24 @@ enum TreeFactory {
             }
         }
 
+        /// Stożek (uproszczone igliwie / korona) — wierzchołek do góry.
+        public mutating func addCone(center: SIMD3<Float>, height: Float, radius: Float, sides: Int = 6) {
+            let apex = center + SIMD3<Float>(0, height / 2, 0)
+            let baseY = center.y - height / 2
+            for i in 0..<sides {
+                let a0 = Float(i) / Float(sides) * .pi * 2
+                let a1 = Float(i + 1) / Float(sides) * .pi * 2
+                let p0 = SIMD3<Float>(center.x + cos(a0) * radius, baseY, center.z + sin(a0) * radius)
+                let p1 = SIMD3<Float>(center.x + cos(a1) * radius, baseY, center.z + sin(a1) * radius)
+                let n = normalize(cross(p1 - p0, apex - p0))
+                let base = UInt32(positions.count)
+                positions += [p0, p1, apex]
+                normals += [n, n, n]
+                uvs += [SIMD2(0, 0), SIMD2(1, 0), SIMD2(0.5, 1)]
+                indices += [base, base + 1, base + 2]
+            }
+        }
+
         /// Zwężająca się rura (gałąź) między dwoma punktami.
         mutating func addTube(a: SIMD3<Float>, b: SIMD3<Float>, radiusA: Float, radiusB: Float, sides: Int = 5) {
             let axis = b - a
@@ -384,6 +402,70 @@ enum TreeFactory {
     /// Instancja wariantu: skala = docelowa wysokość, losowy obrót.
     /// Siatka i materiały są wspólne — to jedno pole i jedna encja na drzewo.
     @MainActor
+    /// Uproszczony zamiennik drzewa dla oddali: pień + kilka dużych kart liści.
+    /// Pełne drzewo to tysiące kart; z 60 m widać tylko sylwetkę.
+    static func proxy(
+        _ variant: Variant,
+        height: Float,
+        rotation: Float,
+        squash: Float = 1,
+        tilt: Float = 0
+    ) -> Entity {
+        let root = Entity()
+        let scale = height / variant.baseHeight
+
+        let trunk = ModelEntity(
+            mesh: .generateCylinder(height: height * 0.62, radius: max(0.06, height * 0.018)),
+            materials: [variant.trunkMaterial]
+        )
+        trunk.position = [0, height * 0.31, 0]
+        trunk.name = "\(variant.name)-proxy-trunk"
+        root.addChild(trunk)
+
+        if let leafMaterial = variant.leafMaterial {
+            var builder = MeshBuilder()
+            let conifer = variant.name.contains("spruce") || variant.name.contains("fir")
+
+            if conifer {
+                // iglaste: stożki z igliwia — z 60 m czytają się jak świerk
+                for tier in 0..<4 {
+                    let t = Float(tier) / 4
+                    let segHeight = height * (0.34 - t * 0.05)
+                    let segRadius = height * (0.20 - t * 0.04)
+                    let y = height * (0.34 + t * 0.19)
+                    builder.addCone(center: [0, y, 0], height: segHeight, radius: segRadius, sides: 7)
+                }
+            } else {
+                // liściaste: kula z 5 kart — pełna sylwetka, 10 trójkątów
+                let canopyY = height * 0.66
+                let radius = height * 0.30
+                for i in 0..<5 {
+                    let angle = Float(i) / 5 * .pi
+                    let right = SIMD3<Float>(cos(angle), 0, sin(angle)) * (radius * 2)
+                    let up = SIMD3<Float>(0, radius * 1.5, 0)
+                    builder.addQuad(center: [0, canopyY, 0], right: right, up: up, twoSided: false)
+                }
+                // dodatkowa karta pozioma — korona nie jest płaska z góry
+                builder.addQuad(center: [0, canopyY + radius * 0.35, 0],
+                                right: SIMD3(radius * 2, 0, 0), up: SIMD3(0, 0, radius * 2), twoSided: false)
+            }
+
+            let canopyDesc = builder.descriptor("canopy-proxy")
+            if let canopyDesc, let mesh = try? MeshResource.generate(from: [canopyDesc]) {
+                let canopy = ModelEntity(mesh: mesh, materials: [leafMaterial])
+                canopy.name = "\(variant.name)-proxy-leaves"
+                root.addChild(canopy)
+            }
+        }
+
+        root.scale = [scale * squash, scale, scale * squash]
+        root.orientation = simd_quatf(angle: rotation, axis: [0, 1, 0])
+        if tilt != 0 {
+            root.orientation = root.orientation * simd_quatf(angle: tilt, axis: [1, 0, 0])
+        }
+        return root
+    }
+
     static func instance(
         _ variant: Variant,
         height: Float,

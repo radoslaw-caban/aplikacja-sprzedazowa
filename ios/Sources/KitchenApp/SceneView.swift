@@ -33,6 +33,18 @@ struct SceneView: View {
     @State private var distanceScale: Float = 1
     @State private var lastDrag: CGSize = .zero
 
+    /// Cache sceny: przebudowujemy ją TYLKO gdy zmienią się dane.
+    /// Wcześniej `update:` kasowało i budowało całe otoczenie przy KAŻDEJ
+    /// zmianie stanu (także przy każdym ruchu kamery) — stąd 1 klatka na sekundy.
+    final class SceneCache {
+        var signature: Int = .min
+        var camera: Entity?
+        var environment: Entity?
+        var fitted: PreviewCamera?
+        var cabinetFocus: SIMD3<Float>?
+    }
+    @State private var cache = SceneCache()
+
     var body: some View {
         RealityView { content in
             if let sky = await EnvironmentArt.environmentResource() {
@@ -48,7 +60,9 @@ struct SceneView: View {
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
             if showEnvironment, scan == nil {
-                content.add(EnvironmentBuilder.makeEntity(room: room))
+                let environment = EnvironmentBuilder.makeEntity(room: room)
+                cache.environment = environment
+                content.add(environment)
             }
             let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
             let cabinetRoot = built.root
@@ -56,25 +70,59 @@ struct SceneView: View {
             let scanEntity = scanEntityToAdd()
             if let scanEntity { content.add(scanEntity) }
             // kadr: skan, a bez skanu — zabudowa (nie cały pokój)
-            let cam = makeCamera(scanEntity: scanEntity, built: built)
+            let base = baseCamera(scanEntity: scanEntity, built: built)
+            cache.fitted = base
+            let cam = makeCamera(base: base)
+            cache.camera = cam
+            cache.signature = sceneSignature
             content.add(cam)
             content.camera = .virtual
+
+            // LOD co klatkę: liczy odległości i przełącza gotowe encje (tanio)
+            var frames = 0
+            var lastLog = Date()
+            _ = content.subscribe(to: SceneEvents.Update.self) { _ in
+                if let environment = cache.environment, let camera = cache.camera {
+                    DetailLOD.update(root: environment, cameraPosition: camera.position(relativeTo: nil))
+                }
+                #if DEBUG
+                frames += 1
+                let now = Date()
+                if now.timeIntervalSince(lastLog) > 2 {
+                    let fps = Double(frames) / now.timeIntervalSince(lastLog)
+                    NSLog("[scena] %.1f kl./s", fps)
+                    frames = 0
+                    lastLog = now
+                }
+                #endif
+            }
         } update: { content in
-            content.entities.removeAll()
-            content.add(SceneBuilder.sunlight())
-            content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
-            if showEnvironment, scan == nil {
-                content.add(EnvironmentBuilder.makeEntity(room: room))
+            let signature = sceneSignature
+            if signature != cache.signature {
+                cache.signature = signature
+                content.entities.removeAll()
+                content.add(SceneBuilder.sunlight())
+                content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
+                if showEnvironment, scan == nil {
+                    let environment = EnvironmentBuilder.makeEntity(room: room)
+                    cache.environment = environment
+                    content.add(environment)
+                }
+                let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
+                content.add(built.root)
+                let scanEntity = scanEntityToAdd()
+                if let scanEntity { content.add(scanEntity) }
+
+                let base = baseCamera(scanEntity: scanEntity, built: built)
+                cache.fitted = base
+                let cam = makeCamera(base: base)
+                cache.camera = cam
+                content.add(cam)
+                content.camera = .virtual
+            } else if let cam = cache.camera, let base = cache.fitted {
+                // tylko kamera — kilkanaście operacji zamiast budowy całego świata
+                applyCameraControl(cam, base: base)
             }
-            let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
-            let cabinetRoot = built.root
-            content.add(cabinetRoot)
-            let scanEntity = scanEntityToAdd()
-            if let scanEntity { content.add(scanEntity) }
-            // kadr: skan, a bez skanu — zabudowa (nie cały pokój)
-            let cam = makeCamera(scanEntity: scanEntity, built: built)
-            content.add(cam)
-            content.camera = .virtual
         }
         .overlay {
             #if os(iOS)
@@ -89,6 +137,25 @@ struct SceneView: View {
         .simultaneousGesture(cameraZoom)
         #endif
         .background(Color(red: 0.93, green: 0.92, blue: 0.90))
+    }
+
+    /// Podpis danych sceny — tani do policzenia, zmienia się tylko przy realnych zmianach.
+    private var sceneSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(room.width); hasher.combine(room.depth); hasher.combine(room.height)
+        hasher.combine(cabinets.count)
+        for cabinet in cabinets {
+            hasher.combine(cabinet.id)
+            hasher.combine(cabinet.x); hasher.combine(cabinet.z)
+            hasher.combine(cabinet.width); hasher.combine(cabinet.height); hasher.combine(cabinet.depth)
+        }
+        hasher.combine(showEnvironment)
+        hasher.combine(interiorView)
+        hasher.combine(scan != nil)
+        hasher.combine(surfaceEntity != nil)
+        hasher.combine(showPoints)
+        hasher.combine(transform.scale); hasher.combine(transform.rotationDeg); hasher.combine(transform.offset.x); hasher.combine(transform.offset.z)
+        return hasher.finalize()
     }
 
     // MARK: - sterowanie kamerą
@@ -137,8 +204,7 @@ struct SceneView: View {
         return nil
     }
 
-    private func makeCamera(scanEntity: Entity?, built: KitchenScene.SceneBuilder.Built) -> Entity {
-        let base = baseCamera(scanEntity: scanEntity, built: built)
+    private func makeCamera(base: PreviewCamera) -> Entity {
         let cam = controlled(base)
 
         let camera = Entity()
@@ -171,6 +237,17 @@ struct SceneView: View {
     /// Zablokowany: przesuwamy cel i kamerę o `pan` (rzut na płaszczyznę XZ).
     /// Odblokowany: obracamy kamerę wokół celu o `yaw`/`pitch`, z odległością
     /// pomnożoną przez `distanceScale` (pinch).
+    /// Tania aktualizacja samej kamery (bez przebudowy sceny).
+    private func applyCameraControl(_ camera: Entity, base: PreviewCamera) {
+        let cam = controlled(base)
+        camera.position = cam.position
+        camera.look(at: cam.target, from: cam.position, relativeTo: nil)
+        if var perspective = camera.components[PerspectiveCameraComponent.self] {
+            perspective.fieldOfViewInDegrees = cam.verticalFOVDegrees
+            camera.components.set(perspective)
+        }
+    }
+
     private func controlled(_ base: PreviewCamera) -> PreviewCamera {
         let target = base.target + SIMD3<Float>(pan.x, 0, pan.y)
         var position = base.position + SIMD3<Float>(pan.x, 0, pan.y)
