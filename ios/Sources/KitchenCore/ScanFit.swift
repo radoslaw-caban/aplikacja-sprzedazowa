@@ -24,6 +24,8 @@ public enum ScanFit {
         /// gęstość najlepszej ściany (punkty na metr bieżący) — miara pewności
         public var wallStrength: Float
         public var isValid: Bool { floorCoverage > 0.02 && wallStrength > 20 }
+        /// Podłoga wystarcza do ustawienia poziomu i obrotu (ściany są WIP).
+        public var hasFloor: Bool { floorCoverage > 0.004 }
     }
 
     /// Wykrycie podłogi i ścian. Punkty w metrach, w układzie chmury.
@@ -251,6 +253,42 @@ public enum ScanFit {
         return angle
     }
 
+    /// Orientacja pomieszczenia z obrysu podłogi: szukamy kąta, przy którym
+    /// prostokąt opisujący punkty podłogi ma najmniejsze pole (rotating calipers).
+    /// To działa dla pokoi prostokątnych niezależnie od gęstości ścian.
+    public static func floorOrientation(points: [SIMD3<Float>], floorY: Float, band: Float = 0.06) -> Double? {
+        var floor: [SIMD2<Float>] = []
+        floor.reserveCapacity(points.count / 4)
+        for p in points where abs(p.y - floorY) < band {
+            floor.append(SIMD2(p.x, p.z))
+        }
+        guard floor.count > 200 else { return nil }
+
+        // krok 0,5° po pełnym obrocie; szukamy minimalnego pola prostokąta
+        var bestAngle: Double = 0
+        var bestArea = Float.greatestFiniteMagnitude
+        var angle: Double = 0
+        while angle < 90 {
+            let a = angle * .pi / 180
+            let c = Float(cos(a)), s = Float(sin(a))
+            var minU = Float.greatestFiniteMagnitude, maxU = -Float.greatestFiniteMagnitude
+            var minV = Float.greatestFiniteMagnitude, maxV = -Float.greatestFiniteMagnitude
+            for p in floor {
+                let u = p.x * c + p.y * s
+                let v = -p.x * s + p.y * c
+                minU = Swift.min(minU, u); maxU = Swift.max(maxU, u)
+                minV = Swift.min(minV, v); maxV = Swift.max(maxV, v)
+            }
+            let area = (maxU - minU) * (maxV - minV)
+            if area < bestArea {
+                bestArea = area
+                bestAngle = angle
+            }
+            angle += 0.5
+        }
+        return bestAngle
+    }
+
     /// Pewna część dopasowania: podłoga na y = 0 i środek chmury nad środkiem pokoju.
     /// Obrót ścian robi użytkownik narzędziem dwupunktowym (sprawdzone).
     public static func alignFloorOnly(
@@ -259,11 +297,31 @@ public enum ScanFit {
         room: Room,
         currentScale: Double
     ) -> ScanTransform {
-        _ = (room, points)
+        let angle = floorOrientation(points: points, floorY: result.floorY) ?? 0
+
+        // po obrocie wyśrodkuj obrys podłogi na środku pokoju
+        // (ta sama konwencja co ScanTransform.apply)
+        let a = angle * .pi / 180
+        let c = Float(cos(a)), s = Float(sin(a))
+        var minX = Float.greatestFiniteMagnitude, maxX = -Float.greatestFiniteMagnitude
+        var minZ = Float.greatestFiniteMagnitude, maxZ = -Float.greatestFiniteMagnitude
+        for p in points where abs(p.y - result.floorY) < 0.06 {
+            let x = p.x * c + p.z * s
+            let z = -p.x * s + p.z * c
+            minX = Swift.min(minX, x); maxX = Swift.max(maxX, x)
+            minZ = Swift.min(minZ, z); maxZ = Swift.max(maxZ, z)
+        }
+        let cx = (minX + maxX) / 2
+        let cz = (minZ + maxZ) / 2
+
         return ScanTransform(
             scale: currentScale,
-            rotationDeg: 0,
-            offset: SIMD3(0, -Double(result.floorY) * currentScale, 0)
+            rotationDeg: angle,
+            offset: SIMD3(
+                -Double(cx) * currentScale,
+                -Double(result.floorY) * currentScale,
+                -Double(cz) * currentScale
+            )
         )
     }
 

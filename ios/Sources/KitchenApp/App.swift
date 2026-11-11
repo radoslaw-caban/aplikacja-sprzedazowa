@@ -230,8 +230,25 @@ struct ContentView: View {
         )
         transform = fitted
         scale = fitted.scale
-        status = String(format: "skan dopasowany (skala %.2f)", fitted.scale)
-        Task { await rebuildSurface(cloud: scan) }
+        // poprawka: podłoga skanu na 0 (obrys nie mówi, gdzie jest podłoga)
+        let unitK = scan.unitScaleToMeters
+        let pts = scan.decimated(maxPoints: 80_000).positions.map { $0 * unitK }
+        Task {
+            let fit = await Task.detached(priority: .userInitiated) { ScanFit.detect(points: pts) }.value
+            if fit.hasFloor {
+                let roomCopy = room
+                let scaleCopy = fitted.scale
+                let aligned = await Task.detached(priority: .userInitiated) {
+                    ScanFit.alignFloorOnly(points: pts, result: fit, room: roomCopy, currentScale: scaleCopy)
+                }.value
+                transform = aligned
+                rotationDeg = aligned.rotationDeg.truncatingRemainder(dividingBy: 360)
+                status = String(format: "podłoga %.2f m, obrót %.0f°", fit.floorY, aligned.rotationDeg)
+                await rebuildSurface(cloud: scan, transform: aligned)
+            } else {
+                await rebuildSurface(cloud: scan, transform: fitted)
+            }
+        }
     }
 
     /// Suwaki obrotu i skali przeliczają transformację od nowa (z zachowaniem auto-dopasowania).
@@ -252,9 +269,9 @@ struct ContentView: View {
     }
 
     /// Powierzchnia w tle (surface nets), encja budowana raz na wątku głównym.
-    private func rebuildSurface(cloud: PointCloud? = nil) async {
+    private func rebuildSurface(cloud: PointCloud? = nil, transform explicit: ScanTransform? = nil) async {
         guard let scan = cloud ?? self.scan else { surfaceEntity = nil; return }
-        let t = transform
+        let t = explicit ?? transform
         let t0 = Date()
         status = "liczę powierzchnię skanu…"
         let built = await Task.detached(priority: .userInitiated) { () -> (VoxelSurfaceBuilder.Geometry, VoxelGrid) in
@@ -284,8 +301,8 @@ struct ContentView: View {
         let fit = await Task.detached(priority: .userInitiated) {
             ScanFit.detect(points: points)
         }.value
-        guard fit.isValid else {
-            status = "nie znalazłem podłogi w skanie"
+        guard fit.hasFloor else {
+            status = String(format: "słaba podłoga: pokrycie %.1f%%", fit.floorCoverage * 100)
             return
         }
         transform = ScanFit.alignFloorOnly(points: points, result: fit, room: room, currentScale: transform.scale)

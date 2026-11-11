@@ -44,6 +44,18 @@ public struct PreviewCamera: Sendable {
         return PreviewCamera(position: [px, eyeY, pz], target: target)
     }
 
+    /// Kadr z rzeczywistego obrysu geometrii: kamera na zewnątrz bryły,
+    /// na wysokości oczu, patrzy w środek.
+    public static func fit(center: SIMD3<Float>, extents: SIMD3<Float>) -> PreviewCamera {
+        let radius = max(extents.x, max(extents.y, extents.z)) / 2
+        let distance = radius * 2.2 + 0.6
+        let eyeY = center.y + radius * 0.35
+        return PreviewCamera(
+            position: [center.x, eyeY, center.z + distance],
+            target: center
+        )
+    }
+
     /// Promień z kamery przez punkt ekranu (0…1) — do trafiania w chmurę.
     public func ray(normalizedPoint p: CGPoint, aspect: Float) -> (origin: SIMD3<Float>, direction: SIMD3<Float>) {
         VoxelGrid.ray(

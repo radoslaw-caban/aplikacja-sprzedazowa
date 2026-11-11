@@ -326,6 +326,49 @@ final class SurfaceNetsTests: XCTestCase {
         XCTAssertTrue(SurfaceNets.build(points: []).isEmpty)
     }
 
+    func testFloorOrientationFindsRoomAngle() {
+        // podłoga 5 × 4 m obrócona o 30° (plus szum) — orientacja musi wyjść ~30° (mod 90)
+        var pts: [SIMD3<Float>] = []
+        let a = 30.0 * .pi / 180
+        var seed: UInt64 = 7
+        func rnd() -> Float {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Float((seed >> 33) & 0xFFFF) / Float(0xFFFF)
+        }
+        for _ in 0..<20_000 {
+            let x = rnd() * 5, z = rnd() * 4
+            let rx = x * Float(cos(a)) + z * Float(sin(a))
+            let rz = -x * Float(sin(a)) + z * Float(cos(a))
+            pts.append(SIMD3(rx, 0, rz))
+        }
+        guard let angle = ScanFit.floorOrientation(points: pts, floorY: 0) else {
+            return XCTFail("brak orientacji")
+        }
+        // pokój obrócony o 30° w konwencji testu ma krawędzie pod 60° (i 150°);
+        // wystarczy, że wykryty kąt jest jednym z tych kierunków (mod 90)
+        func circularDistance(_ a: Double, _ b: Double) -> Double {
+            let d = abs(a - b).truncatingRemainder(dividingBy: 90)
+            return Swift.min(d, 90 - d)
+        }
+        let mod = angle.truncatingRemainder(dividingBy: 90)
+        let diff = Swift.min(circularDistance(mod, 60), circularDistance(mod, 30))
+        XCTAssertLessThan(diff, 3.0, "orientacja podłogi: \(angle)°")
+
+        // po wyrównaniu prostokąt podłogi jest osiowo równoległy: pole ≈ 20 m²
+        let r = ScanFit.Result(floorY: 0, wallAngleDeg: angle, wall1Offset: 0, wall2Offset: 0,
+                               floorCoverage: 1, wallStrength: 100)
+        let t = ScanFit.alignFloorOnly(points: pts, result: r, room: Room(width: 5000, depth: 4000, height: 2600), currentScale: 1)
+        var minX = Float.greatestFiniteMagnitude, maxX = -Float.greatestFiniteMagnitude
+        var minZ = Float.greatestFiniteMagnitude, maxZ = -Float.greatestFiniteMagnitude
+        for p in pts {
+            let q = t.apply(p)
+            minX = Swift.min(minX, q.x); maxX = Swift.max(maxX, q.x)
+            minZ = Swift.min(minZ, q.z); maxZ = Swift.max(maxZ, q.z)
+        }
+        let area = Double((maxX - minX) * (maxZ - minZ))
+        XCTAssertEqual(area, 20, accuracy: 1.5, "pole po wyrównaniu")
+    }
+
     func testTooFewPoints() {
         XCTAssertTrue(SurfaceNets.build(points: [SIMD3(0, 0, 0), SIMD3(1, 1, 1)]).isEmpty)
     }
@@ -390,6 +433,49 @@ final class ScanFitTests: XCTestCase {
         }
         XCTAssertEqual(Double(minY), 0, accuracy: 0.08)
         XCTAssertEqual(Double(maxY - minY), 2.6, accuracy: 0.25)
+    }
+
+    func testFloorOrientationFindsRoomAngle() {
+        // podłoga 5 × 4 m obrócona o 30° (plus szum) — orientacja musi wyjść ~30° (mod 90)
+        var pts: [SIMD3<Float>] = []
+        let a = 30.0 * .pi / 180
+        var seed: UInt64 = 7
+        func rnd() -> Float {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Float((seed >> 33) & 0xFFFF) / Float(0xFFFF)
+        }
+        for _ in 0..<20_000 {
+            let x = rnd() * 5, z = rnd() * 4
+            let rx = x * Float(cos(a)) + z * Float(sin(a))
+            let rz = -x * Float(sin(a)) + z * Float(cos(a))
+            pts.append(SIMD3(rx, 0, rz))
+        }
+        guard let angle = ScanFit.floorOrientation(points: pts, floorY: 0) else {
+            return XCTFail("brak orientacji")
+        }
+        // pokój obrócony o 30° w konwencji testu ma krawędzie pod 60° (i 150°);
+        // wystarczy, że wykryty kąt jest jednym z tych kierunków (mod 90)
+        func circularDistance(_ a: Double, _ b: Double) -> Double {
+            let d = abs(a - b).truncatingRemainder(dividingBy: 90)
+            return Swift.min(d, 90 - d)
+        }
+        let mod = angle.truncatingRemainder(dividingBy: 90)
+        let diff = Swift.min(circularDistance(mod, 60), circularDistance(mod, 30))
+        XCTAssertLessThan(diff, 3.0, "orientacja podłogi: \(angle)°")
+
+        // po wyrównaniu prostokąt podłogi jest osiowo równoległy: pole ≈ 20 m²
+        let r = ScanFit.Result(floorY: 0, wallAngleDeg: angle, wall1Offset: 0, wall2Offset: 0,
+                               floorCoverage: 1, wallStrength: 100)
+        let t = ScanFit.alignFloorOnly(points: pts, result: r, room: Room(width: 5000, depth: 4000, height: 2600), currentScale: 1)
+        var minX = Float.greatestFiniteMagnitude, maxX = -Float.greatestFiniteMagnitude
+        var minZ = Float.greatestFiniteMagnitude, maxZ = -Float.greatestFiniteMagnitude
+        for p in pts {
+            let q = t.apply(p)
+            minX = Swift.min(minX, q.x); maxX = Swift.max(maxX, q.x)
+            minZ = Swift.min(minZ, q.z); maxZ = Swift.max(maxZ, q.z)
+        }
+        let area = Double((maxX - minX) * (maxZ - minZ))
+        XCTAssertEqual(area, 20, accuracy: 1.5, "pole po wyrównaniu")
     }
 
     func testTooFewPoints() {

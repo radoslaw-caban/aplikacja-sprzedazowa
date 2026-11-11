@@ -24,16 +24,20 @@ struct SceneView: View {
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
             content.add(SceneBuilder.build(cabinets: cabinets, includeFloor: false).root)
-            addScan(to: content)
-            content.add(makeCamera())
+            let scanEntity = scanEntityToAdd()
+            if let scanEntity { content.add(scanEntity) }
+            let cam = makeCamera(bounds: scanEntity?.visualBounds(relativeTo: nil))
+            content.add(cam)
             content.camera = .virtual
         } update: { content in
             content.entities.removeAll()
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
             content.add(SceneBuilder.build(cabinets: cabinets, includeFloor: false).root)
-            addScan(to: content)
-            content.add(makeCamera())
+            let scanEntity = scanEntityToAdd()
+            if let scanEntity { content.add(scanEntity) }
+            let cam = makeCamera(bounds: scanEntity?.visualBounds(relativeTo: nil))
+            content.add(cam)
             content.camera = .virtual
         }
         .realityViewCameraControls(.orbit)
@@ -47,16 +51,21 @@ struct SceneView: View {
         .background(Color(red: 0.93, green: 0.92, blue: 0.90))
     }
 
-    private func addScan(to content: RealityViewCameraContent) {
-        if let surfaceEntity, !showPoints {
-            content.add(surfaceEntity)
-        } else if let scan {
-            content.add(PointCloudRenderer.makeEntity(scan, transform: transform))
-        }
+    /// Encja skanu: gotowa powierzchnia albo chmura punktów.
+    @MainActor
+    private func scanEntityToAdd() -> Entity? {
+        if let surfaceEntity, !showPoints { return surfaceEntity }
+        if let scan { return PointCloudRenderer.makeEntity(scan, transform: transform) }
+        return nil
     }
 
-    private func makeCamera() -> Entity {
-        let cam = PreviewCamera.make(room: room, scanBounds: scanBounds)
+    private func makeCamera(bounds: BoundingBox?) -> Entity {
+        let cam: PreviewCamera
+        if let b = bounds, b.extents.x > 0.01 {
+            cam = PreviewCamera.fit(center: b.center, extents: b.extents)
+        } else {
+            cam = PreviewCamera.make(room: room, scanBounds: nil)
+        }
         let camera = Entity()
         camera.components.set(PerspectiveCameraComponent(
             near: 0.02,
