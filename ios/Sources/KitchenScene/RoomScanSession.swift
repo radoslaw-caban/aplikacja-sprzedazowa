@@ -32,11 +32,31 @@ public final class RoomScanSession: NSObject, ObservableObject {
     @Published public private(set) var boundsText: String = "—"
     @Published public private(set) var isRunning = false
 
+    /// Ile klatek głębi weszło do fuzji oraz ile wokseli już mamy.
+    @Published public private(set) var depthFrames = 0
+    @Published public private(set) var fusedVoxels = 0
+    /// Mediana niepewności fuzji („1,8 mm") — realna miara dokładności skanu.
+    @Published public private(set) var precisionText: String = "—"
+
+    /// Fuzja map głębi — celowo poza MainActor, bo klatki przychodzą z kolejki ARKit.
+    public nonisolated let depthStore = DepthFusionStore()
+
     /// Czy urządzenie w ogóle ma LiDAR / wspiera rekonstrukcję sceny.
     public static var isSupported: Bool {
         #if os(iOS)
         ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
             || ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification)
+        #else
+        false
+        #endif
+    }
+
+    /// Czy jest mapa głębi (LiDAR). Na iPhone'ach/iPadach bez LiDAR ARKit
+    /// potrafi dać „sceneDepth" z stereo — też się nada, ale tylko LiDAR ma
+    /// sensowną dokładność, więc tryb dokładny włączamy wyłącznie z LiDAR-em.
+    public static var supportsDepthFusion: Bool {
+        #if os(iOS)
+        ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)
         #else
         false
         #endif
@@ -82,7 +102,13 @@ public final class RoomScanSession: NSObject, ObservableObject {
         cfg.planeDetection = [.horizontal, .vertical]
         // środowisko wyłączone: obciąża GPU, a do geometrii nic nie wnosi
         cfg.environmentTexturing = .none
+        // mapa głębi LiDAR-a: z niej powstaje dokładna chmura (DepthFusion).
+        // Koszt jest znikomy, a bez tego ARKit w ogóle nie wypełnia sceneDepth.
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            cfg.frameSemantics.insert(.sceneDepth)
+        }
 
+        depthStore.reset()
         session.delegate = self
         session.run(cfg, options: [.resetTracking, .removeExistingAnchors])
         isRunning = true
@@ -102,6 +128,7 @@ public final class RoomScanSession: NSObject, ObservableObject {
         #if os(iOS)
         meshAnchors.removeAll()
         lastStatsUpdate = .distantPast
+        depthStore.reset()
         if let cfg = session.configuration as? ARWorldTrackingConfiguration {
             session.run(cfg, options: [.resetTracking, .removeExistingAnchors])
         } else {
@@ -112,13 +139,17 @@ public final class RoomScanSession: NSObject, ObservableObject {
         estimatedPoints = 0
         coverageText = "—"
         boundsText = "—"
+        depthFrames = 0
+        fusedVoxels = 0
+        precisionText = "—"
         ceilingHeight = nil
     }
 
     /// Czy jest co eksportować.
     public var hasScan: Bool {
         #if os(iOS)
-        return !meshAnchors.isEmpty
+        if !meshAnchors.isEmpty { return true }
+        return depthStore.stats().hasData
         #else
         return false
         #endif
@@ -180,11 +211,26 @@ public final class RoomScanSession: NSObject, ObservableObject {
 
         #if os(iOS)
         meshAnchorCount = meshAnchors.count
+
+        // fuzja głębi ma pierwszeństwo w statystykach: to ona daje wynik
+        let depth = depthStore.stats()
+        depthFrames = depth.frames
+        fusedVoxels = depth.voxels
+        precisionText = depth.hasData ? String(format: "%.1f mm", depth.medianSigma * 1000) : "—"
+
         guard !meshAnchors.isEmpty else {
-            estimatedPoints = 0
+            // brak siatki, ale jest głębia — pokazujemy przynajmniej to
+            if let b = depth.bounds {
+                let s = b.max - b.min
+                boundsText = String(format: "%.2f × %.2f × %.2f m", s.x, s.y, s.z)
+                ceilingHeight = (s.y > 2.0 && s.y < 4.5) ? b.max.y : nil
+            }
+            estimatedPoints = depth.voxels
             coverageText = "—"
-            boundsText = "—"
-            ceilingHeight = nil
+            if !depth.hasData {
+                boundsText = "—"
+                ceilingHeight = nil
+            }
             return
         }
 
@@ -281,6 +327,14 @@ private extension ARGeometryElement {
 extension RoomScanSession: ARSessionDelegate {
 
     nonisolated public func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        // Fuzja mapy głębi — dokładnie tu, bo to jedyne miejsce, gdzie ARKit
+        // daje `sceneDepth`. Bramka `claim` odsiewa klatki szybciej niż 30/s:
+        // konwersja kosztuje ~350 kB alokacji i 50 tys. odczytów koloru.
+        if depthStore.claim(timestamp: frame.timestamp),
+           let depthFrame = ARDepthConverter.depthFrame(from: frame) {
+            depthStore.add(depthFrame)
+        }
+
         let state: String
         switch frame.camera.trackingState {
         case .normal: state = "OK"

@@ -55,6 +55,9 @@ struct RoomScanSheet: View {
         HStack(spacing: 14) {
             stat("pkt ~", scan.estimatedPoints.formatted(.number.grouping(.automatic)))
             stat("powierzchnia", scan.coverageText)
+            if scan.precisionText != "—" {
+                stat("dokładność σ", scan.precisionText)
+            }
             stat("wymiary", scan.boundsText)
             Spacer(minLength: 0)
             HStack(spacing: 5) {
@@ -89,7 +92,7 @@ struct RoomScanSheet: View {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
             if scan.hasScan == false && scan.isAvailable {
-                Text("Skieruj iPada na ściany i przejdź powoli całe pomieszczenie.\nSiatka pojawia się na bieżąco.")
+                Text("Skieruj iPada na ściany i przejdź powoli całe pomieszczenie.\nSiatka pojawia się na bieżąco, a mapa głębi LiDAR-a zbiera się w tle — im dłużej stoisz w jednym miejscu, tym dokładniejszy pomiar.")
                     .font(.footnote)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -146,7 +149,13 @@ struct RoomScanSheet: View {
 
     // MARK: - zakończenie
 
-    /// Zbiera trójkąty (MainActor — bufory ARKit) i próbkuje je w tle.
+    /// Zbiera trójkąty (MainActor — bufory ARKit) i buduje chmurę w tle.
+    ///
+    /// KOLEJNOŚĆ MA ZNACZENIE: najpierw fuzja map głębi. Siatka ARKit ma
+    /// rozdzielczość ~5–10 cm i nadaje się tylko na podgląd; mapa głębi daje
+    /// ~2–4 mm po uśrednieniu kilkuset klatek. Siatka jest fallbackiem —
+    /// gdy urządzenie nie ma LiDAR-u albo fuzja nie zebrała sensownej liczby
+    /// punktów (np. skan trwał sekundę).
     private func finish() {
         guard scan.hasScan, !building else { return }
         building = true
@@ -156,19 +165,26 @@ struct RoomScanSheet: View {
         let triangles = scan.collectTriangles()
         let step = scan.sampleStep
         let limit = scan.maxPoints
+        let store = scan.depthStore
 
         Task {
-            // 2) próbkowanie na czystych danych — w tle
-            let cloud = await Task.detached(priority: .userInitiated) {
-                MeshSampler.sample(triangles: triangles, step: step, maxPoints: limit)
+            // 2) chmura w tle: fuzja głębi, a gdy jej brak — próbkowanie siatki
+            let result = await Task.detached(priority: .userInitiated) { () -> (PointCloud, String) in
+                if let fused = store.finish(minSamples: 2), fused.count >= 2_000 {
+                    let note = "Chmura z fuzji LiDAR-a: \(fused.count.formatted()) pkt · σ \(fused.qualityText)"
+                    return (fused.cloud, note)
+                }
+                let cloud = MeshSampler.sample(triangles: triangles, step: step, maxPoints: limit)
+                return (cloud, "Chmura z siatki ARKit: \(cloud.count.formatted()) pkt")
             }.value
 
             building = false
-            guard cloud.count > 0 else {
+            guard result.0.count > 0 else {
                 formatNote = "Skan jest pusty — nie ma czego dodać."
                 return
             }
-            onFinish(cloud)
+            formatNote = result.1
+            onFinish(result.0)
         }
     }
 }
