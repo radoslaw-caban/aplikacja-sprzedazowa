@@ -2,8 +2,8 @@ import SwiftUI
 import KitchenCore
 import simd
 
-/// Widok „Mapa": plan domu rysowany kreskami, z klikalnymi ścianami
-/// i edycją ich długości.
+/// Widok „Mapa": plan pomieszczenia trzema drogami —
+/// **prostokąt** przeciągnięciem, **wymiary** wpisane z klawiatury, **kreski** punkt po punkcie.
 ///
 /// ZASADA: plan jest źródłem prawdy dla bryły domu. Każda zmiana tutaj
 /// przelicza pokój (szerokość × głębokość × wysokość), więc 3D od razu
@@ -13,28 +13,66 @@ struct PlanEditorView: View {
     /// wywoływane po każdej zmianie (zapis do projektu)
     var onChange: (FloorPlan) -> Void
 
+    /// Sposób wprowadzania planu.
+    enum Mode: String, CaseIterable, Identifiable {
+        case rectangle = "Prostokąt"
+        case dimensions = "Wymiary"
+        case lines = "Kreski"
+
+        var id: String { rawValue }
+
+        var icon: String {
+            switch self {
+            case .rectangle: "rectangle.dashed"
+            case .dimensions: "ruler"
+            case .lines: "pencil.tip"
+            }
+        }
+    }
+
+    @State private var mode: Mode = .rectangle
     @State private var selectedWall: Int?
     @State private var lengthText: String = ""
-    @State private var editingLength = false
+
+    // rysowanie prostokąta przeciągnięciem
+    @State private var dragStart: SIMD2<Double>?
+    @State private var dragCurrent: SIMD2<Double>?
+
+    // formularz wymiarów (mm jako tekst — łatwiej wpisywać)
+    @State private var widthText = "3600"
+    @State private var depthText = "3000"
+    @State private var heightText = "2600"
+    @State private var thicknessText = "120"
+
+    /// Skok przyciągania przy rysowaniu (mm).
+    private let snap: Double = 50
 
     var body: some View {
         VStack(spacing: 0) {
             header
+            modeBar
 
             GeometryReader { geo in
                 let fit = PlanFit(plan: plan, size: geo.size)
                 ZStack(alignment: .bottom) {
-                    PlanCanvas(plan: plan, fit: fit, selected: selectedWall)
+                    PlanCanvas(plan: plan, fit: fit, selected: selectedWall, preview: previewRect)
                         .contentShape(Rectangle())
-                        .gesture(
-                            SpatialTapGesture()
-                                .onEnded { value in
-                                    handleTap(at: value.location, fit: fit)
-                                }
-                        )
-                    lengthPanel
-                        .padding(14)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .gesture(drawGesture(fit: fit))
+                        .onTapGesture { location in
+                            guard mode == .lines else { return }
+                            handleTap(at: location, fit: fit)
+                        }
+
+                    VStack(spacing: 10) {
+                        if mode == .rectangle, previewRect == nil {
+                            hint("Przeciągnij po planie od narożnika do narożnika.\nWymiary i pole pokazują się na bieżąco.")
+                        }
+                        if mode == .dimensions {
+                            dimensionsPanel
+                        }
+                        lengthPanel
+                    }
+                    .padding(14)
                 }
             }
 
@@ -42,7 +80,24 @@ struct PlanEditorView: View {
         }
         .background(Color(red: 0.10, green: 0.11, blue: 0.12))
         .onChange(of: plan) { _, new in
+            syncFields(from: new)
             onChange(new)
+        }
+        .onAppear {
+            syncFields(from: plan)
+            // hak diagnostyczny: `defaults write ... planMode Wymiary` otwiera panel wymiarów
+            if let saved = UserDefaults.standard.string(forKey: "planMode"), let savedMode = Mode(rawValue: saved) {
+                mode = savedMode
+            }
+            if let preset = UserDefaults.standard.string(forKey: "planPreset") {
+                let values: [String: (Double, Double)] = [
+                    "Kuchnia": (3000, 3600), "Salon": (5200, 6400),
+                    "Łazienka": (2200, 2400), "Sypialnia": (3600, 4200),
+                ]
+                if let size = values[preset] {
+                    applyDimensions(width: size.0, depth: size.1)
+                }
+            }
         }
     }
 
@@ -51,7 +106,7 @@ struct PlanEditorView: View {
     private var header: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Plan domu").font(.headline)
+                Text("Pomieszczenie").font(.headline)
                 Text(summary).font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
             Spacer()
@@ -68,13 +123,207 @@ struct PlanEditorView: View {
     }
 
     private var summary: String {
-        let m2 = String(format: "%.1f", plan.areaM2)
-        let walls = plan.wallCount
+        let size = plan.size
+        let w = String(format: "%.2f", size.x / 1000)
+        let d = String(format: "%.2f", size.y / 1000)
+        let m2 = String(format: "%.2f", plan.areaM2)
         let height = String(format: "%.2f", plan.height / 1000)
-        return "\(walls) ścian · \(m2) m² · wys. \(height) m · obwód \(Int(plan.perimeter)) mm"
+        let wall = String(format: "%.0f", plan.thickness)
+        return "\(w) × \(d) m · \(m2) m² · wys. \(height) m · ściana \(wall) mm"
     }
 
-    // MARK: - gesty
+    // MARK: - wybór trybu
+
+    private var modeBar: some View {
+        HStack(spacing: 8) {
+            ForEach(Mode.allCases) { item in
+                Button {
+                    mode = item
+                    selectedWall = nil
+                    dragStart = nil
+                    dragCurrent = nil
+                } label: {
+                    Label(item.rawValue, systemImage: item.icon)
+                        .font(.subheadline.weight(mode == item ? .semibold : .regular))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(mode == item ? Color.orange.opacity(0.22) : Color.white.opacity(0.06))
+                )
+                .foregroundStyle(mode == item ? Color.orange : Color.primary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 10)
+    }
+
+    private func hint(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(.secondary)
+            .padding(10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    // MARK: - panel wymiarów
+
+    private var dimensionsPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Wymiary pomieszczenia").font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("mm").font(.caption2).foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                numberField("Szerokość", text: $widthText)
+                Text("×").foregroundStyle(.secondary)
+                numberField("Głębokość", text: $depthText)
+                Text("×").foregroundStyle(.secondary)
+                numberField("Wysokość", text: $heightText)
+            }
+
+            HStack(spacing: 10) {
+                numberField("Ściana", text: $thicknessText)
+                Spacer()
+                Button {
+                    applyDimensions()
+                } label: {
+                    Label("Utwórz", systemImage: "square.grid.2x2")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            // gotowe wielkości — najczęstsze pomieszczenia
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    preset("Kuchnia", 3000, 3600)
+                    preset("Salon", 5200, 6400)
+                    preset("Łazienka", 2200, 2400)
+                    preset("Sypialnia", 3600, 4200)
+                    preset("Willa", 12800, 9600)
+                }
+            }
+
+            Text("Przycisk „Utwórz” zastępuje plan prostokątem o tych wymiarach — środek zostaje.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func numberField(_ label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+            TextField("mm", text: text)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 92)
+                .onSubmit { applyDimensions() }
+        }
+    }
+
+    private func preset(_ name: String, _ width: Double, _ depth: Double) -> some View {
+        Button {
+            widthText = String(Int(width))
+            depthText = String(Int(depth))
+            applyDimensions(width: width, depth: depth)
+        } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name).font(.caption.weight(.semibold))
+                Text("\(Int(width)) × \(Int(depth))").font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Wpisane wymiary → plan. Rozmiar zmieniamy wokół środka, więc pomieszczenie nie ucieka.
+    private func applyDimensions(width: Double? = nil, depth: Double? = nil) {
+        let width = max(500, width ?? parse(widthText))
+        let depth = max(500, depth ?? parse(depthText))
+        let height = parse(heightText).clamped(to: 2000...4000, fallback: 2600)
+        let thickness = parse(thicknessText).clamped(to: 40...400, fallback: 120)
+
+        let b = plan.bounds
+        let cx = plan.points.isEmpty ? 0 : (b.min.x + b.max.x) / 2
+        let cz = plan.points.isEmpty ? 0 : (b.min.y + b.max.y) / 2
+
+        plan = FloorPlan.rectangle(
+            x: cx - width / 2,
+            z: cz - depth / 2,
+            width: width,
+            depth: depth,
+            height: height,
+            thickness: thickness
+        )
+        selectedWall = nil
+        syncFields(from: plan)
+    }
+
+    private func parse(_ text: String) -> Double {
+        Double(text.replacingOccurrences(of: ",", with: ".").filter { $0.isNumber || $0 == "." }) ?? 0
+    }
+
+    private func syncFields(from plan: FloorPlan) {
+        let size = plan.size
+        if size.x > 0 { widthText = String(Int(size.x.rounded())) }
+        if size.y > 0 { depthText = String(Int(size.y.rounded())) }
+        heightText = String(Int(plan.height.rounded()))
+        thicknessText = String(Int(plan.thickness.rounded()))
+    }
+
+    // MARK: - rysowanie prostokąta
+
+    private var previewRect: RectPreview? {
+        guard mode == .rectangle, let start = dragStart, let current = dragCurrent else { return nil }
+        let preview = FloorPlan.rectangle(from: start, to: current, snap: snap)
+        let b = preview.bounds
+        return RectPreview(
+            min: b.min,
+            max: b.max,
+            width: b.max.x - b.min.x,
+            depth: b.max.y - b.min.y
+        )
+    }
+
+    private func drawGesture(fit: PlanFit) -> some Gesture {
+        DragGesture(minimumDistance: 3)
+            .onChanged { value in
+                guard mode == .rectangle else { return }
+                if dragStart == nil { dragStart = fit.planPoint(fromScreen: value.startLocation) }
+                dragCurrent = fit.planPoint(fromScreen: value.location)
+            }
+            .onEnded { value in
+                guard mode == .rectangle, let start = dragStart else { return }
+                let end = fit.planPoint(fromScreen: value.location)
+                defer {
+                    dragStart = nil
+                    dragCurrent = nil
+                }
+                // za małe przeciągnięcie = przypadkowy dotyk, plan zostaje
+                guard abs(end.x - start.x) > 200, abs(end.y - start.y) > 200 else { return }
+                plan = FloorPlan.rectangle(
+                    from: start,
+                    to: end,
+                    snap: snap,
+                    height: parse(heightText).clamped(to: 2000...4000, fallback: 2600),
+                    thickness: parse(thicknessText).clamped(to: 40...400, fallback: 120)
+                )
+                selectedWall = nil
+            }
+    }
+
+    // MARK: - gesty kreskami
 
     private func handleTap(at point: CGPoint, fit: PlanFit) {
         let planPoint = fit.planPoint(fromScreen: point)
@@ -94,7 +343,7 @@ struct PlanEditorView: View {
         plan.append(planPoint)
     }
 
-    // MARK: - panel długości
+    // MARK: - panel długości ściany
 
     private var lengthPanel: some View {
         Group {
@@ -152,8 +401,7 @@ struct PlanEditorView: View {
     }
 
     private func applyLength() {
-        let parsed = Double(lengthText.replacingOccurrences(of: ",", with: ".")) ?? 0
-        setLength(parsed)
+        setLength(parse(lengthText))
     }
 
     private func setLength(_ value: Double) {
@@ -189,16 +437,32 @@ struct PlanEditorView: View {
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             Button {
-                plan = FloorPlan.rectangle(width: 12800, depth: 9600, height: plan.height)
-                selectedWall = nil
+                applyDimensions()
             } label: {
-                Label("Willa 12,8 × 9,6", systemImage: "square.dashed")
+                Label("Zastosuj wymiary", systemImage: "ruler.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
             }
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .padding(14)
         .background(.ultraThinMaterial)
+    }
+}
+
+// MARK: - podgląd rysowanego prostokąta
+
+struct RectPreview: Equatable {
+    let min: SIMD2<Double>
+    let max: SIMD2<Double>
+    let width: Double
+    let depth: Double
+}
+
+extension Double {
+    /// Wartość ograniczona do zakresu; dla zera/śmieci wraca `fallback`.
+    func clamped(to range: ClosedRange<Double>, fallback: Double) -> Double {
+        guard isFinite, self > 0 else { return fallback }
+        return Swift.min(range.upperBound, Swift.max(range.lowerBound, self))
     }
 }
 
@@ -243,12 +507,15 @@ struct PlanCanvas: View {
     let plan: FloorPlan
     let fit: PlanFit
     let selected: Int?
+    /// rysowany właśnie prostokąt (podgląd na żywo z wymiarami)
+    var preview: RectPreview?
 
     var body: some View {
         Canvas { ctx, size in
             drawGrid(ctx: &ctx, size: size)
             drawWalls(ctx: &ctx)
             drawDimensions(ctx: &ctx)
+            drawPreview(ctx: &ctx)
             drawPoints(ctx: &ctx)
         }
         .background(Color(red: 0.13, green: 0.14, blue: 0.15))
@@ -323,7 +590,6 @@ struct PlanCanvas: View {
         for i in 0..<plan.wallCount {
             guard let w = plan.wall(i) else { continue }
             let mid = fit.screenPoint((w.a + w.b) / 2)
-            // etykieta odsunięta od ściany w stronę przeciwną do środka planu
             let center = fit.screenPoint(SIMD2(
                 (plan.bounds.min.x + plan.bounds.max.x) / 2,
                 (plan.bounds.min.y + plan.bounds.max.y) / 2
@@ -339,6 +605,36 @@ struct PlanCanvas: View {
                 .foregroundColor(selected == i ? .orange : .white)
             ctx.draw(text, at: offset, anchor: .center)
         }
+    }
+
+    /// Podgląd rysowanego prostokąta: przerywana ramka + wymiary i pole w środku.
+    private func drawPreview(ctx: inout GraphicsContext) {
+        guard let preview else { return }
+        let a = fit.screenPoint(preview.min)
+        let b = fit.screenPoint(SIMD2(preview.max.x, preview.min.y))
+        let c = fit.screenPoint(preview.max)
+        let d = fit.screenPoint(SIMD2(preview.min.x, preview.max.y))
+
+        var rect = Path()
+        rect.move(to: a)
+        rect.addLine(to: b)
+        rect.addLine(to: c)
+        rect.addLine(to: d)
+        rect.closeSubpath()
+        ctx.fill(rect, with: .color(.orange.opacity(0.12)))
+        ctx.stroke(rect, with: .color(.orange), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+
+        let middle = CGPoint(x: (a.x + c.x) / 2, y: (a.y + c.y) / 2)
+        let area = preview.width * preview.depth / 1_000_000
+        let label = String(format: "%.2f × %.2f m\n%.2f m²",
+                           preview.width / 1000, preview.depth / 1000, area)
+        ctx.draw(
+            Text(label)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.orange),
+            at: middle,
+            anchor: .center
+        )
     }
 
     private func drawPoints(ctx: inout GraphicsContext) {

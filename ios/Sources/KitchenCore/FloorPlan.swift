@@ -44,6 +44,68 @@ public struct FloorPlan: Codable, Sendable, Equatable {
         )
     }
 
+    /// Prostokąt o zadanych wymiarach, umieszczony lewym-górnym narożnikiem w (x, z).
+    /// To ścieżka „wpisuję wymiary" — bez rysowania.
+    public static func rectangle(
+        x: Double,
+        z: Double,
+        width: Double,
+        depth: Double,
+        height: Double = 2900,
+        thickness: Double = 120
+    ) -> FloorPlan {
+        let w = Swift.max(500, width)
+        let d = Swift.max(500, depth)
+        return FloorPlan(
+            points: [
+                SIMD2(x, z), SIMD2(x + w, z), SIMD2(x + w, z + d), SIMD2(x, z + d),
+            ],
+            closed: true,
+            height: height,
+            thickness: thickness
+        )
+    }
+
+    /// Prostokąt z dwóch narożników (przeciągnięcie po planie), zaokrąglony do `snap` mm.
+    public static func rectangle(
+        from start: SIMD2<Double>,
+        to end: SIMD2<Double>,
+        snap: Double = 50,
+        height: Double = 2900,
+        thickness: Double = 120
+    ) -> FloorPlan {
+        func rounded(_ v: Double) -> Double { snap > 0 ? (v / snap).rounded() * snap : v }
+        let x0 = rounded(Swift.min(start.x, end.x))
+        let z0 = rounded(Swift.min(start.y, end.y))
+        let x1 = rounded(Swift.max(start.x, end.x))
+        let z1 = rounded(Swift.max(start.y, end.y))
+        return rectangle(x: x0, z: z0,
+                         width: Swift.max(500, x1 - x0),
+                         depth: Swift.max(500, z1 - z0),
+                         height: height, thickness: thickness)
+    }
+
+    /// Wymiary obrysu w mm.
+    public var size: SIMD2<Double> {
+        let b = bounds
+        return SIMD2(b.max.x - b.min.x, b.max.y - b.min.y)
+    }
+
+    /// Czy plan jest pojedynczym prostokątem (4 ściany, 4 punkty).
+    public var isSimpleRectangle: Bool { closed && points.count == 4 }
+
+    /// Zmiana wymiarów istniejącego prostokąta z zachowaniem jego środka.
+    /// Wpisanie „szerokość 3600" w formularzu nie przesuwa pomieszczenia.
+    public mutating func setSize(width: Double, depth: Double) {
+        let b = bounds
+        let cx = (b.min.x + b.max.x) / 2
+        let cz = (b.min.y + b.max.y) / 2
+        let w = Swift.max(500, width) / 2
+        let d = Swift.max(500, depth) / 2
+        points = [SIMD2(cx - w, cz - d), SIMD2(cx + w, cz - d), SIMD2(cx + w, cz + d), SIMD2(cx - w, cz + d)]
+        closed = true
+    }
+
     // MARK: - ściany
 
     /// Liczba odcinków: dla zamkniętego planu tyle, ile punktów.

@@ -278,7 +278,13 @@ public struct FusedCloud: Sendable {
     public var count: Int { positions.count }
 
     /// Chmura w formacie reszty appki (metry — tak jak `MeshSampler.sample`).
-    public var cloud: PointCloud { PointCloud(positions: positions, colors: colors) }
+    ///
+    /// Przekazuje `sigma` do chmury: bez tego niepewność policzona w fuzji
+    /// ginęła przy eksporcie i odbiorca pliku nie miał jak odsiać słabych
+    /// punktów — a to jest główna wartość tej metody.
+    public var cloud: PointCloud {
+        PointCloud(positions: positions, colors: colors, uncertainty: sigma)
+    }
 
     /// „1,2 mm · 412 tys. pkt" — do statusu w UI.
     public var qualityText: String {

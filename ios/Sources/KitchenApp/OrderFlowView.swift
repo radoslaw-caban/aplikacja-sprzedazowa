@@ -377,16 +377,26 @@ struct LockedWorkspace: View {
     var showScanCloud: Bool = false
     @Binding var locked: Bool
 
+    /// Pokój z ręcznego planu (jeśli projekt go ma) — ma pierwszeństwo nad skanem.
+    private var manualRoom: Room? {
+        guard let plan = model.current.plan, plan.points.count >= 3 else { return nil }
+        return plan.room(name: model.current.room.name)
+    }
+
     var body: some View {
         ZStack {
             SceneView(
                 cabinets: model.current.cabinets,
 
-                room: scanPlan.map { plan in
-                    Room(width: Double(plan.width) * 1000,
-                         depth: Double(plan.depth) * 1000,
-                         height: Double(plan.height) * 1000)
-                } ?? model.current.room,
+                // Kolejność ważności: ręcznie wpisany plan → plan ze skanu → pokój projektu.
+                // Wcześniej skan nadpisywał wymiary, więc wpisanie „3,0 × 3,6 m" nic nie dawało.
+                room: manualRoom
+                    ?? scanPlan.map { plan in
+                        Room(width: Double(plan.width) * 1000,
+                             depth: Double(plan.depth) * 1000,
+                             height: Double(plan.height) * 1000)
+                    }
+                    ?? model.current.room,
                 scan: model.scan,
                 transform: model.scanTransform,
                 interiorView: interiorView,

@@ -629,6 +629,54 @@ func runChecks() {
         r.check("LOD: proxy tańsze niż pełny model", DetailLOD.fullDetailDistance < DetailLOD.hideDistance)
     }
 
+    // 8) niepewność trafia do pliku — bez tego σ ginęło przy eksporcie
+    print("\nDokładność — niepewność w pliku PLY")
+    do {
+        var st = DepthFusionState()
+        for i in 0..<30 {
+            DepthFusion.add(frame: wallFrame(noise: 0.010, seed: UInt64(900 + i * 6151)),
+                            into: &st, minConfidence: 1)
+        }
+        guard let fused = DepthFusion.fused(from: st, minSamples: 2) else {
+            r.check("niepewność: fuzja dała wynik", false, "")
+            return
+        }
+        let cloud = fused.cloud
+        r.check("niepewność: chmura ją niesie",
+                cloud.uncertainty?.count == cloud.count,
+                "\(cloud.uncertainty?.count ?? -1)/\(cloud.count)")
+
+        let data = ScanPLYWriter.data(for: cloud)
+        let header = String(decoding: data.prefix(400), as: UTF8.self)
+        r.check("PLY: nagłówek deklaruje sigma", header.contains("property float sigma"))
+        // rekord 19 B = 3 float + 3 uchar + 1 float
+        if let range = data.range(of: Data("end_header\n\n".utf8)) {
+            let body = data.count - range.upperBound
+            r.check("PLY: rekord 19 B z sigma", body == 19 * cloud.count,
+                    "\(body) / \(19 * cloud.count)")
+        }
+
+        // odczyt tym samym parserem: dodatkowa właściwość nie może psuć współrzędnych
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("check-sigma.ply")
+        do {
+            try data.write(to: url)
+            let back = try PLYParser.parse(contentsOf: url)
+            r.check("PLY z sigma: parser czyta poprawnie", back.count == cloud.count,
+                    "\(cloud.count) → \(back.count)")
+            let s = back.bounds.max - back.bounds.min
+            r.check("PLY z sigma: obrys nienaruszony", abs(s.x - 4) < 0.06,
+                    String(format: "%.2f m", s.x))
+            try? FileManager.default.removeItem(at: url)
+        } catch {
+            r.check("PLY z sigma: obieg zamknięty", false, "\(error)")
+        }
+
+        let report = ScanPLYWriter.qualityReport(cloud)
+        r.check("raport jakości: zawiera σ i wymiary",
+                report?.contains("σ mediana") == true && report?.contains("mm") == true,
+                report?.replacingOccurrences(of: "\n", with: " | ") ?? "nil")
+    }
+
     let passed = r.checks - r.failures
     print("\n\(passed)/\(r.checks) warunków spełnionych")
     if r.failures > 0 {

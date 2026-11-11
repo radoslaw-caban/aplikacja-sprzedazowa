@@ -72,6 +72,10 @@ struct SceneView: View {
             if showScanCloud, let scanPlan {
                 content.add(ScanCloudOverlay.entity(plan: scanPlan))
             }
+            #if DEBUG
+            NSLog("[scena] pokój %.0f × %.0f mm, wys. %.0f, szafek %d",
+                  room.width, room.depth, room.height, cabinets.count)
+            #endif
             let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
             let cabinetRoot = built.root
             content.add(cabinetRoot)

@@ -583,4 +583,57 @@ final class GestureNavTests: XCTestCase {
         XCTAssertEqual(GestureNav.step(for: .horizontal, dx: -120, dy: 0), 1)
         XCTAssertEqual(GestureNav.step(for: .horizontal, dx: 120, dy: 0), -1)
     }
+
+    // MARK: - pomieszczenie z wymiarów / z prostokąta
+
+    func testRectangleFromDimensions() {
+        let plan = FloorPlan.rectangle(x: 1000, z: 2000, width: 3600, depth: 3000, height: 2600, thickness: 120)
+        XCTAssertEqual(plan.size.x, 3600, accuracy: 0.001)
+        XCTAssertEqual(plan.size.y, 3000, accuracy: 0.001)
+        XCTAssertEqual(plan.areaM2, 10.8, accuracy: 0.001)
+        XCTAssertEqual(plan.points.count, 4)
+        XCTAssertTrue(plan.closed)
+        XCTAssertEqual(plan.height, 2600, accuracy: 0.001)
+        XCTAssertEqual(plan.thickness, 120, accuracy: 0.001)
+        // narożnik lewy-górny w zadanym punkcie
+        XCTAssertEqual(plan.bounds.min.x, 1000, accuracy: 0.001)
+        XCTAssertEqual(plan.bounds.min.y, 2000, accuracy: 0.001)
+    }
+
+    func testRectangleFromDragSnapsAndOrdersCorners() {
+        // przeciągnięcie „od prawej do lewej" musi dać ten sam prostokąt
+        let plan = FloorPlan.rectangle(from: SIMD2(3720, 3040), to: SIMD2(0, 0), snap: 50)
+        XCTAssertEqual(plan.size.x, 3700, accuracy: 0.001)   // 3720 → 3700
+        XCTAssertEqual(plan.size.y, 3050, accuracy: 0.001)   // 3040 → 3050
+        XCTAssertEqual(plan.bounds.min.x, 0, accuracy: 0.001)
+        XCTAssertEqual(plan.bounds.min.y, 0, accuracy: 0.001)
+    }
+
+    func testRectangleRoomFollowsPlan() {
+        let plan = FloorPlan.rectangle(width: 5200, depth: 6400, height: 2800)
+        let room = plan.room(name: "Salon")
+        XCTAssertEqual(room.width, 5200, accuracy: 0.001)
+        XCTAssertEqual(room.depth, 6400, accuracy: 0.001)
+        XCTAssertEqual(room.height, 2800, accuracy: 0.001)
+    }
+
+    func testSetSizeKeepsCentre() {
+        var plan = FloorPlan.rectangle(x: 0, z: 0, width: 3000, depth: 3000)
+        plan.setSize(width: 4000, depth: 5000)
+        XCTAssertEqual(plan.size.x, 4000, accuracy: 0.001)
+        XCTAssertEqual(plan.size.y, 5000, accuracy: 0.001)
+        let b = plan.bounds
+        XCTAssertEqual((b.min.x + b.max.x) / 2, 1500, accuracy: 0.001)
+        XCTAssertEqual((b.min.y + b.max.y) / 2, 1500, accuracy: 0.001)
+    }
+
+    func testIsSimpleRectangle() {
+        XCTAssertTrue(FloorPlan.rectangle(width: 3000, depth: 3000).isSimpleRectangle)
+        // plan w kształcie litery L: 5 punktów, więc to nie jest prosty prostokąt
+        let lShape = FloorPlan(
+            points: [SIMD2(0, 0), SIMD2(4000, 0), SIMD2(4000, 2000), SIMD2(2000, 2000), SIMD2(2000, 4000), SIMD2(0, 4000)],
+            closed: true
+        )
+        XCTAssertFalse(lShape.isSimpleRectangle)
+    }
 }
