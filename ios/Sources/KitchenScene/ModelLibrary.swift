@@ -19,6 +19,8 @@ public enum ModelLibrary {
         Entry(name: "IslandTree", license: "CC0", author: "Poly Haven"),
         Entry(name: "TeslaModel3", license: "CC-BY-4.0",
               author: "Ameer Studio · https://sketchfab.com/3d-models/tesla-2018-model-3-5ef9b845aaf44203b6d04e2c677e444f"),
+        Entry(name: "TerraceSofa", license: "CC0", author: "Poly Haven · Sofa 01"),
+        Entry(name: "TerracePlant", license: "CC0", author: "Poly Haven · Anthurium Botany 01"),
     ]
 
     private static var cache: [String: Entity] = [:]

@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import ImageIO
 import RealityKit
 import KitchenScene
 
@@ -251,8 +252,8 @@ public enum EnvironmentArt {
                 let cy = CGFloat.random(in: CGFloat(size) * 0.15...CGFloat(size) * 0.85)
                 let w = CGFloat.random(in: 10...26)
                 let h = w * CGFloat.random(in: 0.55...0.95)
-                let g = CGFloat.random(in: 0.45...0.85)
-                ctx.setFillColor(CGColor(red: 0.20 + g * 0.16, green: 0.34 + g * 0.34, blue: 0.12 + g * 0.14, alpha: 1))
+                let g = CGFloat.random(in: 0.55...1.0)
+                ctx.setFillColor(CGColor(red: 0.24 + g * 0.22, green: 0.42 + g * 0.38, blue: 0.16 + g * 0.20, alpha: 1))
                 ctx.saveGState()
                 ctx.translateBy(x: cx, y: cy)
                 ctx.rotate(by: CGFloat.random(in: 0...6.28))
@@ -320,6 +321,80 @@ public enum EnvironmentArt {
         return try? TextureResource.generate(from: image, options: .init(semantic: .color))
     }
 
+    /// Tekstura koron lasu na wzgórzach: kępy ciemnej zieleni z prześwitami.
+    ///
+    /// Płaski kolor na tle czyta się jak zielona ściana. Dopiero drobna
+    /// tekstura koron (kilkaset kół o różnej jasności) daje wrażenie, że to las
+    /// pokrywający zbocze — tak jak na zdjęciach połonin.
+    public static func forestCanopy() -> TextureResource? {
+        let width = 512, height = 128
+        guard let image = makeImage(width: width, height: height, draw: { ctx in
+            ctx.setFillColor(CGColor(red: 0.11, green: 0.20, blue: 0.13, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            // korony drzew: gęste, drobne, o zmiennej jasności
+            for _ in 0..<2600 {
+                let x = CGFloat.random(in: 0..<CGFloat(width))
+                let y = CGFloat.random(in: 0..<CGFloat(height))
+                let r = CGFloat.random(in: 1.5...5.0)
+                let g = CGFloat.random(in: 0.16...0.40)
+                let b = CGFloat.random(in: 0.10...0.24)
+                ctx.setFillColor(CGColor(red: 0.06 + g * 0.35, green: g, blue: b, alpha: 0.95))
+                ctx.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+            }
+            // pasy „łęgów" — jaśniejsze smugi w dolinach
+            for _ in 0..<40 {
+                let x = CGFloat.random(in: 0..<CGFloat(width))
+                let w = CGFloat.random(in: 6...22)
+                let alpha = CGFloat.random(in: 0.05...0.14)
+                ctx.setFillColor(CGColor(red: 0.55, green: 0.62, blue: 0.42, alpha: alpha))
+                ctx.fill(CGRect(x: x, y: 0, width: w, height: CGFloat(height) * 0.55))
+            }
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
+    /// Panorama z pliku zdjęciowego, zszyta BEZ SZWU: obraz + jego lustrzane
+    /// odbicie. Dzięki temu krawędź tekstury wypada w miejscu, gdzie obraz
+    /// i odbicie są identyczne — na walcu nie widać łączenia.
+    public static func panorama(fromImageNamed name: String) -> TextureResource? {
+        let url = Bundle.main.url(forResource: name, withExtension: "jpg", subdirectory: "Textures")
+            ?? Bundle.main.url(forResource: name, withExtension: "jpg")
+        guard let url,
+              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+
+        // Przycinamy niebo ze zdjęcia: nasze niebo rysuje skybox, a jeśli
+        // panorama wnosi własne chmury, na horyzoncie widać „drugie niebo".
+        let cropTop = CGFloat(image.height) * 0.26
+        let cropped = image.cropping(to: CGRect(x: 0, y: cropTop,
+                                                width: CGFloat(image.width),
+                                                height: CGFloat(image.height) - cropTop)) ?? image
+
+        let w = cropped.width
+        let h = cropped.height
+        guard let ctx = CGContext(
+            data: nil, width: w * 2, height: h,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        // ORIENTACJA: CGImage rysujemy wprost — RealityKit mapuje teksturę tak,
+        // że wiersz zerowy obrazu odpowiada dołowi walca, co daje poprawny
+        // horyzont. Odwracanie w pionie dawało pejzaż do góry nogami.
+        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        // druga kopia: lustrzane odbicie w poziomie (zszycie bez szwu)
+        ctx.saveGState()
+        ctx.translateBy(x: CGFloat(w * 2), y: 0)
+        ctx.scaleBy(x: -1, y: 1)
+        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.restoreGState()
+
+        guard let panorama = ctx.makeImage() else { return nil }
+        return try? TextureResource.generate(from: panorama, options: .init(semantic: .color))
+    }
+
     /// Mgła: poziomy gradient bieli — kładziony na pasmach i w dolinach.
     public static func hazeGradient() -> TextureResource? {
         let height = 128
@@ -343,10 +418,11 @@ public enum EnvironmentArt {
         return makeImage(width: width, height: height, draw: { ctx in
             let colorSpace = CGColorSpaceCreateDeviceRGB()
             let colors = [
-                CGColor(red: 0.16, green: 0.34, blue: 0.62, alpha: 1),
-                CGColor(red: 0.34, green: 0.55, blue: 0.80, alpha: 1),
-                CGColor(red: 0.68, green: 0.78, blue: 0.86, alpha: 1),
-                CGColor(red: 0.90, green: 0.90, blue: 0.86, alpha: 1),
+                // połonina: mocny błękit u góry, biel przy horyzoncie
+                CGColor(red: 0.20, green: 0.42, blue: 0.72, alpha: 1),
+                CGColor(red: 0.40, green: 0.62, blue: 0.85, alpha: 1),
+                CGColor(red: 0.72, green: 0.84, blue: 0.92, alpha: 1),
+                CGColor(red: 0.91, green: 0.93, blue: 0.92, alpha: 1),
                 CGColor(red: 0.42, green: 0.44, blue: 0.38, alpha: 1),
             ] as CFArray
             if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 0.34, 0.52, 0.62, 1]) {

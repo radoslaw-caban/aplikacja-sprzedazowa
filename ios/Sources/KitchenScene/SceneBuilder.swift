@@ -117,86 +117,43 @@ public enum SceneBuilder {
         return entity
     }
 
-    /// Pomieszczenie: podłoga, cztery ściany i listwy przypodłogowe.
+    /// Pomieszczenie + skorupa nowoczesnej willi.
+    ///
+    /// Wnętrze (podłoga, ściany, listwy) jest potrzebne do widoku kuchni;
+    /// elewacja, dachy, przeszklenia, taras i basen powstają w `VillaBuilder`.
     @MainActor
     public static func buildRoom(_ room: Room, walls: Bool = true) -> Entity {
         let root = Entity()
         root.name = "room"
 
+        let houseW = meters(room.width)
+        let houseD = meters(room.depth)
+
+        // podłoga wewnętrzna
         let floor = ModelEntity(
-            mesh: .generateBox(width: meters(room.width), height: 0.02, depth: meters(room.depth), cornerRadius: 0),
+            mesh: .generateBox(width: houseW, height: 0.02, depth: houseD, cornerRadius: 0),
             materials: [SimpleMaterial(color: color("#c8b39a"), isMetallic: false)]
         )
         floor.position = [0, -0.01, 0]
         root.addChild(floor)
 
-        // MARK: fundament
-        //
-        // Dom musi stać NA czymś. Bez ławy i cokołu budynek „pływa" na trawie,
-        // a w rzeczywistości każdy dom ma betonowy fundament wystający ponad
-        // teren o 20–40 cm. Tu: ława schowana w gruncie + widoczny cokół.
+        // płyta fundamentowa — w nowoczesnym domu nie ma wysokiego cokołu,
+        // ale budynek musi stać na betonie, a nie na trawie
         var concreteMaterial = PhysicallyBasedMaterial()
-        if let tex = EnvironmentArt.concrete() {
+        if let tex = EnvironmentArt.photoTexture("concrete_diff") {
             concreteMaterial.baseColor = .init(tint: .white, texture: .init(tex))
         } else {
-            concreteMaterial.baseColor = .init(tint: color("#8d8a84"))
+            concreteMaterial.baseColor = .init(tint: color("#a9a69f"))
         }
         concreteMaterial.roughness = .init(floatLiteral: 0.9)
-        concreteMaterial.metallic = .init(floatLiteral: 0)
-
-        let houseW = meters(room.width)
-        let houseD = meters(room.depth)
-        // Willa ma DWIE kondygnacje: dane pokoju opisują parter (tu stoi kuchnia),
-        // a bryła domu dostaje piętro tej samej wielkości. Bez tego balkon
-        // wypadałby na wysokości 1,3 m — czyli w drzwiach.
-        let storeyHeight = Float(room.height / 1000)   // parter = wysokość z danych pomieszczenia
-        let houseHeight = storeyHeight * 2
-
-        // ława: szersza niż ściany, schowana 60 cm w gruncie
-        if let mesh = MeshFactory.texturedBox(width: houseW + 0.9, height: 0.95, depth: houseD + 0.9, tile: 1.2) {
+        if let mesh = MeshFactory.texturedBox(width: houseW + 0.7, height: 0.9, depth: houseD + 0.7, tile: 1.2) {
             let footing = ModelEntity(mesh: mesh, materials: [concreteMaterial])
-            footing.position = [0, -0.42, 0]
-            footing.name = "foundation-footing"
+            footing.position = [0, -0.33, 0]
+            footing.name = "foundation"
             root.addChild(footing)
         }
 
-        // cokół: cztery pasy po zewnętrznej stronie ścian (0,5 m pod terenem,
-        // 0,35 m nad nim) — wnętrze zostaje czyste, a elewacja ma podstawę
-        let skirtThickness: Float = 0.34
-        let skirtHeight: Float = 0.95
-        let skirtTop: Float = 0.40
-        for side in [Float(-1), Float(1)] {
-            if let mesh = MeshFactory.texturedBox(width: houseW + skirtThickness * 2, height: skirtHeight,
-                                                  depth: skirtThickness, tile: 1.2) {
-                let skirt = ModelEntity(mesh: mesh, materials: [concreteMaterial])
-                skirt.position = [0, skirtTop - skirtHeight / 2, side * (houseD / 2 + skirtThickness / 2)]
-                skirt.name = "foundation-skirt-z"
-                root.addChild(skirt)
-            }
-            if let mesh = MeshFactory.texturedBox(width: skirtThickness, height: skirtHeight,
-                                                  depth: houseD + skirtThickness * 2, tile: 1.2) {
-                let skirt = ModelEntity(mesh: mesh, materials: [concreteMaterial])
-                skirt.position = [side * (houseW / 2 + skirtThickness / 2), skirtTop - skirtHeight / 2, 0]
-                skirt.name = "foundation-skirt-x"
-                root.addChild(skirt)
-            }
-        }
-
-        // schody wejściowe (3 stopnie) — inaczej drzwi są 32 cm nad trawnikiem
-        var stepMaterial = PhysicallyBasedMaterial()
-        stepMaterial.baseColor = .init(tint: color("#a8a49c"))
-        stepMaterial.roughness = .init(floatLiteral: 0.85)
-        for step in 0..<3 {
-            let height = skirtTop * Float(3 - step) / 3
-            let stair = ModelEntity(
-                mesh: .generateBox(width: 2.6, height: max(0.06, height), depth: 0.36, cornerRadius: 0.01),
-                materials: [stepMaterial]
-            )
-            stair.position = [0, max(0.03, height / 2), houseD / 2 + 0.18 + Float(step) * 0.34]
-            stair.name = "entrance-step-\(step)"
-            root.addChild(stair)
-        }
-
+        // ściany wewnętrzne parteru (tło dla zabudowy kuchennej)
         var wallMaterial = PhysicallyBasedMaterial()
         if let diff = EnvironmentArt.photoTexture("stucco_diff") {
             wallMaterial.baseColor = .init(tint: .white, texture: .init(diff))
@@ -207,6 +164,7 @@ public enum SceneBuilder {
             wallMaterial.normal = .init(texture: .init(nor))
         }
         wallMaterial.roughness = .init(floatLiteral: 0.85)
+
         for i in 0..<(walls ? 4 : 0) {
             let size = room.wallSize(i)
             let pos = room.wallPosition(i)
@@ -221,274 +179,14 @@ public enum SceneBuilder {
             root.addChild(wall)
         }
 
-        // ściany piętra — ta sama elewacja, przesunięte o wysokość parteru
-        for i in 0..<(walls ? 4 : 0) {
-            let size = room.wallSize(i)
-            let pos = room.wallPosition(i)
-            let upper = ModelEntity(
-                mesh: MeshFactory.texturedBox(
-                    width: meters(size.x), height: storeyHeight, depth: meters(size.z), tile: 2.5
-                ) ?? .generateBox(width: meters(size.x), height: storeyHeight, depth: meters(size.z), cornerRadius: 0),
-                materials: [wallMaterial]
-            )
-            upper.position = [meters(pos.x), storeyHeight + storeyHeight / 2, meters(pos.z)]
-            upper.name = "wall-upper-\(i)"
-            root.addChild(upper)
-        }
+        // skorupa willi: elewacja, płaskie dachy, przeszklenia, taras, basen
+        root.addChild(VillaBuilder.shell(room: room))
 
-        // dach: płaski, z lekkim nawisem — bez niego dom wygląda jak otwarte pudełko
-        var roofMaterial = PhysicallyBasedMaterial()
-        if let diff = EnvironmentArt.photoTexture("roof_diff") {
-            roofMaterial.baseColor = .init(tint: .white, texture: .init(diff))
-        } else {
-            roofMaterial.baseColor = .init(tint: color("#54585e"))
-        }
-        if let nor = EnvironmentArt.photoTexture("roof_nor", semantic: .normal) {
-            roofMaterial.normal = .init(texture: .init(nor))
-        }
-        roofMaterial.roughness = .init(floatLiteral: 0.7)
-
-        let roofWidth = meters(room.width) + 0.7
-        let roofDepth = meters(room.depth) + 0.7
-        let rise = min(1.6, roofDepth * 0.28)
-
-        // dach dwuspadowy z okapem — dopiero to czyta się jako dom, nie pudełko
-        if let mesh = MeshFactory.gabledRoof(
-            width: roofWidth,
-            depth: roofDepth,
-            rise: rise,
-            eaveOverhang: 0.45,
-            gableOverhang: 0.35,
-            tile: 1.6
-        ) {
-            let gableRoof = ModelEntity(mesh: mesh, materials: [roofMaterial])
-            gableRoof.position = [0, houseHeight, 0]
-            gableRoof.name = "roof"
-            root.addChild(gableRoof)
-
-            // szczyty pod dachem (trójkąty) — inaczej widać dziurę nad ścianą
-            if let ends = MeshFactory.gableEnds(width: meters(room.width) + 0.02, rise: rise, depth: meters(room.depth) + 0.02) {
-                let gables = ModelEntity(mesh: ends, materials: [wallMaterial])
-                gables.position = [0, houseHeight, 0]
-                gables.name = "gables"
-                root.addChild(gables)
-            }
-
-            // rynna i obróbka kalenicy
-            var trim = PhysicallyBasedMaterial()
-            trim.baseColor = .init(tint: color("#3c3f42"))
-            trim.roughness = .init(floatLiteral: 0.45)
-            trim.metallic = .init(floatLiteral: 0.6)
-
-            let ridge = ModelEntity(
-                mesh: .generateBox(width: roofWidth + 0.7, height: 0.09, depth: 0.16, cornerRadius: 0.01),
-                materials: [trim]
-            )
-            ridge.position = [0, houseHeight + rise + 0.04, 0]
-            ridge.name = "ridge"
-            root.addChild(ridge)
-
-            for sign in [Float(1), Float(-1)] {
-                let gutter = ModelEntity(
-                    mesh: .generateBox(width: roofWidth + 0.7, height: 0.12, depth: 0.14, cornerRadius: 0.02),
-                    materials: [trim]
-                )
-                gutter.position = [0, houseHeight - 0.04, sign * (roofDepth / 2 + 0.42)]
-                gutter.name = "gutter"
-                root.addChild(gutter)
-            }
-        } else {
-            let roof = ModelEntity(
-                mesh: MeshFactory.texturedBox(width: roofWidth, height: 0.24, depth: roofDepth, tile: 1.6)
-                    ?? .generateBox(width: roofWidth, height: 0.24, depth: roofDepth, cornerRadius: 0.02),
-                materials: [roofMaterial]
-            )
-            roof.position = [0, houseHeight + 0.11, 0]
-            roof.name = "roof"
-            root.addChild(roof)
-        }
-
-        // elewacja: okna i drzwi po stronie podjazdu (+Z), żeby dom czytał się z zewnątrz
-        var glass = PhysicallyBasedMaterial()
-        glass.baseColor = .init(tint: color("#2b3a4a"))
-        glass.roughness = .init(floatLiteral: 0.08)
-        glass.metallic = .init(floatLiteral: 0.35)
-
-        var frame = PhysicallyBasedMaterial()
-        frame.baseColor = .init(tint: color("#f4f2ec"))
-        frame.roughness = .init(floatLiteral: 0.6)
-
-        let facadeZ = meters(room.depth) / 2 + 0.06
-        for (index, xOffset) in [-1, 1].enumerated() {
-            let window = ModelEntity(
-                mesh: .generateBox(width: 1.4, height: 1.1, depth: 0.08, cornerRadius: 0.01),
-                materials: [frame]
-            )
-            window.position = [Float(xOffset) * meters(room.width) * 0.22, 1.5, facadeZ + 0.05]
-            window.name = "window-\(index)"
-            root.addChild(window)
-
-            let pane = ModelEntity(
-                mesh: .generateBox(width: 1.24, height: 0.94, depth: 0.06, cornerRadius: 0.005),
-                materials: [glass]
-            )
-            pane.position = [window.position.x, 1.5, facadeZ + 0.07]
-            root.addChild(pane)
-
-            // parapet: cienka płyta pod oknem, żeby elewacja nie była „naklejką"
-            var sillMat = PhysicallyBasedMaterial()
-            sillMat.baseColor = .init(tint: color("#d8d2c6"))
-            sillMat.roughness = .init(floatLiteral: 0.5)
-            let sill = ModelEntity(
-                mesh: .generateBox(width: 1.56, height: 0.06, depth: 0.18, cornerRadius: 0.008),
-                materials: [sillMat]
-            )
-            sill.position = [window.position.x, 0.93, facadeZ + 0.09]
-            sill.name = "sill-\(index)"
-            root.addChild(sill)
-        }
-
-        let doorFrame = ModelEntity(
-            mesh: .generateBox(width: 1.0, height: 2.1, depth: 0.1, cornerRadius: 0.01),
-            materials: [frame]
-        )
-        doorFrame.position = [0, 1.05, facadeZ]
-        root.addChild(doorFrame)
-
-        var doorMaterial = PhysicallyBasedMaterial()
-        doorMaterial.baseColor = .init(tint: color("#3c3a36"))
-        doorMaterial.roughness = .init(floatLiteral: 0.5)
-        let door = ModelEntity(
-            mesh: .generateBox(width: 0.88, height: 2.0, depth: 0.08, cornerRadius: 0.005),
-            materials: [doorMaterial]
-        )
-        door.position = [0, 1.0, facadeZ + 0.02]
-        root.addChild(door)
-
-        // MARK: willa — piętro, balkon, portyk, komin
-        //
-        // Te trzy elementy decydują, czy bryła czyta się jako willa, czy jako
-        // pudełko z dachem: gzyms dzielący kondygnacje, balkon nad wejściem
-        // na kolumnach i komin wystający z połaci.
-        // gzyms dokładnie na styku kondygnacji
-        let storeyY = storeyHeight
-
-        if let mesh = MeshFactory.texturedBox(width: houseW + 0.30, height: 0.16, depth: houseD + 0.30, tile: 1.5) {
-            let cornice = ModelEntity(mesh: mesh, materials: [wallMaterial])
-            cornice.position = [0, storeyY, 0]
-            cornice.name = "cornice"
-            root.addChild(cornice)
-        }
-
-        // rząd okien piętra — na wysokości 1,5 m nad stropem parteru
-        let upperY = storeyHeight + 1.5
-        for (index, xOffset) in [Float(-0.62), 0, 0.62].enumerated() {
-            let frameEntity = ModelEntity(
-                mesh: .generateBox(width: 1.24, height: 1.06, depth: 0.08, cornerRadius: 0.01),
-                materials: [frame]
-            )
-            frameEntity.position = [xOffset * houseW * 0.55, upperY, facadeZ + 0.05]
-            frameEntity.name = "window-upper-\(index)"
-            root.addChild(frameEntity)
-
-            let pane = ModelEntity(
-                mesh: .generateBox(width: 1.10, height: 0.92, depth: 0.06, cornerRadius: 0.005),
-                materials: [glass]
-            )
-            pane.position = [frameEntity.position.x, upperY, facadeZ + 0.07]
-            root.addChild(pane)
-
-            let sill = ModelEntity(
-                mesh: .generateBox(width: 1.42, height: 0.06, depth: 0.18, cornerRadius: 0.008),
-                materials: [frame]
-            )
-            sill.position = [frameEntity.position.x, upperY - 0.56, facadeZ + 0.09]
-            root.addChild(sill)
-        }
-
-        // balkon nad wejściem
-        let balconyWidth: Float = min(4.6, houseW * 0.55)
-        let balconyDepth: Float = 1.35
-        let balconyZ = houseD / 2 + balconyDepth / 2
-        let balcony = ModelEntity(
-            mesh: .generateBox(width: balconyWidth, height: 0.18, depth: balconyDepth, cornerRadius: 0.03),
-            materials: [SimpleMaterial(color: color("#d8d2c6"), isMetallic: false)]
-        )
-        balcony.position = [0, storeyY, balconyZ]
-        balcony.name = "balcony"
-        root.addChild(balcony)
-
-        // balustrada: szkło + pochwyt
-        var railingGlass = PhysicallyBasedMaterial()
-        railingGlass.baseColor = .init(tint: PlatformColor(red: 0.55, green: 0.62, blue: 0.66, alpha: 0.55))
-        railingGlass.roughness = .init(floatLiteral: 0.12)
-        railingGlass.metallic = .init(floatLiteral: 0.1)
-        railingGlass.blending = .transparent(opacity: .init(floatLiteral: 0.30))
-
-        let panel = ModelEntity(
-            mesh: .generateBox(width: balconyWidth - 0.1, height: 0.95, depth: 0.04, cornerRadius: 0),
-            materials: [railingGlass]
-        )
-        panel.position = [0, storeyY + 0.55, balconyZ + balconyDepth / 2 - 0.05]
-        panel.name = "balcony-glass"
-        root.addChild(panel)
-
-        var railMaterial = PhysicallyBasedMaterial()
-        railMaterial.baseColor = .init(tint: color("#3c3f42"))
-        railMaterial.roughness = .init(floatLiteral: 0.4)
-        railMaterial.metallic = .init(floatLiteral: 0.6)
-        let handrail = ModelEntity(
-            mesh: .generateBox(width: balconyWidth, height: 0.06, depth: 0.10, cornerRadius: 0.01),
-            materials: [railMaterial]
-        )
-        handrail.position = [0, storeyY + 1.06, balconyZ + balconyDepth / 2 - 0.05]
-        root.addChild(handrail)
-
-        // portyk: dwie kolumny podtrzymujące balkon
-        for side in [Float(-1), Float(1)] {
-            let column = ModelEntity(
-                mesh: .generateCylinder(height: storeyY, radius: 0.18),
-                materials: [wallMaterial]
-            )
-            column.position = [side * (balconyWidth / 2 - 0.35), storeyY / 2, houseD / 2 + balconyDepth - 0.35]
-            column.name = "portico-column"
-            root.addChild(column)
-
-            let base = ModelEntity(
-                mesh: .generateBox(width: 0.46, height: 0.12, depth: 0.46, cornerRadius: 0.01),
-                materials: [stepMaterial]
-            )
-            base.position = [column.position.x, 0.06, column.position.z]
-            root.addChild(base)
-        }
-
-        // komin z cegły — musi WYSTAWAĆ nad kalenicę, inaczej chowa się w połaci
-        var brickMaterial = PhysicallyBasedMaterial()
-        brickMaterial.baseColor = .init(tint: color("#8d5a44"))
-        brickMaterial.roughness = .init(floatLiteral: 0.9)
-        let chimneyHeight: Float = 2.6
-        let chimney = ModelEntity(
-            mesh: MeshFactory.texturedBox(width: 0.86, height: chimneyHeight, depth: 0.86, tile: 0.5)
-                ?? .generateBox(width: 0.86, height: chimneyHeight, depth: 0.86, cornerRadius: 0.01),
-            materials: [brickMaterial]
-        )
-        // na kalenicy (z = 0), przesunięty w bok — typowe miejsce komina w willi
-        chimney.position = [-houseW * 0.26, houseHeight + rise + chimneyHeight / 2 - 0.9, 0]
-        chimney.name = "chimney"
-        root.addChild(chimney)
-
-        let cap = ModelEntity(
-            mesh: .generateBox(width: 1.02, height: 0.12, depth: 1.02, cornerRadius: 0.01),
-            materials: [stepMaterial]
-        )
-        cap.position = [chimney.position.x, chimney.position.y + chimneyHeight / 2 + 0.06, chimney.position.z]
-        root.addChild(cap)
-
-        // listwy 80 × 20 mm
+        // listwy przypodłogowe 80 × 20 mm
         let skirting = SimpleMaterial(color: color("#f4f1ea"), isMetallic: false)
         for i in 0..<4 {
-            let along: Float = (i < 2) ? meters(room.width) : 0.02
-            let deep: Float = (i < 2) ? 0.02 : meters(room.depth)
+            let along: Float = (i < 2) ? houseW : 0.02
+            let deep: Float = (i < 2) ? 0.02 : houseD
             let strip = ModelEntity(
                 mesh: .generateBox(width: along, height: 0.08, depth: deep, cornerRadius: 0),
                 materials: [skirting]

@@ -19,7 +19,7 @@ public enum EnvironmentBuilder {
         public var fogBanks: Int = 40           // mgła w dolinach
         public var mountains: Int = 26
         public var birds: Int = 6
-        public var clouds: Int = 20
+        public var clouds: Int = 28
         public var seed: UInt64 = 20261111
         public init() {}
     }
@@ -46,22 +46,24 @@ public enum EnvironmentBuilder {
         root.name = "environment"
         var rng = RNG(options.seed)
 
-        root.addChild(sky(radius: 24000))
+        // Nieba NIE stawiamy jako kuli: promień 24 km leżał poza far plane
+        // kamery, a jej „mgielna" kula zasłaniała niebo na szaro. Tło nieba
+        // daje skybox środowiska z SceneView.
         root.addChild(ground(radius: options.radius))
         root.addChild(farMeadow(inner: options.radius - 2, outer: 6000))
         // Bieszczady: pasma w warstwach, za nimi uproszczone tło lasu,
         // a między nimi mgła w dolinach. Kolejność = kolejność malowania pleneru.
-        // Tło: trzy plany ZIELONYCH wzgórz z lasem, każde za pasem mgły.
-        // Od najbliższego: ciemna zieleń → średnia → blada mglista.
-        root.addChild(hillBackdrop(radius: options.radius * 3.2, heightRange: 14...38,
-                                   tint: (0.13, 0.24, 0.17)))
-        root.addChild(fogRings(radius: options.radius * 3.35, count: 22, height: 26, opacity: 0.45))
-        root.addChild(hillBackdrop(radius: options.radius * 5.0, heightRange: 32...78,
-                                   tint: (0.24, 0.35, 0.28)))
-        root.addChild(fogRings(radius: options.radius * 5.3, count: 20, height: 48, opacity: 0.55))
-        root.addChild(hillBackdrop(radius: options.radius * 7.6, heightRange: 60...130,
-                                   tint: (0.40, 0.49, 0.44), jitter: false))
-        root.addChild(fogRings(radius: options.radius * 8.0, count: 18, height: 80, opacity: 0.62))
+        // Tło: PRAWDZIWE zdjęcie Bieszczad na walcu, zszyte bez szwu
+        // (obraz + odbicie lustrzane), z pasami mgły przed nim.
+        root.addChild(photoBackdrop(name: "bieszczady",
+                                    radius: options.radius * 4.4,
+                                    // pasmo przesunięte w dół: łąka ze zdjęcia
+                                    // ma wypaść POD horyzontem, a grzbiety nad nim
+                                    bottom: -70, top: 120))
+        // mgła dokładnie na styku panoramy z niebem — zaszywa górną krawędź
+        root.addChild(fogRings(radius: options.radius * 4.0, count: 26, height: 34, opacity: 0.55))
+        root.addChild(fogRings(radius: options.radius * 5.4, count: 24, height: 48, opacity: 0.42))
+        root.addChild(fogRings(radius: options.radius * 4.2, count: 22, height: 26, opacity: 0.30))
         root.addChild(fogBanks(options: options, rng: &rng))
         root.addChild(clouds(options: options, rng: &rng))
         root.addChild(forest(options: options, rng: &rng, room: room))
@@ -84,11 +86,11 @@ public enum EnvironmentBuilder {
                                   bytesPerRow: 0, space: colorSpace,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         let colors = [
-            // Bieszczady: zachmurzone, chłodne niebo — bez nasyconego błękitu
-            CGColor(red: 0.60, green: 0.68, blue: 0.74, alpha: 1),
-            CGColor(red: 0.72, green: 0.78, blue: 0.82, alpha: 1),
-            CGColor(red: 0.83, green: 0.86, blue: 0.88, alpha: 1),
-            CGColor(red: 0.90, green: 0.92, blue: 0.92, alpha: 1),
+            // Niebo jak na zdjęciu połoniny: błękit u góry, biel przy horyzoncie
+            CGColor(red: 0.36, green: 0.55, blue: 0.78, alpha: 1),
+            CGColor(red: 0.55, green: 0.70, blue: 0.86, alpha: 1),
+            CGColor(red: 0.79, green: 0.86, blue: 0.91, alpha: 1),
+            CGColor(red: 0.93, green: 0.94, blue: 0.92, alpha: 1),
         ] as CFArray
         guard let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 0.45, 0.72, 1]) else { return nil }
         ctx.drawLinearGradient(gradient, start: CGPoint(x: 0, y: size), end: CGPoint(x: 0, y: 0), options: [])
@@ -280,6 +282,8 @@ public enum EnvironmentBuilder {
         radius: Float,
         heightRange: ClosedRange<Float>,
         tint: (Float, Float, Float),
+        texture: TextureResource? = nil,
+        uvRepeat: Float = 1,
         jitter: Bool = true
     ) -> Entity {
         let root = Entity()
@@ -316,7 +320,9 @@ public enum EnvironmentBuilder {
             ]
             let inward = normalize(SIMD3<Float>(-(x0 + x1) / 2, 0, -(z0 + z1) / 2))
             normals += [inward, inward, inward, inward]
-            uvs += [SIMD2(0, 0), SIMD2(1, 0), SIMD2(1, 1), SIMD2(0, 1)]
+            let u0 = Float(i) / Float(segments) * uvRepeat
+            let u1 = Float(i + 1) / Float(segments) * uvRepeat
+            uvs += [SIMD2(u0, 0), SIMD2(u1, 0), SIMD2(u1, 1), SIMD2(u0, 1)]
             indices += [base, base + 1, base + 2, base, base + 2, base + 3]
         }
 
@@ -327,11 +333,69 @@ public enum EnvironmentBuilder {
         descriptor.primitives = .triangles(indices)
         guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return root }
 
-        let material = UnlitMaterial(color: PlatformColor(
-            red: CGFloat(tint.0), green: CGFloat(tint.1), blue: CGFloat(tint.2), alpha: 1
-        ))
+        var material = UnlitMaterial()
+        if let texture {
+            // korony lasu z tekstury — tło przestaje być jednolitą ścianą
+            material.color = .init(tint: PlatformColor(
+                red: CGFloat(tint.0), green: CGFloat(tint.1), blue: CGFloat(tint.2), alpha: 1
+            ), texture: .init(texture))
+        } else {
+            material.color = .init(tint: PlatformColor(
+                red: CGFloat(tint.0), green: CGFloat(tint.1), blue: CGFloat(tint.2), alpha: 1
+            ))
+        }
         let entity = ModelEntity(mesh: mesh, materials: [material])
         entity.name = "hills-silhouette"
+        root.addChild(entity)
+        return root
+    }
+
+    /// Tło z prawdziwego zdjęcia: panorama na walcu, za pasem mgły.
+    ///
+    /// Zdjęcie jest zszyte z odbiciem lustrzanym, więc na walcu nie widać
+    /// łączenia. Wysokość pasma dobrana tak, żeby horyzont zdjęcia wypadał
+    /// na wysokości horyzontu sceny — inaczej „góry" wiszą w powietrzu.
+    static func photoBackdrop(name: String, radius: Float, bottom: Float, top: Float) -> Entity {
+        let root = Entity()
+        root.name = "photo-backdrop"
+        guard let texture = EnvironmentArt.panorama(fromImageNamed: name) else { return root }
+
+        let segments = 128
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+
+        for i in 0..<segments {
+            let a0 = Float(i) / Float(segments) * .pi * 2
+            let a1 = Float(i + 1) / Float(segments) * .pi * 2
+            let x0 = cos(a0) * radius, z0 = sin(a0) * radius
+            let x1 = cos(a1) * radius, z1 = sin(a1) * radius
+            let base = UInt32(positions.count)
+            positions += [
+                SIMD3(x0, bottom, z0), SIMD3(x1, bottom, z1),
+                SIMD3(x1, top, z1), SIMD3(x0, top, z0),
+            ]
+            let inward = normalize(SIMD3<Float>(-(x0 + x1) / 2, 0, -(z0 + z1) / 2))
+            normals += [inward, inward, inward, inward]
+            let u0 = Float(i) / Float(segments)
+            let u1 = Float(i + 1) / Float(segments)
+            uvs += [SIMD2(u0, 0), SIMD2(u1, 0), SIMD2(u1, 1), SIMD2(u0, 1)]
+            indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+        }
+
+        var descriptor = MeshDescriptor(name: "photoBackdrop")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.normals = MeshBuffer(normals)
+        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.primitives = .triangles(indices)
+        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return root }
+
+        var material = UnlitMaterial()
+        material.color = .init(tint: .white, texture: .init(texture))
+        material.faceCulling = .none
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        entity.name = "panorama"
         root.addChild(entity)
         return root
     }
@@ -776,7 +840,7 @@ public enum EnvironmentBuilder {
 
         var material = UnlitMaterial()
         material.color = .init(tint: .white, texture: .init(texture))
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.85))
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.55))
         material.faceCulling = .none
 
         let mesh = MeshFactory.ground(size: 1, tile: 1) ?? .generatePlane(width: 1, depth: 1)
@@ -784,9 +848,9 @@ public enum EnvironmentBuilder {
             let cloud = ModelEntity(mesh: mesh, materials: [material])
             let angle = rng.range(0, .pi * 2)
             let distance = rng.range(180, 900)
-            let size = rng.range(70, 190)
+            let size = rng.range(90, 220)
             cloud.scale = [size, 1, size * rng.range(0.45, 0.7)]
-            cloud.position = [cos(angle) * distance, rng.range(85, 190), sin(angle) * distance]
+            cloud.position = [cos(angle) * distance, rng.range(110, 260), sin(angle) * distance]
             cloud.orientation = simd_quatf(angle: rng.range(0, .pi), axis: [0, 1, 0])
             cloud.name = "cloud-\(i)"
             root.addChild(cloud)
