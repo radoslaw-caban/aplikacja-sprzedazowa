@@ -84,7 +84,6 @@ public enum ScanHouseBuilder {
         let sill: Float = 0.95
         let head: Float = 2.15
         let windowWidth: Float = 1.40
-        let margin: Float = 0.90
 
         struct Opening {
             let start: Float

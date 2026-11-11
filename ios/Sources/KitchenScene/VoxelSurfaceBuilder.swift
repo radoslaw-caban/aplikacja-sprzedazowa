@@ -95,7 +95,7 @@ public enum VoxelSurfaceBuilder {
                 let cc = colors[i]
                 c = SIMD3(Float(cc.x), Float(cc.y), Float(cc.z))
             }
-            if var existing = sums[key] {
+            if let existing = sums[key] {
                 sums[key] = existing + c
                 counts[key] = (counts[key] ?? 0) + 1
             } else {

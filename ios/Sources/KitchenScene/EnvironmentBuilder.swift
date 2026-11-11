@@ -109,7 +109,7 @@ public enum EnvironmentBuilder {
         guard let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 0.45, 0.72, 1]) else { return nil }
         ctx.drawLinearGradient(gradient, start: CGPoint(x: 0, y: size), end: CGPoint(x: 0, y: 0), options: [])
         guard let image = ctx.makeImage() else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Niebo: kula widziana od środka, z gradientem od błękitu do mgły.
@@ -1262,7 +1262,7 @@ public enum EnvironmentBuilder {
                         angle += .pi / 4
                         let next = SIMD3<Float>(cos(angle) * radius, height, sin(angle) * radius)
                         try? await Task.sleep(nanoseconds: 10_000_000)
-                        await bird.move(to: Transform(translation: next), relativeTo: bird.parent, duration: 3.5, timingFunction: .linear)
+                        bird.move(to: Transform(translation: next), relativeTo: bird.parent, duration: 3.5, timingFunction: .linear)
                     }
                 }
                 continue
@@ -1295,7 +1295,7 @@ public enum EnvironmentBuilder {
                     angle += .pi / 4
                     let next = SIMD3<Float>(cos(angle) * radius, height, sin(angle) * radius)
                     try? await Task.sleep(nanoseconds: 10_000_000)
-                    await bird.move(to: Transform(translation: next), relativeTo: bird.parent, duration: 3.5, timingFunction: .linear)
+                    bird.move(to: Transform(translation: next), relativeTo: bird.parent, duration: 3.5, timingFunction: .linear)
                 }
             }
 

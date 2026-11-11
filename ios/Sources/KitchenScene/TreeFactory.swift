@@ -145,6 +145,7 @@ enum TreeFactory {
 
     // MARK: - materiały
 
+    @MainActor
     private static func barkMaterial() -> PhysicallyBasedMaterial {
         var m = PhysicallyBasedMaterial()
         if let tex = EnvironmentArt.bark() {
@@ -157,6 +158,7 @@ enum TreeFactory {
         return m
     }
 
+    @MainActor
     private static func leafMaterial(_ texture: TextureResource?, tint: TreeColor, roughness: Float = 0.85) -> PhysicallyBasedMaterial {
         var m = PhysicallyBasedMaterial()
         if let texture {
@@ -202,6 +204,7 @@ enum TreeFactory {
 
     /// Drzewo liściaste: pień rozwidla się rekurencyjnie, na końcach gałęzi
     /// siedzą kępy liści.
+    @MainActor
     private static func deciduous(
         seed: UInt64,
         baseHeight: Float,
@@ -297,6 +300,7 @@ enum TreeFactory {
     }
 
     /// Brzoza: biały pień, cienkie gałęzie, jasna korona.
+    @MainActor
     private static func birch(seed: UInt64, baseHeight: Float, leaves: TextureResource?) -> Variant {
         var rng = RNG(seed)
         var trunk = MeshBuilder()
@@ -344,6 +348,7 @@ enum TreeFactory {
     }
 
     /// Iglaste: pień + okółki gałęzi, na nich kępy igliwia.
+    @MainActor
     private static func conifer(
         seed: UInt64,
         baseHeight: Float,
@@ -401,9 +406,9 @@ enum TreeFactory {
 
     /// Instancja wariantu: skala = docelowa wysokość, losowy obrót.
     /// Siatka i materiały są wspólne — to jedno pole i jedna encja na drzewo.
-    @MainActor
     /// Uproszczony zamiennik drzewa dla oddali: pień + kilka dużych kart liści.
     /// Pełne drzewo to tysiące kart; z 60 m widać tylko sylwetkę.
+    @MainActor
     static func proxy(
         _ variant: Variant,
         height: Float,
@@ -466,6 +471,7 @@ enum TreeFactory {
         return root
     }
 
+    @MainActor
     static func instance(
         _ variant: Variant,
         height: Float,
@@ -535,6 +541,7 @@ enum GrassFactory {
         return cache
     }
 
+    @MainActor
     private static func makePatch(
         seed: UInt64,
         texture: TextureResource,

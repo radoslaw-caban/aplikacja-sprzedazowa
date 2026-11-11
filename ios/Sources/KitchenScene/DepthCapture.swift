@@ -121,7 +121,7 @@ public final class DepthFusionStore: @unchecked Sendable {
     /// podwaja się w szczycie.
     public func finish(minSamples: Int = 1) -> FusedCloud? {
         lock.lock()
-        var taken = state
+        let taken = state
         state = DepthFusionState(cell: taken.cell)
         let hadEnabled = enabled
         enabled = false

@@ -36,9 +36,7 @@ public enum PointCloudRenderer {
 
         // centrowanie: X/Z na środku, Y od podłogi
         let b = cloud.robustBounds()
-        let center = SIMD3<Float>((b.min.x + b.max.x) / 2, b.min.y, (b.min.z + b.max.z) / 2)
         let toMeters = cloud.unitScaleToMeters
-        let height = max(0.001, (b.max.y - b.min.y) * toMeters)
 
         // Kolor: jeśli skan ma RGB, grupujemy punkty po kolorze (64 kubełki),
         // bo RealityKit nie czyta koloru wierzchołka w materiałach wbudowanych.

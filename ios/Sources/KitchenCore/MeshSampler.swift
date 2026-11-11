@@ -101,7 +101,7 @@ public enum MeshSampler {
             // i `count * count` przelewa Int64 (crash), dlatego dzielimy.
             let uc = uRange.count, vc = vRange.count
             guard uc > 0, vc > 0, uc <= 60_000_000, vc <= 60_000_000, uc <= 60_000_000 / vc else { continue }
-            let cells = uc * vc
+            _ = uc * vc   // kontrola przepełnienia wyżej
 
             let denom: Float = dropAxis == 0 ? n.x : (dropAxis == 1 ? n.y : n.z)
             guard abs(denom) > 1e-9 else { continue }

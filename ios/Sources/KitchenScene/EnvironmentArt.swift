@@ -2,7 +2,6 @@ import Foundation
 import CoreGraphics
 import ImageIO
 import RealityKit
-import KitchenScene
 
 #if os(iOS)
 import UIKit
@@ -18,6 +17,7 @@ public enum EnvironmentArt {
 
     // MARK: - pomocnicze
 
+    @MainActor
     static func makeImage(width: Int, height: Int, draw: (CGContext) -> Void) -> CGImage? {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let ctx = CGContext(
@@ -29,6 +29,7 @@ public enum EnvironmentArt {
         return ctx.makeImage()
     }
 
+    @MainActor
     static func noise(_ ctx: CGContext, width: Int, height: Int, count: Int, alpha: CGFloat, size: ClosedRange<Int>) {
         for _ in 0..<count {
             let x = CGFloat.random(in: 0..<CGFloat(width))
@@ -44,6 +45,7 @@ public enum EnvironmentArt {
 
     /// Trawa: zielona baza + drobne źdźbła.
     /// Tekstura fotograficzna z paczki (Poly Haven, CC0).
+    @MainActor
     public static func photoTexture(_ name: String, semantic: TextureResource.Semantic = .color) -> TextureResource? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "jpg",
                                         subdirectory: "Textures") ?? Bundle.main.url(forResource: name, withExtension: "jpg") else {
@@ -52,6 +54,7 @@ public enum EnvironmentArt {
         return try? TextureResource.load(contentsOf: url, withName: name, options: .init(semantic: semantic))
     }
 
+    @MainActor
     public static func grass(seed: UInt64 = 1) -> TextureResource? {
         if let photo = photoTexture("grass_diff") { return photo }
         let size = 512
@@ -70,10 +73,11 @@ public enum EnvironmentArt {
                 ctx.strokePath()
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Kostka brukowa: siatka kostek z fugami.
+    @MainActor
     public static func cobble() -> TextureResource? {
         let size = 512
         let cell = 64
@@ -94,10 +98,11 @@ public enum EnvironmentArt {
             }
             self.noise(ctx, width: size, height: size, count: 4000, alpha: 0.10, size: 1...3)
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Kora: pionowe smugi.
+    @MainActor
     public static func bark() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -113,10 +118,11 @@ public enum EnvironmentArt {
                 ctx.strokePath()
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Tynk elewacji: jednolity z ziarnem.
+    @MainActor
     public static func plaster() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -124,13 +130,14 @@ public enum EnvironmentArt {
             ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
             self.noise(ctx, width: size, height: size, count: 6000, alpha: 0.12, size: 1...3)
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Beton fundamentu: szary, z kruszywem i śladami szalunku.
     ///
     /// Fundament musi być widoczny jako inny materiał niż elewacja — inaczej
     /// dom „pływa" na trawie i nie wiadomo, gdzie kończy się budynek.
+    @MainActor
     public static func concrete() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -154,10 +161,11 @@ public enum EnvironmentArt {
                                        end: CGPoint(x: 0, y: 0), options: [])
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Asfalt drogi: ciemny, drobnoziarnisty, z jaśniejszymi smugami zużycia.
+    @MainActor
     public static func asphalt() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -179,13 +187,14 @@ public enum EnvironmentArt {
                 ctx.strokePath()
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Chmura: miękka biała plama z przezroczystym brzegiem.
     ///
     /// Alfa jest kluczowa — bez niej chmura to biała kartka na niebie.
     /// Kilka nałożonych kół o losowej alfa daje kłębiasty obrys.
+    @MainActor
     public static func cloud() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -204,7 +213,7 @@ public enum EnvironmentArt {
                                        endCenter: CGPoint(x: cx, y: cy), endRadius: r, options: [])
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Gęsta trawa: kępy źdźbeł z przezroczystym tłem — do billboardów.
@@ -212,6 +221,7 @@ public enum EnvironmentArt {
     /// Sama tekstura podłoża nie daje wrażenia „gęstej trawy": z bliska widać
     /// płaski dywan. Dopiero kępy postawione w terenie dają wysokość i ruch
     /// światła jak na połoninie.
+    @MainActor
     public static func grassBlades() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -237,12 +247,13 @@ public enum EnvironmentArt {
                 ctx.fillEllipse(in: CGRect(x: x, y: y, width: 4, height: 4))
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Kępa liści: kilkadziesiąt drobnych listków na przezroczystym tle.
     /// Taka karta na końcu gałęzi czyta się jak korona — z bliska widać liście,
     /// z daleka masę zieleni z prześwitami.
+    @MainActor
     public static func leafCluster() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -261,10 +272,11 @@ public enum EnvironmentArt {
                 ctx.restoreGState()
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Kępa igliwia: cienkie, ciemne igły rozchodzące się z punktu.
+    @MainActor
     public static func needleCluster() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -282,10 +294,11 @@ public enum EnvironmentArt {
                 ctx.strokePath()
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Kępa z kwiatami: źdźbła + kolorowe główki (biało-żółte, jak na połoninie).
+    @MainActor
     public static func flowerCluster() -> TextureResource? {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
@@ -318,7 +331,7 @@ public enum EnvironmentArt {
                 ctx.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Tekstura koron lasu na wzgórzach: kępy ciemnej zieleni z prześwitami.
@@ -326,6 +339,7 @@ public enum EnvironmentArt {
     /// Płaski kolor na tle czyta się jak zielona ściana. Dopiero drobna
     /// tekstura koron (kilkaset kół o różnej jasności) daje wrażenie, że to las
     /// pokrywający zbocze — tak jak na zdjęciach połonin.
+    @MainActor
     public static func forestCanopy() -> TextureResource? {
         let width = 512, height = 128
         guard let image = makeImage(width: width, height: height, draw: { ctx in
@@ -350,7 +364,7 @@ public enum EnvironmentArt {
                 ctx.fill(CGRect(x: x, y: 0, width: w, height: CGFloat(height) * 0.55))
             }
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Panorama z pliku zdjęciowego, zszyta BEZ SZWU: obraz + jego lustrzane
@@ -358,6 +372,7 @@ public enum EnvironmentArt {
     /// i odbicie są identyczne — na walcu nie widać łączenia.
     /// Wczytanie zdjęcia z bundle — przez ścieżkę pliku, bo `Bundle.url(forResource:)`
     /// nie znajduje plików wewnątrz referencji folderu na wszystkich systemach.
+    @MainActor
     static func loadCGImage(named name: String) -> CGImage? {
         let path = Bundle.main.path(forResource: name, ofType: "jpg", inDirectory: "Textures")
             ?? Bundle.main.path(forResource: name, ofType: "jpg")
@@ -369,6 +384,7 @@ public enum EnvironmentArt {
         #endif
     }
 
+    @MainActor
     public static func panorama(fromImageNamed name: String) -> TextureResource? {
         guard let image = loadCGImage(named: name) else {
             print("[env] panorama: nie wczytano pliku \(name).jpg")
@@ -406,13 +422,14 @@ public enum EnvironmentArt {
         ctx.restoreGState()
 
         guard let panorama = ctx.makeImage() else { return nil }
-        let texture = try? TextureResource.generate(from: panorama, options: .init(semantic: .color))
+        let texture = try? TextureResource(image: panorama, withName: nil, options: .init(semantic: .color))
         print("[env] panorama: \(copyWidth * 2)x\(copyHeight), tekstura:", texture != nil)
         return texture
     }
 
     /// Miękki, okrągły cień kontaktowy (AO) pod obiektami. Siatka terenu nie ma
     /// ambient occlusion, więc bez tego drzewa i auto „lewitują" nad trawą.
+    @MainActor
     public static func softShadow() -> TextureResource? {
         let size = 128
         guard let ctx = CGContext(
@@ -435,10 +452,11 @@ public enum EnvironmentArt {
                                        width: radius * 2 * t, height: radius * 2 * t))
         }
         guard let image = ctx.makeImage() else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     /// Mgła: poziomy gradient bieli — kładziony na pasmach i w dolinach.
+    @MainActor
     public static func hazeGradient() -> TextureResource? {
         let height = 128
         guard let image = makeImage(width: 1, height: height, draw: { ctx in
@@ -450,12 +468,13 @@ public enum EnvironmentArt {
             ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: 0),
                                    end: CGPoint(x: 0, y: CGFloat(height)), options: [])
         }) else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     // MARK: - środowisko (IBL)
 
     /// Equirectangular skybox: gradient nieba + słońce + pas mgły przy horyzoncie.
+    @MainActor
     public static func skyEquirect() -> CGImage? {
         let width = 1024, height = 512
         return makeImage(width: width, height: height, draw: { ctx in

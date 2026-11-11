@@ -96,8 +96,8 @@ public struct ScanTransform: Codable, Sendable, Equatable {
         // obrót zmienia wymiary w rzucie — po obrocie liczymy obrys ponownie
         let a = rotationDeg * .pi / 180
         let swap = abs(sin(a)) > 0.5
-        let spanX = (swap ? d : w) * scale
-        let spanZ = (swap ? w : d) * scale
+        _ = (swap ? d : w) * scale      // szerokość po obrocie (do rozbudowy układu)
+        _ = (swap ? w : d) * scale
 
         // środek chmury po obrocie (obrót wokół początku układu chmury)
         let cx = Double(cloudMin.x + cloudMax.x) / 2 * scale

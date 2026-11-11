@@ -310,15 +310,15 @@ public enum GLBLoader {
             return readFloat(data, offset)
         case 5125:
             var v: UInt32 = 0
-            withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 4)) }
+            _ = withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 4)) }
             return normalized ? Float(v) / Float(UInt32.max) : Float(v)
         case 5123:
             var v: UInt16 = 0
-            withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 2)) }
+            _ = withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 2)) }
             return normalized ? Float(v) / 65535.0 : Float(v)
         case 5122:
             var v: Int16 = 0
-            withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 2)) }
+            _ = withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 2)) }
             return normalized ? max(Float(v) / 32767.0, -1) : Float(v)
         case 5121:
             return normalized ? Float(data[offset]) / 255.0 : Float(data[offset])
@@ -371,6 +371,7 @@ public enum GLBLoader {
         Float(bitPattern: readUInt32(data, offset))
     }
 
+    @MainActor
     static func imageTexture(_ view: [String: Any], bin: Data) -> TextureResource? {
         let offset = (view["byteOffset"] as? Int) ?? 0
         let length = (view["byteLength"] as? Int) ?? 0
@@ -379,7 +380,7 @@ public enum GLBLoader {
         guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
         else { return nil }
-        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+        return try? TextureResource(image: image, withName: nil, options: .init(semantic: .color))
     }
 
     static func defaultNormals(positions: [SIMD3<Float>], indices: [UInt32]) -> [SIMD3<Float>] {

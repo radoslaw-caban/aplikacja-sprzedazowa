@@ -8,6 +8,7 @@ import simd
 enum MeshFactory {
 
     /// Pudełko z UV liczonym w metrach: `tile` = rozmiar jednej kafelki (m).
+    @MainActor
     static func texturedBox(
         width: Float,
         height: Float,
@@ -57,6 +58,7 @@ enum MeshFactory {
 
     /// Dach dwuspadowy: dwie połacie + okap. Kalenica wzdłuż osi X.
     /// Zwraca siatkę dachu (bez szczytów — te robi `gableEnds`).
+    @MainActor
     static func gabledRoof(
         width: Float,
         depth: Float,
@@ -103,6 +105,7 @@ enum MeshFactory {
     }
 
     /// Trójkąty szczytowe (wypełnienie między połaciami) — materiał ściany.
+    @MainActor
     static func gableEnds(width: Float, rise: Float, depth: Float) -> MeshResource? {
         let halfW = width / 2
         let halfD = depth / 2
@@ -131,6 +134,7 @@ enum MeshFactory {
     }
 
     /// Płaszczyzna pozioma z UV w metrach (trawa, kostka, taras).
+    @MainActor
     static func ground(size: Float, tile: Float) -> MeshResource? {
         let r = size / 2
         var descriptor = MeshDescriptor(name: "ground")
