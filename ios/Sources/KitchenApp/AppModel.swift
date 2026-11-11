@@ -100,6 +100,7 @@ final class AppModel {
     func updateRoom(_ room: Room) {
         guard projects.indices.contains(currentIndex) else { return }
         projects[currentIndex].room = room
+        rebuildZones()
     }
 
     /// Plan bieżącego projektu. Gdy jeszcze nie rysowany — prostokąt z pokoju,
@@ -131,7 +132,68 @@ final class AppModel {
         projects[currentIndex].plan = plan
         projects[currentIndex].room = plan.room(name: projects[currentIndex].room.name)
         projects[currentIndex].updatedAt = Date()
+        // strefy są przypięte do ścian planu — po zmianie planu odbudowujemy je
+        rebuildZones()
         persist()
+    }
+
+    // MARK: - strefy zabudowy
+
+    /// Strefy bieżącego projektu (brak = pusta lista).
+    var currentZones: [Zone] { current.zones ?? [] }
+
+    /// Nowa strefa na ścianie planu — od razu z gotową propozycją.
+    @discardableResult
+    func addZone(kind: ZoneKind, wallIndex: Int) -> Zone {
+        let z = Zones.makeZone(kind: kind, wallIndex: wallIndex)
+        guard projects.indices.contains(currentIndex) else { return z }
+        var zones = projects[currentIndex].zones ?? []
+        zones.append(z)
+        projects[currentIndex].zones = zones
+        rebuildZones()
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        status = "Strefa: \(z.name) — gotowa propozycja"
+        return z
+    }
+
+    func updateZone(_ zone: Zone, persistNow: Bool = false) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var zones = projects[currentIndex].zones ?? []
+        guard let i = zones.firstIndex(where: { $0.id == zone.id }) else { return }
+        zones[i] = zone
+        projects[currentIndex].zones = zones
+        rebuildZones()
+        projects[currentIndex].updatedAt = Date()
+        if persistNow { persist() }
+    }
+
+    func setZoneValue(_ zoneID: UUID, key: String, value: ZoneValue) {
+        guard var zone = currentZones.first(where: { $0.id == zoneID }) else { return }
+        zone.answers[key] = value
+        updateZone(zone)
+    }
+
+    func deleteZone(_ id: UUID) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var zones = projects[currentIndex].zones ?? []
+        zones.removeAll { $0.id == id }
+        projects[currentIndex].zones = zones
+        rebuildZones()
+        persist()
+        status = "Strefa usunięta"
+    }
+
+    /// Odtwarza szafki stref (szafki ręczne zostają). Strefa jest właścicielem
+    /// swoich szafek — zmiana odpowiedzi przebudowuje tylko jej zabudowę.
+    func rebuildZones() {
+        guard projects.indices.contains(currentIndex) else { return }
+        let zones = projects[currentIndex].zones ?? []
+        projects[currentIndex].cabinets = Zones.rebuilt(
+            projects[currentIndex].cabinets,
+            zones: zones,
+            plan: currentPlan
+        )
     }
 
     // MARK: - dokumenty

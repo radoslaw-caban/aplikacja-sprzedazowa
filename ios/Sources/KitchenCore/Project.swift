@@ -85,6 +85,8 @@ public struct Project: Identifiable, Codable, Sendable {
     public var plan: FloorPlan?
     /// Szczegóły zamówienia — ekran startowy aplikacji.
     public var order: ProjectOrder?
+    /// Strefy zabudowy (auto-projekt) — brak pola = projekt bez stref.
+    public var zones: [Zone]?
 
     public init(
         id: UUID = UUID(),
@@ -95,7 +97,8 @@ public struct Project: Identifiable, Codable, Sendable {
         locked: Bool = false,
         updatedAt: Date = Date(),
         plan: FloorPlan? = nil,
-        order: ProjectOrder? = nil
+        order: ProjectOrder? = nil,
+        zones: [Zone]? = nil
     ) {
         self.id = id
         self.name = name
@@ -106,6 +109,7 @@ public struct Project: Identifiable, Codable, Sendable {
         self.updatedAt = updatedAt
         self.plan = plan
         self.order = order
+        self.zones = zones
     }
 }
 

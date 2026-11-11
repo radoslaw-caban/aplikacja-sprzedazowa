@@ -106,8 +106,24 @@ public enum Generator {
             }
         }
 
+        // ---- szafa przesuwna: panele w płaszczyźnie frontu ----
+        if let panels = c.slidingPanels, panels > 1 {
+            let pw = c.width / Double(panels) + 30
+            for i in 0..<panels {
+                let px = -c.width / 2 + (Double(i) + 0.5) * (c.width / Double(panels))
+                out.append(Box(
+                    id: "\(c.id):slide:\(i)",
+                    role: .front,
+                    cabinetID: c.id,
+                    size: SIMD3(pw, bodyH - 2 * Standards.gap, Standards.panel),
+                    position: SIMD3(px, baseY + bodyH / 2, c.depth / 2 + Standards.gap + Standards.panel / 2 + Double(i) * 18),
+                    color: c.color
+                ))
+            }
+        }
+
         // ---- front (pełne pokrycie korpusu, szczelina 3 mm) ----
-        if c.type != .wall || true {
+        if c.slidingPanels == nil {
             let hasDrawers = c.elements.contains { $0.kind == .drawer }
             if !hasDrawers {
                 out.append(Box(
@@ -125,6 +141,81 @@ public enum Generator {
             }
         }
 
+        // ---- AGD i urządzenia (strefy zabudowy) ----
+        if let appliances = c.appliances, !appliances.isEmpty {
+            out.append(contentsOf: applianceBoxes(c, appliances))
+        }
+
+        return out
+    }
+
+    /// Bryły AGD w układzie lokalnym szafki. Rysowane 4 mm przed frontem,
+    /// żeby nie znikały pod skrzydłem (brak z-fightingu).
+    public static func applianceBoxes(_ c: Cabinet, _ kinds: [ApplianceKind]) -> [Box] {
+        var out: [Box] = []
+        let top = c.height + (c.type == .base ? Standards.worktopThickness : 0)
+        let zFace = c.depth / 2 + Standards.gap + Standards.panel / 2 + 4
+        let steel = "#b9bcc1"
+        let dark = "#15181c"
+        func add(_ kind: String, _ size: SIMD3<Double>, _ pos: SIMD3<Double>, _ color: String) {
+            out.append(Box(id: "\(c.id):ag:\(kind):\(out.count)", role: .appliance,
+                           cabinetID: c.id, size: size, position: pos, color: color))
+        }
+        for kind in kinds {
+            switch kind {
+            case .sink:
+                let w = min(c.width - 120, 760), d = 430.0
+                add("rim", SIMD3(w, 10, d), SIMD3(0, top + 5, 10), steel)
+                add("bowl", SIMD3(w - 90, 160, d - 110), SIMD3(0, top - 80, 10), "#30363d")
+                add("tap", SIMD3(26, 240, 26), SIMD3(0, top + 150, -c.depth / 2 + 110), steel)
+                add("spout", SIMD3(24, 24, 200), SIMD3(0, top + 265, -c.depth / 2 + 210), steel)
+            case .hob:
+                let w = min(c.width - 60, 800), d = 480.0
+                add("glass", SIMD3(w, 6, d), SIMD3(0, top + 3, 10), "#22262c")
+                for (sx, sz) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+                    add("zone", SIMD3(160, 3, 160),
+                        SIMD3(sx * w / 4.2, top + 7, sz * d / 4.6), "#3b4048")
+                }
+            case .oven:
+                let y = c.plinth + (c.type == .tall ? 860 : 120)
+                add("oven", SIMD3(min(560, c.width - 40), 590, 22), SIMD3(0, y + 295, zFace), dark)
+                add("handle", SIMD3(500, 18, 30), SIMD3(0, y + 555, zFace + 20), steel)
+            case .microwave:
+                let y = c.plinth + (c.type == .tall ? 1490 : 480)
+                add("micro", SIMD3(min(520, c.width - 60), 360, 20), SIMD3(0, y + 180, zFace), dark)
+                add("handle", SIMD3(420, 16, 26), SIMD3(0, y + 350, zFace + 18), steel)
+            case .fridge:
+                let h = c.height - c.plinth - 20
+                add("fridge", SIMD3(c.width - 20, h, 22), SIMD3(0, c.plinth + h / 2 + 10, zFace), "#c3c8ce")
+                add("handleL", SIMD3(18, h * 0.55, 26), SIMD3(-c.width / 2 + 40, c.plinth + h * 0.55, zFace + 18), steel)
+                add("handleR", SIMD3(18, h * 0.55, 26), SIMD3(c.width / 2 - 40, c.plinth + h * 0.55, zFace + 18), steel)
+            case .hood:
+                let w = min(c.width, 900)
+                let canopyY = top + 650
+                add("canopy", SIMD3(w, 70, 500), SIMD3(0, canopyY, -c.depth / 2 + 300), steel)
+                add("chimney", SIMD3(280, 700, 260), SIMD3(0, canopyY + 380, -c.depth / 2 + 320), "#cfd2d6")
+            case .dishwasher:
+                let h = c.height - c.plinth - 10
+                add("panel", SIMD3(c.width - 8, h, 20), SIMD3(0, c.plinth + h / 2, zFace), "#c9ccd1")
+                add("strip", SIMD3(c.width - 16, 40, 24), SIMD3(0, c.height - 45, zFace + 12), "#8f939a")
+            case .tv:
+                let tw = min(c.width * 0.8, 1600)
+                let th = tw * 0.5625
+                add("screen", SIMD3(tw, th, 36), SIMD3(0, c.mountHeight + c.height + 700, -c.depth / 2 - 20), "#0b0d10")
+                add("stand", SIMD3(180, 26, 120), SIMD3(0, c.mountHeight + c.height + 700 - th / 2, -c.depth / 2 - 20), steel)
+            case .mirror:
+                add("mirror", SIMD3(min(c.width - 40, 900), min(c.height - 20, 700), 18),
+                    SIMD3(0, c.mountHeight + c.height / 2, c.depth / 2 + 10), "#a9c2cf")
+            case .basin:
+                add("basin", SIMD3(min(c.width - 100, 600), 130, 400), SIMD3(0, top + 65, 10), "#f2f1ec")
+                add("tap", SIMD3(26, 220, 26), SIMD3(0, top + 170, -c.depth / 2 + 90), steel)
+            case .washer:
+                add("panel", SIMD3(c.width - 8, c.height - c.plinth - 20, 20),
+                    SIMD3(0, c.height / 2, zFace), "#e4e2dd")
+            case .bin:
+                break
+            }
+        }
         return out
     }
 

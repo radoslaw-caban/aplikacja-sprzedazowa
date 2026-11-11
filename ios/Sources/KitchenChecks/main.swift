@@ -26,6 +26,121 @@ final class Reporter {
 
 func near(_ a: Double, _ b: Double, _ eps: Double = 0.001) -> Bool { abs(a - b) <= eps }
 
+func runZoneChecks(_ r: Reporter) {
+    print("\nStrefy zabudowy (auto-projekt)")
+
+    let ctx = ZoneContext(wallLength: 5000, wallHeight: 2600, roomWidth: 5000, roomDepth: 4000)
+
+    // każda strefa ma sensowny plan
+    for spec in ZoneLibrary.specs {
+        let plan = ZonePlanner.plan(spec.kind, ZoneAnswers(spec.defaults), ctx)
+        r.check("\(spec.short): plan niepusty", !plan.parts.isEmpty, "\(plan.parts.count) części")
+        r.check("\(spec.short): dodatnie wymiary",
+                plan.parts.allSatisfy { $0.width > 100 && $0.height > 100 && $0.depth > 100 })
+        let base = plan.parts.filter { $0.type == .base }.sorted { $0.at < $1.at }
+        var contiguous = true
+        for i in 1..<max(1, base.count) where base.count > 1 {
+            if abs(base[i].at - (base[i - 1].at + base[i - 1].width)) > 0.6 { contiguous = false }
+        }
+        r.check("\(spec.short): ciąg dolny bez dziur", contiguous || base.count < 2)
+    }
+
+    // gotowanie
+    let cook = ZoneAnswers(ZoneLibrary.defaults(.kitchenCook))
+    let cookPlan = ZonePlanner.plan(.kitchenCook, cook, ctx)
+    let hob = cookPlan.parts.first { $0.role == "hob" }
+    r.check("gotowanie: szafka pod płytą 600", hob?.width == 600)
+    r.check("gotowanie: cokół 900 − 38 − 720 = 142", hob?.plinth == 142, "\(hob?.plinth ?? -1)")
+    r.check("gotowanie: słupek piekarnika 600",
+            cookPlan.parts.first { $0.role == "oven" }?.width == 600)
+    r.check("gotowanie: piekarnik + mikrofala",
+            cookPlan.parts.first { $0.role == "oven" }?.appliances.contains(.microwave) == true)
+    r.check("gotowanie: lodówka 600", cookPlan.parts.first { $0.role == "fridge" }?.width == 600)
+    r.check("gotowanie: witryny na obu końcach",
+            cookPlan.parts.filter { $0.role.hasPrefix("witryna") }.count == 2)
+    let wallCab = cookPlan.parts.first { $0.type == .wall }
+    r.check("gotowanie: szafki górne 600 nad blatem", wallCab?.mountHeight == 1500)
+    r.check("gotowanie: okap na szafce płyty", hob?.appliances.contains(.hood) == true)
+    r.check("gotowanie: zmywarka 600", cookPlan.parts.contains { $0.role == "dishwasher" && $0.width == 600 })
+
+    // czystość
+    let clean = ZoneAnswers(ZoneLibrary.defaults(.kitchenClean))
+    let cleanPlan = ZonePlanner.plan(.kitchenClean, clean, ctx)
+    let sink = cleanPlan.parts.first { $0.role == "sink" }
+    r.check("czystość: zlew 1,5-komorowy 800", sink?.width == 800)
+    r.check("czystość: kosz pod zlewem", sink?.appliances.contains(.bin) == true)
+    let dw = cleanPlan.parts.first { $0.role == "dishwasher" }
+    r.check("czystość: zmywarka obok zlewu",
+            dw != nil && sink != nil && abs(dw!.at - (sink!.at + sink!.width)) < 1)
+    var moved = clean
+    moved["sinkPos"] = .number(90)
+    let movedPlan = ZonePlanner.plan(.kitchenClean, moved, ctx)
+    r.check("czystość: przesuwanie zlewu po blacie",
+            (movedPlan.parts.first { $0.role == "sink" }?.at ?? 0) > (sink?.at ?? 0))
+
+    // wysoka, wyspa, szafy, RTV, łazienka
+    let tallPlan = ZonePlanner.plan(.kitchenTall, ZoneAnswers(ZoneLibrary.defaults(.kitchenTall)), ctx)
+    r.check("wysoka: do sufitu 2560", tallPlan.parts.allSatisfy { $0.height == 2560 })
+
+    let island = ZonePlanner.plan(.kitchenIsland, ZoneAnswers(ZoneLibrary.defaults(.kitchenIsland)), ctx)
+    r.check("wyspa: blat 860 z nawisem", island.parts.allSatisfy { $0.worktopDepth == 860 })
+    r.check("wyspa: okap sufitowy", island.parts.contains { $0.appliances.contains(.hood) })
+
+    let hinged = ZonePlanner.plan(.wardrobeHinged, ZoneAnswers(ZoneLibrary.defaults(.wardrobeHinged)), ctx)
+    r.check("szafa otwierana: głębokość 600", hinged.parts.allSatisfy { $0.depth == 600 })
+    let sliding = ZonePlanner.plan(.wardrobeSliding, ZoneAnswers(ZoneLibrary.defaults(.wardrobeSliding)), ctx)
+    r.check("szafa przesuwna: głębokość 650", sliding.parts.allSatisfy { $0.depth == 650 })
+    r.check("szafa przesuwna: 2 panele", sliding.parts.first?.slidingPanels == 2)
+
+    let tv = ZonePlanner.plan(.livingTV, ZoneAnswers(ZoneLibrary.defaults(.livingTV)), ctx)
+    r.check("RTV: nadbudowa nad telewizorem", (tv.parts.first { $0.type == .wall }?.mountHeight ?? 0) >= 1600)
+    let bath = ZonePlanner.plan(.bathroom, ZoneAnswers(ZoneLibrary.defaults(.bathroom)), ctx)
+    r.check("łazienka: umywalka + lustro + słupek",
+            bath.parts.contains { $0.appliances.contains(.basin) }
+            && bath.parts.contains { $0.appliances.contains(.mirror) }
+            && bath.parts.contains { $0.width == 400 && $0.type == .tall })
+
+    // materiał: szafki na ścianie planu
+    let plan = FloorPlan.rectangle(width: 5000, depth: 4000, height: 2600)
+    let zone = Zones.makeZone(kind: .kitchenCook, wallIndex: 0)
+    let cabinets = Zones.cabinets(for: zone, plan: plan)
+    r.check("plan: tyle szafek co części", cabinets.count == cookPlan.parts.count,
+            "\(cabinets.count) / \(cookPlan.parts.count)")
+    r.check("plan: wszystkie mają zoneID", cabinets.allSatisfy { $0.zoneID == zone.id })
+    r.check("plan: szafki w granicach pomieszczenia",
+            cabinets.allSatisfy { abs($0.x) < 2600 && abs($0.z) < 2100 })
+    r.check("plan: front do wnętrza (obrót 0 na ścianie północnej)",
+            abs((cabinets.first?.rotation ?? -1)) < 0.01)
+    r.check("plan: blat i cokół na biegu",
+            !Runs.worktops(Runs.compute(cabinets)).isEmpty && !Runs.plinths(Runs.compute(cabinets)).isEmpty)
+
+    // przebudowa nie rusza szafek ręcznych
+    let manual = Library.make(Library.base[0], at: 0, z: 1000)
+    let merged = Zones.rebuilt([manual] + cabinets, zones: [zone], plan: plan)
+    r.check("przebudowa: szafka ręczna zostaje",
+            merged.contains { $0.id == manual.id })
+    r.check("przebudowa: szafki strefy odtworzone",
+            merged.filter { $0.zoneID == zone.id }.count == cabinets.count)
+    let cleared = Zones.rebuilt(merged, zones: [], plan: plan)
+    r.check("usunięcie strefy: zostaje tylko ręczna",
+            cleared.count == 1 && cleared.first?.id == manual.id)
+
+    // zapis/odczyt strefy (Codable — projekt na dysku)
+    if let data = try? JSONEncoder().encode(zone),
+       let back = try? JSONDecoder().decode(Zone.self, from: data) {
+        r.check("Codable: strefa przechodzi przez JSON",
+                back.kind == zone.kind && back.wallIndex == zone.wallIndex && back.answers == zone.answers)
+    } else {
+        r.check("Codable: strefa przechodzi przez JSON", false)
+    }
+
+    // pytania zależne
+    var noHob = cook
+    noHob["hob"] = .text("none")
+    r.check("pytania: okap znika bez płyty",
+            !ZoneLibrary.activeQuestions(.kitchenCook, answers: ZoneAnswers(noHob.values)).contains { $0.id == "hood" })
+}
+
 @MainActor
 func runChecks() {
     let r = Reporter()
@@ -679,6 +794,7 @@ func runChecks() {
                 report?.replacingOccurrences(of: "\n", with: " | ") ?? "nil")
     }
 
+    runZoneChecks(r)
     runRoomModelChecks(r)
 
     let passed = r.checks - r.failures

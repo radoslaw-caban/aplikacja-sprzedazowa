@@ -14,6 +14,8 @@ struct PlanEditorView: View {
     var onChange: (FloorPlan) -> Void
     /// wywoływane po kliknięciu „Wstaw szafki" na zaznaczonej ścianie
     var onFillWall: ((Int) -> Void)? = nil
+    /// wywoływane po kliknięciu „Strefa…" — auto-projekt zabudowy na ścianie
+    var onZoneWall: ((Int) -> Void)? = nil
 
     /// Sposób wprowadzania planu.
     enum Mode: String, CaseIterable, Identifiable {
@@ -581,6 +583,15 @@ struct PlanEditorView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                if let onZoneWall {
+                    Button {
+                        onZoneWall(index)
+                    } label: {
+                        Label("Strefa…", systemImage: "sparkles")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                }
                 Button {
                     onFillWall?(index)
                 } label: {

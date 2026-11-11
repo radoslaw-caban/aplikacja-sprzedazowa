@@ -295,8 +295,8 @@ export function buildAllZoneCabinets(
   room: Room,
   opts: BuildOptions,
 ): Cabinet[] {
-  const ids = new Set(zones.map((z) => z.id));
-  const manual = cabinets.filter((c) => !c.zoneId || !ids.has(c.zoneId));
+  // ręczne = bez zoneId; szafki usuniętych stref też znikają (sieroty)
+  const manual = cabinets.filter((c) => !c.zoneId);
   const generated = zones.flatMap((z) => buildZoneCabinets(z, room, opts));
   return [...manual, ...generated];
 }

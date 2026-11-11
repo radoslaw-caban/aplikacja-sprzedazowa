@@ -35,6 +35,8 @@ struct ContentView: View {
     @State private var showScanCloud = UserDefaults.standard.bool(forKey: "showScanCloud")
     @State private var showScan = false
     @State private var showPlan = false
+    @State private var showZones = false
+    @State private var zoneWall = 0
     @State private var showTextures = false
     @State private var showSettings = false
     @State private var planDraft = FloorPlan.rectangle()
@@ -85,6 +87,14 @@ struct ContentView: View {
                 onFillWall: { wallIndex in
                     fillWall(wallIndex)
                 },
+                onZoneWall: { wallIndex in
+                    zoneWall = wallIndex
+                    showPlan = false
+                    // najpierw zamknij plan, potem otwórz kreator stref
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                        showZones = true
+                    }
+                },
                 onOpen3D: {
                     showPlan = false
                 }
@@ -92,6 +102,9 @@ struct ContentView: View {
             #if os(iOS)
             .presentationSizing(.page)
             #endif
+        }
+        .sheet(isPresented: $showZones) {
+            ZoneDesignerView(model: model, initialWall: zoneWall)
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -193,6 +206,16 @@ struct ContentView: View {
                 }
                 Button { model.addProject() } label: {
                     Label("Nowy projekt", systemImage: "plus")
+                }
+            }
+
+            Section("Projekt") {
+                Button {
+                    zoneWall = 0
+                    showZones = true
+                    drawerOpen = false
+                } label: {
+                    Label("Strefy zabudowy (auto-projekt)", systemImage: "sparkles")
                 }
             }
 

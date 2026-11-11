@@ -13,6 +13,12 @@ public enum Runs {
         public let rotation: Double
         public let bodyTop: Double      // górna krawędź korpusu (mm)
         public let hasBase: Bool
+        /// blat głębszy niż korpus (wyspa: 860 z nawisem 300)
+        public let worktopDepth: Double?
+        /// przesunięcie blatu w głąb (lokalne +Z), mm
+        public let worktopShift: Double
+        /// realna wysokość cokołu w biegu
+        public let plinthHeight: Double
     }
 
     public struct WorktopParams: Sendable {
@@ -61,7 +67,10 @@ public enum Runs {
                     rotation: first.rotation,
                     // blat leży na korpusie: wysokość szafki jest już łączna (z cokołem)
                     bodyTop: arr.map { $0.height + $0.mountHeight }.max() ?? 0,
-                    hasBase: arr.contains { $0.type == .base }
+                    hasBase: arr.contains { $0.type == .base },
+                    worktopDepth: arr.compactMap(\.worktopDepth).max(),
+                    worktopShift: arr.compactMap(\.worktopShift).first ?? 0,
+                    plinthHeight: arr.map { $0.type == .wall ? 0 : $0.plinth }.max() ?? 0
                 ))
             }
 
@@ -80,12 +89,15 @@ public enum Runs {
     public static func worktops(_ runs: [Run], _ p: WorktopParams = WorktopParams()) -> [Box] {
         guard p.enabled else { return [] }
         return runs.filter(\.hasBase).map { r in
-            Box(
+            let rad = r.rotation * .pi / 180
+            let shift = r.worktopShift
+            return Box(
                 id: "\(r.id):worktop",
                 role: .worktop,
                 cabinetID: r.cabinetIDs.first,
-                size: SIMD3(r.length + p.overhang * 2, p.thickness, 580),
-                position: SIMD3(r.cx, r.bodyTop + p.thickness / 2, r.cz),
+                size: SIMD3(r.length + p.overhang * 2, p.thickness, r.worktopDepth ?? 580),
+                position: SIMD3(r.cx + shift * sin(rad), r.bodyTop + p.thickness / 2,
+                                r.cz + shift * cos(rad)),
                 color: p.color,
                 rotationY: r.rotation
             )
@@ -95,13 +107,14 @@ public enum Runs {
     /// Cokół liczony na bieg (cofnięty o `setback`).
     public static func plinths(_ runs: [Run], _ p: PlinthParams = PlinthParams()) -> [Box] {
         guard p.enabled else { return [] }
-        return runs.filter(\.hasBase).map { r in
-            Box(
+        return runs.filter { $0.hasBase && $0.plinthHeight > 0 }.map { r in
+            let h = r.plinthHeight
+            return Box(
                 id: "\(r.id):plinth",
                 role: .plinth,
                 cabinetID: r.cabinetIDs.first,
-                size: SIMD3(r.length, p.height, 540 - p.setback),
-                position: SIMD3(r.cx, p.height / 2, r.cz + p.setback / 2),
+                size: SIMD3(r.length, h, 540 - p.setback),
+                position: SIMD3(r.cx, h / 2, r.cz + p.setback / 2),
                 color: p.color,
                 rotationY: r.rotation
             )

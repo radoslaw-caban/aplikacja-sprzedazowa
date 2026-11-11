@@ -84,6 +84,19 @@ public struct Cabinet: Identifiable, Codable, Sendable {
     public var color: String
     /// Nazwa pliku tekstury frontu (biblioteka tekstur). `nil` = kolor jednolity.
     public var texture: String?
+    // MARK: - strefy zabudowy (auto-projekt)
+    /// Strefa, która wygenerowała szafkę. `nil` = szafka wstawiona ręcznie.
+    public var zoneID: UUID?
+    /// rola w strefie: sink / hob / oven / fridge / tv / wardrobe…
+    public var zoneRole: String?
+    /// AGD i urządzenia rysowane razem z szafką
+    public var appliances: [ApplianceKind]?
+    /// szafa przesuwna: liczba paneli (front rysowany bez zawiasów)
+    public var slidingPanels: Int?
+    /// blat głębszy niż korpus (wyspa, nawis) — mm
+    public var worktopDepth: Double?
+    /// przesunięcie blatu w głąb, lokalne +Z — mm
+    public var worktopShift: Double?
 
     public init(
         id: UUID = UUID(),
@@ -99,7 +112,13 @@ public struct Cabinet: Identifiable, Codable, Sendable {
         mountHeight: Double = 0,
         elements: [CabinetElement] = [],
         color: String = "#c8bca9",
-        texture: String? = nil
+        texture: String? = nil,
+        zoneID: UUID? = nil,
+        zoneRole: String? = nil,
+        appliances: [ApplianceKind]? = nil,
+        slidingPanels: Int? = nil,
+        worktopDepth: Double? = nil,
+        worktopShift: Double? = nil
     ) {
         self.id = id
         self.name = name
@@ -115,13 +134,19 @@ public struct Cabinet: Identifiable, Codable, Sendable {
         self.elements = elements
         self.color = color
         self.texture = texture
+        self.zoneID = zoneID
+        self.zoneRole = zoneRole
+        self.appliances = appliances
+        self.slidingPanels = slidingPanels
+        self.worktopDepth = worktopDepth
+        self.worktopShift = worktopShift
     }
 }
 
 /// Bryła do wygenerowania w scenie (mm, względem środka szafki).
 public struct Box: Identifiable, Sendable {
     public enum Role: String, Sendable {
-        case side, bottom, top, back, shelf, divider, front, drawerFront, plinth, worktop, scene
+        case side, bottom, top, back, shelf, divider, front, drawerFront, plinth, worktop, scene, appliance
     }
 
     public let id: String
