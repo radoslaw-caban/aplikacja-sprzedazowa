@@ -12,6 +12,7 @@ struct ZoneDesignerView: View {
     @State private var wallIndex: Int
     @State private var draftID: UUID?
     @State private var step = 0
+    @State private var detent: PresentationDetent = .large
 
     init(model: AppModel, initialWall: Int = 0) {
         self.model = model
@@ -49,7 +50,7 @@ struct ZoneDesignerView: View {
             }
         }
         #if os(iOS)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         #endif
         .onAppear {
