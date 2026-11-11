@@ -152,6 +152,51 @@ public enum SceneBuilder {
         roof.name = "roof"
         root.addChild(roof)
 
+        // elewacja: okna i drzwi po stronie podjazdu (+Z), żeby dom czytał się z zewnątrz
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: color("#2b3a4a"))
+        glass.roughness = .init(floatLiteral: 0.08)
+        glass.metallic = .init(floatLiteral: 0.35)
+
+        var frame = PhysicallyBasedMaterial()
+        frame.baseColor = .init(tint: color("#f4f2ec"))
+        frame.roughness = .init(floatLiteral: 0.6)
+
+        let facadeZ = meters(room.depth) / 2 + 0.06
+        for (index, xOffset) in [-1, 1].enumerated() {
+            let window = ModelEntity(
+                mesh: .generateBox(width: 1.4, height: 1.1, depth: 0.08, cornerRadius: 0.01),
+                materials: [frame]
+            )
+            window.position = [Float(xOffset) * meters(room.width) * 0.22, 1.5, facadeZ]
+            window.name = "window-\(index)"
+            root.addChild(window)
+
+            let pane = ModelEntity(
+                mesh: .generateBox(width: 1.24, height: 0.94, depth: 0.06, cornerRadius: 0.005),
+                materials: [glass]
+            )
+            pane.position = [window.position.x, 1.5, facadeZ + 0.02]
+            root.addChild(pane)
+        }
+
+        let doorFrame = ModelEntity(
+            mesh: .generateBox(width: 1.0, height: 2.1, depth: 0.1, cornerRadius: 0.01),
+            materials: [frame]
+        )
+        doorFrame.position = [0, 1.05, facadeZ]
+        root.addChild(doorFrame)
+
+        var doorMaterial = PhysicallyBasedMaterial()
+        doorMaterial.baseColor = .init(tint: color("#3c3a36"))
+        doorMaterial.roughness = .init(floatLiteral: 0.5)
+        let door = ModelEntity(
+            mesh: .generateBox(width: 0.88, height: 2.0, depth: 0.08, cornerRadius: 0.005),
+            materials: [doorMaterial]
+        )
+        door.position = [0, 1.0, facadeZ + 0.02]
+        root.addChild(door)
+
         // listwy 80 × 20 mm
         let skirting = SimpleMaterial(color: color("#f4f1ea"), isMetallic: false)
         for i in 0..<4 {
@@ -174,8 +219,13 @@ public enum SceneBuilder {
         var sun = DirectionalLightComponent()
         sun.intensity = 3200
         sun.color = .init(red: 1, green: 0.96, blue: 0.9, alpha: 1)
+
         let entity = Entity()
         entity.components.set(sun)
+        #if os(iOS)
+        // cień to osobny komponent (macOS SDK go nie ma)
+        entity.components.set(DirectionalLightComponent.Shadow(maximumDistance: 60, depthBias: 1.0))
+        #endif
         entity.orientation = simd_quatf(angle: -.pi / 4, axis: [1, 0, 0])
         return entity
     }

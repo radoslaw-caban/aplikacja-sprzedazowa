@@ -25,6 +25,12 @@ struct SceneView: View {
 
     var body: some View {
         RealityView { content in
+            if let sky = await EnvironmentArt.environmentResource() {
+                content.environment = .skybox(sky)
+            }
+            #if os(iOS)
+            content.renderingEffects.depthOfField = interiorView ? .disabled : .enabled
+            #endif
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
             if showEnvironment, scan == nil {

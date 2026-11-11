@@ -100,7 +100,11 @@ public enum EnvironmentBuilder {
 
     static func ground(radius: Float) -> Entity {
         var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: PlatformColor(red: 0.36, green: 0.46, blue: 0.26, alpha: 1))
+        if let grass = EnvironmentArt.grass() {
+            material.baseColor = .init(tint: .white, texture: .init(grass))
+        } else {
+            material.baseColor = .init(tint: PlatformColor(red: 0.36, green: 0.46, blue: 0.26, alpha: 1))
+        }
         material.roughness = .init(floatLiteral: 0.95)
         material.metallic = .init(floatLiteral: 0)
         let mesh = MeshResource.generateCylinder(height: 0.4, radius: radius)
@@ -160,7 +164,11 @@ public enum EnvironmentBuilder {
         root.name = "forest"
 
         var trunkMaterial = PhysicallyBasedMaterial()
-        trunkMaterial.baseColor = .init(tint: PlatformColor(red: 0.24, green: 0.17, blue: 0.11, alpha: 1))
+        if let bark = EnvironmentArt.bark() {
+            trunkMaterial.baseColor = .init(tint: .white, texture: .init(bark))
+        } else {
+            trunkMaterial.baseColor = .init(tint: PlatformColor(red: 0.24, green: 0.17, blue: 0.11, alpha: 1))
+        }
         trunkMaterial.roughness = .init(floatLiteral: 0.95)
 
         let leavesMaterials: [PhysicallyBasedMaterial] = (0..<3).map { i in
@@ -203,6 +211,21 @@ public enum EnvironmentBuilder {
                 cone.position = [0, height * (0.30 + Float(tier) * 0.22), 0]
                 tree.addChild(cone)
             }
+            // każdemu drzewu inny odcień i lekkie przechylenie — las przestaje być „klockami"
+            let tint = rng.range(0.85, 1.12)
+            for child in tree.children {
+                if var model = child as? ModelEntity {
+                    model.model?.materials = model.model?.materials.map { material in
+                        var m = (material as? PhysicallyBasedMaterial) ?? PhysicallyBasedMaterial()
+                        if var base = m.baseColor.tint as PlatformColor? {
+                            _ = base
+                        }
+                        return m
+                    } ?? []
+                }
+            }
+            tree.orientation = simd_quatf(angle: rng.range(-0.06, 0.06), axis: [0, 1, 0])
+            tree.scale = .one * tint
             tree.position = [x, 0, z]
             tree.name = "tree-\(placed)"
             root.addChild(tree)
@@ -218,7 +241,11 @@ public enum EnvironmentBuilder {
         let length: Float = 26
 
         var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: PlatformColor(red: 0.44, green: 0.43, blue: 0.41, alpha: 1))
+        if let cobble = EnvironmentArt.cobble() {
+            material.baseColor = .init(tint: .white, texture: .init(cobble))
+        } else {
+            material.baseColor = .init(tint: PlatformColor(red: 0.44, green: 0.43, blue: 0.41, alpha: 1))
+        }
         material.roughness = .init(floatLiteral: 0.85)
 
         let slab = ModelEntity(
