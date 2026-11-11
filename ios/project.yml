@@ -34,6 +34,9 @@ targets:
       - path: Resources/Models
         type: folder
         buildPhase: resources
+      - path: Resources/Textures
+        type: folder
+        buildPhase: resources
       - path: ../app/public/dom-chmura.ply
         buildPhase: resources
     dependencies:
@@ -67,6 +70,9 @@ targets:
     sources:
       - path: Sources/KitchenApp
       - path: Resources/Models
+        type: folder
+        buildPhase: resources
+      - path: Resources/Textures
         type: folder
         buildPhase: resources
       - path: ../app/public/dom-chmura.ply

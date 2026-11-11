@@ -130,12 +130,23 @@ public enum SceneBuilder {
         floor.position = [0, -0.01, 0]
         root.addChild(floor)
 
-        let wallMaterial = SimpleMaterial(color: color("#e8e0d5"), isMetallic: false)
+        var wallMaterial = PhysicallyBasedMaterial()
+        if let diff = EnvironmentArt.photoTexture("stucco_diff") {
+            wallMaterial.baseColor = .init(tint: .white, texture: .init(diff))
+        } else {
+            wallMaterial.baseColor = .init(tint: color("#e8e0d5"))
+        }
+        if let nor = EnvironmentArt.photoTexture("stucco_nor", semantic: .normal) {
+            wallMaterial.normal = .init(texture: .init(nor))
+        }
+        wallMaterial.roughness = .init(floatLiteral: 0.85)
         for i in 0..<(walls ? 4 : 0) {
             let size = room.wallSize(i)
             let pos = room.wallPosition(i)
             let wall = ModelEntity(
-                mesh: .generateBox(width: meters(size.x), height: meters(size.y), depth: meters(size.z), cornerRadius: 0),
+                mesh: MeshFactory.texturedBox(
+                    width: meters(size.x), height: meters(size.y), depth: meters(size.z), tile: 2.5
+                ) ?? .generateBox(width: meters(size.x), height: meters(size.y), depth: meters(size.z), cornerRadius: 0),
                 materials: [wallMaterial]
             )
             wall.position = [meters(pos.x), meters(pos.y), meters(pos.z)]
@@ -144,13 +155,76 @@ public enum SceneBuilder {
         }
 
         // dach: płaski, z lekkim nawisem — bez niego dom wygląda jak otwarte pudełko
-        let roof = ModelEntity(
-            mesh: .generateBox(width: meters(room.width) + 0.6, height: 0.22, depth: meters(room.depth) + 0.6, cornerRadius: 0.02),
-            materials: [SimpleMaterial(color: color("#54585e"), isMetallic: false)]
-        )
-        roof.position = [0, meters(room.height) + 0.11, 0]
-        roof.name = "roof"
-        root.addChild(roof)
+        var roofMaterial = PhysicallyBasedMaterial()
+        if let diff = EnvironmentArt.photoTexture("roof_diff") {
+            roofMaterial.baseColor = .init(tint: .white, texture: .init(diff))
+        } else {
+            roofMaterial.baseColor = .init(tint: color("#54585e"))
+        }
+        if let nor = EnvironmentArt.photoTexture("roof_nor", semantic: .normal) {
+            roofMaterial.normal = .init(texture: .init(nor))
+        }
+        roofMaterial.roughness = .init(floatLiteral: 0.7)
+
+        let roofWidth = meters(room.width) + 0.7
+        let roofDepth = meters(room.depth) + 0.7
+        let rise = min(1.6, roofDepth * 0.28)
+
+        // dach dwuspadowy z okapem — dopiero to czyta się jako dom, nie pudełko
+        if let mesh = MeshFactory.gabledRoof(
+            width: roofWidth,
+            depth: roofDepth,
+            rise: rise,
+            eaveOverhang: 0.45,
+            gableOverhang: 0.35,
+            tile: 1.6
+        ) {
+            let gableRoof = ModelEntity(mesh: mesh, materials: [roofMaterial])
+            gableRoof.position = [0, meters(room.height), 0]
+            gableRoof.name = "roof"
+            root.addChild(gableRoof)
+
+            // szczyty pod dachem (trójkąty) — inaczej widać dziurę nad ścianą
+            if let ends = MeshFactory.gableEnds(width: meters(room.width) + 0.02, rise: rise, depth: meters(room.depth) + 0.02) {
+                let gables = ModelEntity(mesh: ends, materials: [wallMaterial])
+                gables.position = [0, meters(room.height), 0]
+                gables.name = "gables"
+                root.addChild(gables)
+            }
+
+            // rynna i obróbka kalenicy
+            var trim = PhysicallyBasedMaterial()
+            trim.baseColor = .init(tint: color("#3c3f42"))
+            trim.roughness = .init(floatLiteral: 0.45)
+            trim.metallic = .init(floatLiteral: 0.6)
+
+            let ridge = ModelEntity(
+                mesh: .generateBox(width: roofWidth + 0.7, height: 0.09, depth: 0.16, cornerRadius: 0.01),
+                materials: [trim]
+            )
+            ridge.position = [0, meters(room.height) + rise + 0.04, 0]
+            ridge.name = "ridge"
+            root.addChild(ridge)
+
+            for sign in [Float(1), Float(-1)] {
+                let gutter = ModelEntity(
+                    mesh: .generateBox(width: roofWidth + 0.7, height: 0.12, depth: 0.14, cornerRadius: 0.02),
+                    materials: [trim]
+                )
+                gutter.position = [0, meters(room.height) - 0.04, sign * (roofDepth / 2 + 0.42)]
+                gutter.name = "gutter"
+                root.addChild(gutter)
+            }
+        } else {
+            let roof = ModelEntity(
+                mesh: MeshFactory.texturedBox(width: roofWidth, height: 0.24, depth: roofDepth, tile: 1.6)
+                    ?? .generateBox(width: roofWidth, height: 0.24, depth: roofDepth, cornerRadius: 0.02),
+                materials: [roofMaterial]
+            )
+            roof.position = [0, meters(room.height) + 0.11, 0]
+            roof.name = "roof"
+            root.addChild(roof)
+        }
 
         // elewacja: okna i drzwi po stronie podjazdu (+Z), żeby dom czytał się z zewnątrz
         var glass = PhysicallyBasedMaterial()
@@ -168,7 +242,7 @@ public enum SceneBuilder {
                 mesh: .generateBox(width: 1.4, height: 1.1, depth: 0.08, cornerRadius: 0.01),
                 materials: [frame]
             )
-            window.position = [Float(xOffset) * meters(room.width) * 0.22, 1.5, facadeZ]
+            window.position = [Float(xOffset) * meters(room.width) * 0.22, 1.5, facadeZ + 0.05]
             window.name = "window-\(index)"
             root.addChild(window)
 
@@ -176,8 +250,20 @@ public enum SceneBuilder {
                 mesh: .generateBox(width: 1.24, height: 0.94, depth: 0.06, cornerRadius: 0.005),
                 materials: [glass]
             )
-            pane.position = [window.position.x, 1.5, facadeZ + 0.02]
+            pane.position = [window.position.x, 1.5, facadeZ + 0.07]
             root.addChild(pane)
+
+            // parapet: cienka płyta pod oknem, żeby elewacja nie była „naklejką"
+            var sillMat = PhysicallyBasedMaterial()
+            sillMat.baseColor = .init(tint: color("#d8d2c6"))
+            sillMat.roughness = .init(floatLiteral: 0.5)
+            let sill = ModelEntity(
+                mesh: .generateBox(width: 1.56, height: 0.06, depth: 0.18, cornerRadius: 0.008),
+                materials: [sillMat]
+            )
+            sill.position = [window.position.x, 0.93, facadeZ + 0.09]
+            sill.name = "sill-\(index)"
+            root.addChild(sill)
         }
 
         let doorFrame = ModelEntity(

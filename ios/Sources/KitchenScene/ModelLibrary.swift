@@ -17,9 +17,6 @@ public enum ModelLibrary {
     /// Spis modeli z licencjami (wymóg CC-BY: podanie autora).
     public static let catalog: [Entry] = [
         Entry(name: "IslandTree", license: "CC0", author: "Poly Haven"),
-        Entry(name: "ToyCar", license: "CC BY 4.0", author: "NVIDIA / Khronos glTF Sample Assets"),
-        Entry(name: "Stork", license: "CC BY 3.0", author: "mirada / three.js"),
-        Entry(name: "Flamingo", license: "CC BY 3.0", author: "mirada / three.js"),
     ]
 
     private static var cache: [String: Entity] = [:]

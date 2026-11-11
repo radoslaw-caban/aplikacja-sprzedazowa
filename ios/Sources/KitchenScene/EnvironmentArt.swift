@@ -42,7 +42,17 @@ public enum EnvironmentArt {
     // MARK: - tekstury
 
     /// Trawa: zielona baza + drobne źdźbła.
+    /// Tekstura fotograficzna z paczki (Poly Haven, CC0).
+    public static func photoTexture(_ name: String, semantic: TextureResource.Semantic = .color) -> TextureResource? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "jpg",
+                                        subdirectory: "Textures") ?? Bundle.main.url(forResource: name, withExtension: "jpg") else {
+            return nil
+        }
+        return try? TextureResource.load(contentsOf: url, withName: name, options: .init(semantic: semantic))
+    }
+
     public static func grass(seed: UInt64 = 1) -> TextureResource? {
+        if let photo = photoTexture("grass_diff") { return photo }
         let size = 512
         guard let image = makeImage(width: size, height: size, draw: { ctx in
             ctx.setFillColor(CGColor(red: 0.30, green: 0.42, blue: 0.22, alpha: 1))

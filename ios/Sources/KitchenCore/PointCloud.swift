@@ -5,13 +5,17 @@ import Foundation
 public struct PointCloud: Sendable {
     public var positions: [SIMD3<Float>]
     public var colors: [SIMD3<UInt8>]?
+    /// Niepewność pozycji per punkt (metry) — wypełniana przy fuzji głębi.
+    /// `nil` dla chmur z pliku, gdzie nie znamy charakterystyki skanera.
+    public var uncertainty: [Float]?
     public var bounds: (min: SIMD3<Float>, max: SIMD3<Float>)
 
     public var count: Int { positions.count }
 
-    public init(positions: [SIMD3<Float>], colors: [SIMD3<UInt8>]? = nil) {
+    public init(positions: [SIMD3<Float>], colors: [SIMD3<UInt8>]? = nil, uncertainty: [Float]? = nil) {
         self.positions = positions
         self.colors = colors
+        self.uncertainty = uncertainty
         if positions.isEmpty {
             bounds = (SIMD3<Float>(repeating: 0), SIMD3<Float>(repeating: 0))
         } else {
@@ -53,14 +57,16 @@ public struct PointCloud: Sendable {
         var newPositions: [SIMD3<Float>] = []
         newPositions.reserveCapacity(maxPoints)
         var newColors: [SIMD3<UInt8>]? = colors == nil ? nil : []
+        var newUncertainty: [Float]? = uncertainty == nil ? nil : []
         var i = 0.0
         while Int(i) < positions.count && newPositions.count < maxPoints {
             let idx = Int(i)
             newPositions.append(positions[idx])
             if let c = colors { newColors?.append(c[idx]) }
+            if let u = uncertainty { newUncertainty?.append(u[idx]) }
             i += step
         }
-        return PointCloud(positions: newPositions, colors: newColors)
+        return PointCloud(positions: newPositions, colors: newColors, uncertainty: newUncertainty)
     }
 }
 

@@ -12,7 +12,7 @@ import simd
 public enum EnvironmentBuilder {
 
     public struct Options: Sendable {
-        public var radius: Float = 120          // promień terenu (m)
+        public var radius: Float = 210          // promień terenu z teksturą (m)
         public var forestTrees: Int = 220
         public var mountains: Int = 26
         public var birds: Int = 6
@@ -40,8 +40,9 @@ public enum EnvironmentBuilder {
         root.name = "environment"
         var rng = RNG(options.seed)
 
-        root.addChild(sky(radius: 7000))
+        root.addChild(sky(radius: 24000))
         root.addChild(ground(radius: options.radius))
+        root.addChild(farMeadow(inner: options.radius - 2, outer: 6000))
         root.addChild(mountainRange(options: options, rng: &rng))
         root.addChild(forest(options: options, rng: &rng, room: room))
         root.addChild(driveway(room: room))
@@ -107,54 +108,135 @@ public enum EnvironmentBuilder {
         }
         material.roughness = .init(floatLiteral: 0.95)
         material.metallic = .init(floatLiteral: 0)
-        let mesh = MeshResource.generateCylinder(height: 0.4, radius: radius)
+        if let normal = EnvironmentArt.photoTexture("grass_nor", semantic: .normal) {
+            material.normal = .init(texture: .init(normal))
+        }
+
+        // UV w metrach: kafelka 4 × 4 m, więc trawa nie jest rozmazana przy horyzoncie
+        let tile: Float = 6
+        let r = radius
+        var desc = MeshDescriptor(name: "ground")
+        desc.positions = MeshBuffer([SIMD3<Float>(-r, 0, -r), SIMD3(r, 0, -r), SIMD3(r, 0, r), SIMD3(-r, 0, r)])
+        desc.normals = MeshBuffer([SIMD3<Float>(0, 1, 0), SIMD3(0, 1, 0), SIMD3(0, 1, 0), SIMD3(0, 1, 0)])
+        let u = r * 2 / tile
+        desc.textureCoordinates = MeshBuffer([SIMD2<Float>(0, 0), SIMD2(u, 0), SIMD2(u, u), SIMD2(0, u)])
+        desc.primitives = .triangles([0, 2, 1, 0, 3, 2])
+
+        if let mesh = try? MeshResource.generate(from: [desc]) {
+            let entity = ModelEntity(mesh: mesh, materials: [material])
+            entity.name = "ground"
+            return entity
+        }
+        let fallback = ModelEntity(mesh: .generateCylinder(height: 0.4, radius: radius), materials: [material])
+        fallback.position = [0, -0.2, 0]
+        fallback.name = "ground"
+        return fallback
+    }
+
+    /// Daleka łąka: jednolity zielony pierścień za lasem. Tekstura trawy na 6 km
+    /// zmieliłaby się do brązu (średnia mipmapy), a tak horyzont zostaje zielony.
+    static func farMeadow(inner: Float, outer: Float) -> Entity {
+        let segments = 96
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+
+        for i in 0..<segments {
+            let a0 = Float(i) / Float(segments) * .pi * 2
+            let a1 = Float(i + 1) / Float(segments) * .pi * 2
+            let base = UInt32(positions.count)
+            positions += [
+                SIMD3(cos(a0) * inner, -0.02, sin(a0) * inner),
+                SIMD3(cos(a1) * inner, -0.02, sin(a1) * inner),
+                SIMD3(cos(a1) * outer, -0.02, sin(a1) * outer),
+                SIMD3(cos(a0) * outer, -0.02, sin(a0) * outer),
+            ]
+            normals += [SIMD3(0, 1, 0), SIMD3(0, 1, 0), SIMD3(0, 1, 0), SIMD3(0, 1, 0)]
+            uvs += [SIMD2(0, 0), SIMD2(1, 0), SIMD2(1, 1), SIMD2(0, 1)]
+            indices += [base, base + 2, base + 1, base, base + 3, base + 2]
+        }
+
+        var descriptor = MeshDescriptor(name: "farMeadow")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.normals = MeshBuffer(normals)
+        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.primitives = .triangles(indices)
+        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return Entity() }
+
+        // UnlitMaterial: daleka łąka nie może łapać światła, bo robiła się beżowa
+        let material = UnlitMaterial(color: PlatformColor(red: 0.34, green: 0.40, blue: 0.22, alpha: 1))
+
         let entity = ModelEntity(mesh: mesh, materials: [material])
-        entity.position = [0, -0.2, 0]
-        entity.name = "ground"
+        entity.name = "far-meadow"
         return entity
     }
 
+    /// Grań górska na horyzoncie: pierścień trójkątów z poszarpaną linią.
+    /// Stożki wyglądały jak spodki — pierścień czyta się jak prawdziwe pasmo.
     static func mountainRange(options: Options, rng: inout RNG) -> Entity {
         let root = Entity()
         root.name = "mountains"
-        for i in 0..<options.mountains {
-            let angle = Float(i) / Float(options.mountains) * .pi * 2 + rng.range(-0.1, 0.1)
-            // góry jako tło: kilka kilometrów dalej, żeby były małe kątowo
-            let distance = rng.range(6000, 9000)
-            let height = rng.range(700, 1500)
-            let base = height * rng.range(1.4, 2.2)
 
-            // stożek = góra; im dalej, tym bledsza (perspektywa powietrzna)
-            let fade = 1 - min(1, distance / 9000)
-            var material = PhysicallyBasedMaterial()
-            material.baseColor = .init(tint: PlatformColor(
-                red: CGFloat(Double(0.58 + 0.16 * (1 - fade))),
-                green: CGFloat(Double(0.64 + 0.15 * (1 - fade))),
-                blue: CGFloat(Double(0.74 + 0.12 * (1 - fade))),
-                alpha: 1
-            ))
-            material.roughness = .init(floatLiteral: 0.95)
+        // dwie warstwy: dalsza bledsza, bliższa ciemniejsza (perspektywa powietrzna)
+        let layers: [(radius: Float, minH: Float, maxH: Float, tint: (Float, Float, Float))] = [
+            (12000, 700, 1500, (0.74, 0.79, 0.86)),
+            (8200, 300, 700, (0.60, 0.67, 0.76)),
+        ]
 
-            let cone = ModelEntity(
-                mesh: .generateCone(height: height, radius: base / 2),
-                materials: [material]
-            )
-            cone.position = [cos(angle) * distance, height / 2 - 1, sin(angle) * distance]
-            cone.name = "mountain-\(i)"
-            root.addChild(cone)
+        for layer in layers {
+            let segments = 220
+            var positions: [SIMD3<Float>] = []
+            var normals: [SIMD3<Float>] = []
+            var uvs: [SIMD2<Float>] = []
+            var indices: [UInt32] = []
 
-            if height > 500 {
-                var snow = PhysicallyBasedMaterial()
-                snow.baseColor = .init(tint: PlatformColor(red: 0.95, green: 0.96, blue: 0.98, alpha: 1))
-                snow.roughness = .init(floatLiteral: 0.8)
-                let capHeight = height * 0.26
-                let cap = ModelEntity(
-                    mesh: .generateCone(height: capHeight, radius: base * 0.28),
-                    materials: [snow]
-                )
-                cap.position = [cone.position.x, height - 1 - capHeight / 2 + 1, cone.position.z]
-                root.addChild(cap)
+            // wygeneruj wysokości grzbietu (suma kilku sinusów — bez losowego szumu)
+            var heights = [Float](repeating: 0, count: segments)
+            let phase = rng.range(0, 100)
+            for i in 0..<segments {
+                let a = Float(i) / Float(segments) * .pi * 2
+                let n = 0.5 + 0.5 * sin(a * 3 + phase)
+                let n2 = 0.5 + 0.5 * sin(a * 7.3 + phase * 1.7)
+                let n3 = 0.5 + 0.5 * sin(a * 13.1 + phase * 0.4)
+                let blend = n * 0.55 + n2 * 0.3 + n3 * 0.15
+                heights[i] = layer.minH + (layer.maxH - layer.minH) * blend
             }
+
+            for i in 0..<segments {
+                let a0 = Float(i) / Float(segments) * .pi * 2
+                let a1 = Float(i + 1) / Float(segments) * .pi * 2
+                let x0 = cos(a0) * layer.radius, z0 = sin(a0) * layer.radius
+                let x1 = cos(a1) * layer.radius, z1 = sin(a1) * layer.radius
+                let h0 = heights[i], h1 = heights[(i + 1) % segments]
+
+                let base = UInt32(positions.count)
+                positions += [
+                    SIMD3(x0, -80, z0),          // podstawa (schowana pod terenem)
+                    SIMD3(x1, -80, z1),
+                    SIMD3(x1, h1, z1),
+                    SIMD3(x0, h0, z0),
+                ]
+                let inward = normalize(SIMD3<Float>(-(x0 + x1) / 2, 0, -(z0 + z1) / 2))
+                normals += [inward, inward, inward, inward]
+                uvs += [SIMD2(0, 0), SIMD2(1, 0), SIMD2(1, 1), SIMD2(0, 1)]
+                indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+            }
+
+            var descriptor = MeshDescriptor(name: "ridge")
+            descriptor.positions = MeshBuffer(positions)
+            descriptor.normals = MeshBuffer(normals)
+            descriptor.textureCoordinates = MeshBuffer(uvs)
+            descriptor.primitives = .triangles(indices)
+            guard let mesh = try? MeshResource.generate(from: [descriptor]) else { continue }
+
+            let material = UnlitMaterial(color: PlatformColor(
+                red: CGFloat(layer.tint.0), green: CGFloat(layer.tint.1), blue: CGFloat(layer.tint.2), alpha: 1
+            ))
+
+            let entity = ModelEntity(mesh: mesh, materials: [material])
+            entity.name = "ridge-\(layer.radius)"
+            root.addChild(entity)
         }
         return root
     }
@@ -186,7 +268,7 @@ public enum EnvironmentBuilder {
         while placed < options.forestTrees && guardCount < options.forestTrees * 6 {
             guardCount += 1
             let angle = rng.range(0, .pi * 2)
-            let distance = rng.range(houseRadius + 2, options.radius * 0.85)
+            let distance = rng.range(houseRadius + 2, options.radius * 0.82)
             let x = cos(angle) * distance
             let z = sin(angle) * distance
             // nie sadzimy na podjeździe (pas szerokości 6 m wzdłuż +Z)
@@ -195,7 +277,7 @@ public enum EnvironmentBuilder {
             let height = rng.range(5.5, 12)
 
             // przy domu stawiamy prawdziwe modele (współdzielona siatka = jedna pamięć)
-            if distance < houseRadius + 26, placed < 14,
+            if placed < options.forestTrees,
                let model = ModelLibrary.entity(named: "IslandTree", targetSize: rng.range(6, 9)) {
                 model.position = [x, 0, z]
                 model.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
@@ -282,7 +364,7 @@ public enum EnvironmentBuilder {
     /// Auto stojące na podjeździe (proste bryły, czytelne z odległości).
     static func car(position: SIMD3<Float>) -> Entity {
         // prawdziwy model (CC BY 4.0), z fallbackiem na bryły
-        if let model = ModelLibrary.entity(named: "ToyCar", targetSize: 4.4), !model.name.contains("__skip") {
+        if let model = ModelLibrary.entity(named: "ToyCar"), ProcessInfo.processInfo.environment["USE_GLB_CAR"] != nil {
             let root = Entity()
             root.name = "car"
             model.name = "car-body"
