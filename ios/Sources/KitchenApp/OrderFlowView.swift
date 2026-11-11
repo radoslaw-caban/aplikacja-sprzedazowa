@@ -16,6 +16,8 @@ struct OrderFlowView: View {
     var openPlan: () -> Void
     var openScan: () -> Void
     var openDocuments: () -> Void
+    var openContract: () -> Void = {}
+    var openClientProjects: () -> Void = {}
 
     /// 2 = Szczegóły zamówienia — ekran startowy.
     /// `flowPage` w UserDefaults pozwala zweryfikować dowolny ekran bez dotykania.
@@ -39,7 +41,9 @@ struct OrderFlowView: View {
                     .tag(0)
                 FilesPage(model: model, openDocuments: openDocuments)
                     .tag(1)
-                OrderDetailsPage(model: model)
+                OrderDetailsPage(model: model,
+                                 openContract: openContract,
+                                 openClientProjects: openClientProjects)
                     .tag(2)
                 ProjectScenePage(model: model, interior: false, scanPlan: scanPlan, locked: locked,
                                  note: "Dom w otoczeniu — widok dla klienta")
@@ -108,6 +112,8 @@ struct ActionPanelPage: View {
     var openPlan: () -> Void
     var openScan: () -> Void
     var openDocuments: () -> Void
+    var openContract: () -> Void = {}
+    var openClientProjects: () -> Void = {}
     @Binding var interiorView: Bool
 
     var body: some View {
@@ -176,6 +182,8 @@ struct ActionPanelPage: View {
 struct FilesPage: View {
     @Bindable var model: AppModel
     var openDocuments: () -> Void
+    var openContract: () -> Void = {}
+    var openClientProjects: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -213,6 +221,8 @@ struct FilesPage: View {
 struct OrderDetailsPage: View {
     @Bindable var model: AppModel
     @State private var draft = ProjectOrder()
+    var openContract: () -> Void = {}
+    var openClientProjects: () -> Void = {}
 
     /// Rodzaj klawiatury bez wciągania UIKit do wspólnego kodu (macOS).
     enum FieldKind { case text, phone, email }
@@ -235,14 +245,62 @@ struct OrderDetailsPage: View {
                         numberField("Cena (zł)", value: $draft.price)
                         numberField("Zaliczka (zł)", value: $draft.deposit)
                     }
+                    HStack(spacing: 14) {
+                        numberField("Rabat (%)", value: Binding(
+                            get: { draft.discountPercent ?? 0 },
+                            set: { draft.discountPercent = $0 }
+                        ))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Cena po rabacie").font(.caption).foregroundStyle(.secondary)
+                            Text(draft.finalPrice, format: .currency(code: "PLN"))
+                                .font(.callout.weight(.semibold)).monospacedDigit()
+                        }
+                        Spacer()
+                    }
                     HStack {
                         Text("Do zapłaty po zaliczce").font(.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Text(draft.remaining, format: .currency(code: "PLN"))
+                        Text(max(0, draft.finalPrice - draft.deposit), format: .currency(code: "PLN"))
                             .font(.callout.weight(.semibold)).monospacedDigit()
                     }
-                    ProgressView(value: draft.depositProgress)
+                    ProgressView(value: draft.finalPrice > 0 ? min(1, draft.deposit / draft.finalPrice) : 0)
                         .tint(.green)
+                }
+
+                card("Kartoteka klienta") {
+                    HStack(spacing: 10) {
+                        Button {
+                            model.addProjectForCurrentClient()
+                        } label: {
+                            Label("Dodaj kolejny projekt", systemImage: "plus.rectangle.on.folder")
+                                .font(.caption.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            openClientProjects()
+                        } label: {
+                            Label("Projekty klienta", systemImage: "square.stack.3d.up")
+                                .font(.caption.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Button {
+                        openContract()
+                    } label: {
+                        Label(draft.isContractSigned ? "Umowa podpisana — zobacz" : "Umowa do podpisu",
+                              systemImage: draft.isContractSigned ? "checkmark.seal.fill" : "signature")
+                            .font(.caption.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(draft.isContractSigned ? .green : .accentColor)
                 }
 
                 card("Ustalenia") {

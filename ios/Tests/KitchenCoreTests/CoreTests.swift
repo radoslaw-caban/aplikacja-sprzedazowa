@@ -923,4 +923,61 @@ final class GestureNavTests: XCTestCase {
             seen.insert(key)
         }
     }
+
+    // MARK: - wyszukiwarka klientów i rabat
+
+    private func sampleProjects() -> [Project] {
+        var a = Project(name: "Emil Kędra")
+        a.order = ProjectOrder(clientLastName: "Kędra", clientFirstName: "Emil",
+                               address: "ul. Kościuszki 77, Nowy Targ", price: 45_000, deposit: 0)
+        var b = Project(name: "Emil Kędra")
+        b.order = ProjectOrder(clientLastName: "Kędra", clientFirstName: "Emil",
+                               address: "ul. Kościuszki 77, Nowy Targ", price: 9_000, deposit: 0)
+        var c = Project(name: "Renata Gazda")
+        c.order = ProjectOrder(clientLastName: "Gazda", clientFirstName: "Renata",
+                               address: "ul. Szpitalna 5/2, Nowy Targ", price: 26_800, deposit: 8_000)
+        return [a, b, c]
+    }
+
+    func testClientSearchFindsBySurname() {
+        let hits = ClientDirectory.search(sampleProjects(), query: "kedra")
+        XCTAssertEqual(hits.count, 2, "szukanie bez ogonków musi znaleźć Kędra")
+        XCTAssertEqual(hits.first?.projectCount, 2, "klient ma dwa projekty")
+    }
+
+    func testClientSearchFindsByAddress() {
+        let hits = ClientDirectory.search(sampleProjects(), query: "szpitalna")
+        XCTAssertEqual(hits.count, 1)
+        XCTAssertEqual(hits.first?.name, "Renata Gazda")
+    }
+
+    func testClientSearchEmptyQueryListsAll() {
+        XCTAssertEqual(ClientDirectory.search(sampleProjects(), query: "").count, 3)
+    }
+
+    func testClientProjectsGrouping() {
+        let projects = sampleProjects()
+        let list = ClientDirectory.projects(of: "Emil Kędra", in: projects)
+        XCTAssertEqual(list.count, 2)
+    }
+
+    func testDiscountLowersFinalPrice() {
+        var order = ProjectOrder(clientLastName: "Kędra", price: 45_000, deposit: 5_000)
+        XCTAssertEqual(order.finalPrice, 45_000, accuracy: 0.01)
+        order.discountPercent = 10
+        XCTAssertEqual(order.discountAmount, 4_500, accuracy: 0.01)
+        XCTAssertEqual(order.finalPrice, 40_500, accuracy: 0.01)
+        order.discountPercent = 150          // ograniczenie do 100 %
+        XCTAssertEqual(order.effectiveDiscount, 100)
+        XCTAssertEqual(order.finalPrice, 0, accuracy: 0.01)
+    }
+
+    func testContractSignedState() {
+        var order = ProjectOrder()
+        XCTAssertFalse(order.isContractSigned)
+        order.contractSignedAt = Date()
+        order.contractSignatureFile = "abc-podpis.png"
+        XCTAssertTrue(order.isContractSigned)
+        XCTAssertEqual(order.contractSignatureFile, "abc-podpis.png")
+    }
 }

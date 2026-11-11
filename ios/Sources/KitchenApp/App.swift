@@ -39,6 +39,9 @@ struct ContentView: View {
     @State private var zoneWall = 0
     @State private var showTextures = false
     @State private var showSettings = false
+    @State private var showNewClient = false
+    @State private var showContract = false
+    @State private var showClientProjects = false
     @State private var planDraft = FloorPlan.rectangle()
     /// Projekt zablokowany: na ekranie tylko 3D i kłódka (przeciąganie przesuwa).
     @State private var locked = true
@@ -72,6 +75,63 @@ struct ContentView: View {
             }
             edgeHandle
                 .zIndex(4)
+        }
+        .overlay(alignment: .topLeading) {
+            if !locked {
+                HStack(alignment: .top, spacing: 8) {
+                    ClientSearchBar(
+                        projects: model.projects,
+                        currentName: ClientDirectory.displayName(model.current),
+                        currentAddress: model.current.order?.address ?? "",
+                        workingSet: model.workingSet,
+                        onOpen: { id in
+                            if let index = model.projects.firstIndex(where: { $0.id == id }) {
+                                model.selectProject(index)
+                            }
+                        },
+                        onToggleWorking: { model.toggleWorkingSet($0) },
+                        onNewClient: { showNewClient = true }
+                    )
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 24).onEnded { value in
+                            guard model.workingSet.count > 1 else { return }
+                            if value.translation.height > 40 { model.switchWorking(step: 1) }
+                            if value.translation.height < -40 { model.switchWorking(step: -1) }
+                        }
+                    )
+
+                    if model.workingSet.count > 1 {
+                        VStack(spacing: 4) {
+                            Button { model.switchWorking(step: -1) } label: {
+                                Image(systemName: "chevron.up").font(.caption.weight(.bold))
+                            }
+                            Button { model.switchWorking(step: 1) } label: {
+                                Image(systemName: "chevron.down").font(.caption.weight(.bold))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(8)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+                .padding(.top, 10)
+                .padding(.leading, 14)
+            }
+        }
+        .planPresentation(isPresented: $showNewClient) {
+            NewClientFlow { firstName, lastName, address, phone, email in
+                let project = model.createClient(firstName: firstName, lastName: lastName,
+                                                 address: address, phone: phone, email: email)
+                model.addToWorkingSet(project.id)
+            }
+        }
+        .sheet(isPresented: $showContract) {
+            ContractSheet(project: model.current) { file in
+                model.signContract(signatureFile: file)
+            }
+        }
+        .sheet(isPresented: $showClientProjects) {
+            ClientProjectsSheet(model: model, onClose: { showClientProjects = false })
         }
         .animation(.easeInOut(duration: 0.22), value: drawerOpen)
         .animation(.easeInOut(duration: 0.2), value: locked)
@@ -154,6 +214,16 @@ struct ContentView: View {
             if UserDefaults.standard.object(forKey: "demoClient") != nil {
                 let index = UserDefaults.standard.integer(forKey: "demoClient")
                 if model.projects.indices.contains(index) { model.selectProject(index) }
+            }
+
+            // haki diagnostyczne: umowa i kreator klienta
+            if UserDefaults.standard.bool(forKey: "demoContract") {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                showContract = true
+            }
+            if UserDefaults.standard.bool(forKey: "demoNewClient") {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                showNewClient = true
             }
 
             // kartoteki klientów z tabeli zamówień (raz, brakujące)
@@ -384,7 +454,9 @@ struct ContentView: View {
                         showPlan = true
                     },
                     openScan: { showScan = true },
-                    openDocuments: { showDocuments = true }
+                    openDocuments: { showDocuments = true },
+                    openContract: { showContract = true },
+                    openClientProjects: { showClientProjects = true }
                 )
             }
             bottomBar

@@ -20,6 +20,11 @@ final class AppModel {
     /// nazwa pliku skanu wczytanego do sceny
     var scanName: String?
 
+    /// „Pulpit projektowy": klienci, nad którymi pracujemy teraz (przewijanie góra/dół).
+    var workingSet: [UUID] = []
+    /// klucz zapisu zestawu roboczego
+    static let workingSetKey = "aplikacja-sprzedazowa:workingSet"
+
     let store: ProjectStore
 
     init(store: ProjectStore = .standard()) {
@@ -32,6 +37,12 @@ final class AppModel {
             ])]
         }
         self.projects = loaded
+        if let raw = UserDefaults.standard.array(forKey: Self.workingSetKey) as? [String] {
+            self.workingSet = raw.compactMap(UUID.init(uuidString:))
+        }
+        // zestaw roboczy nie może wskazywać na usunięte projekty
+        let ids = Set(loaded.map(\.id))
+        workingSet = workingSet.filter { ids.contains($0) }
     }
 
     /// Wgrywa kartoteki klientów z tabeli zamówień — raz, tylko brakujące.
@@ -117,6 +128,111 @@ final class AppModel {
         return order.clientLastName == client.lastName
             && order.clientFirstName == client.firstName
             && abs(order.price - client.total) < 0.01
+    }
+
+    // MARK: - pulpit projektowy
+
+    /// Projekty z pulpitu (w kolejności ustawionej przez użytkownika).
+    var workingProjects: [Project] {
+        workingSet.compactMap { id in projects.first { $0.id == id } }
+    }
+
+    var isCurrentInWorkingSet: Bool { workingSet.contains(current.id) }
+
+    func addToWorkingSet(_ id: UUID) {
+        guard !workingSet.contains(id) else { return }
+        workingSet.append(id)
+        persistWorkingSet()
+        status = "Dodano do pulpitu projektowego"
+    }
+
+    func removeFromWorkingSet(_ id: UUID) {
+        workingSet.removeAll { $0 == id }
+        persistWorkingSet()
+    }
+
+    func toggleWorkingSet(_ id: UUID) {
+        if workingSet.contains(id) { removeFromWorkingSet(id) } else { addToWorkingSet(id) }
+    }
+
+    /// Przewijanie po pulpicie: +1 w dół, -1 w górę.
+    func switchWorking(step: Int) {
+        let list = workingProjects
+        guard !list.isEmpty else { return }
+        let currentIndex = list.firstIndex { $0.id == current.id } ?? 0
+        let next = (currentIndex + step + list.count) % list.count
+        if let index = projects.firstIndex(where: { $0.id == list[next].id }) {
+            selectProject(index)
+        }
+    }
+
+    private func persistWorkingSet() {
+        UserDefaults.standard.set(workingSet.map(\.uuidString), forKey: Self.workingSetKey)
+    }
+
+    // MARK: - kartoteka klienta
+
+    /// Nowy projekt dla tego samego klienta (dane kontaktowe skopiowane, zabudowa pusta).
+    @discardableResult
+    func addProjectForCurrentClient() -> Project {
+        var new = Project(name: current.name)
+        new.order = current.order
+        new.room = current.room
+        new.plan = current.plan
+        projects.append(new)
+        persist()
+        if let index = projects.firstIndex(where: { $0.id == new.id }) {
+            currentIndex = index
+        }
+        status = "Nowy projekt dla \(new.name)"
+        return new
+    }
+
+    /// Projekty tego samego klienta co bieżący.
+    func projectsOfCurrentClient() -> [Project] {
+        ClientDirectory.projects(of: ClientDirectory.displayName(current), in: projects)
+    }
+
+    /// Rabat klienta (procent) — wpływa na cenę końcową.
+    func setDiscount(percent: Double) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var order = projects[currentIndex].order ?? ProjectOrder()
+        order.discountPercent = min(100, max(0, percent))
+        projects[currentIndex].order = order
+        projects[currentIndex].updatedAt = Date()
+        persist()
+    }
+
+    /// Zapis podpisu umowy (plik PNG w Documents/umowy).
+    func signContract(signatureFile: String) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var order = projects[currentIndex].order ?? ProjectOrder()
+        order.contractSignedAt = Date()
+        order.contractSignatureFile = signatureFile
+        projects[currentIndex].order = order
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        status = "Umowa podpisana"
+    }
+
+    /// Nowy klient z kreatora — zakłada kartotekę.
+    @discardableResult
+    func createClient(firstName: String, lastName: String, address: String, phone: String, email: String) -> Project {
+        var project = Project(name: "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces))
+        project.order = ProjectOrder(
+            clientLastName: lastName,
+            clientFirstName: firstName,
+            address: address,
+            phone: phone,
+            email: email,
+            status: "Nowy klient"
+        )
+        projects.append(project)
+        persist()
+        if let index = projects.firstIndex(where: { $0.id == project.id }) {
+            currentIndex = index
+        }
+        return project
     }
 
     var current: Project {

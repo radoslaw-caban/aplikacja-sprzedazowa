@@ -20,6 +20,12 @@ public struct ProjectOrder: Codable, Sendable, Equatable {
     public var notes: String
     /// Data dostawy (z tabeli zamówień). `nil` = jeszcze nie ustalona.
     public var deliveryDate: Date?
+    /// Rabat klienta w procentach (0–100). Pomniejsza cenę końcową.
+    public var discountPercent: Double?
+    /// Data podpisania umowy (nil = nie podpisana).
+    public var contractSignedAt: Date?
+    /// Nazwa pliku z podpisem (Documents/umowy/…png).
+    public var contractSignatureFile: String?
     /// Status zamówienia w formie tekstowej („Do dostarczenia", „W realizacji").
     public var status: String?
     public var updatedAt: Date
@@ -35,6 +41,9 @@ public struct ProjectOrder: Codable, Sendable, Equatable {
         changeReason: String = "",
         notes: String = "",
         deliveryDate: Date? = nil,
+        discountPercent: Double? = nil,
+        contractSignedAt: Date? = nil,
+        contractSignatureFile: String? = nil,
         status: String? = nil,
         updatedAt: Date = Date()
     ) {
@@ -48,6 +57,9 @@ public struct ProjectOrder: Codable, Sendable, Equatable {
         self.changeReason = changeReason
         self.notes = notes
         self.deliveryDate = deliveryDate
+        self.discountPercent = discountPercent
+        self.contractSignedAt = contractSignedAt
+        self.contractSignatureFile = contractSignatureFile
         self.status = status
         self.updatedAt = updatedAt
     }
@@ -62,6 +74,22 @@ public struct ProjectOrder: Codable, Sendable, Equatable {
     public var remaining: Double { max(0, price - deposit) }
 
     /// Czy zamówienie ma już dane kontaktowe (do statusu w UI).
+    /// Rabat ograniczony do 0–100 %.
+    public var effectiveDiscount: Double {
+        min(100, max(0, discountPercent ?? 0))
+    }
+
+    public var discountAmount: Double {
+        price * effectiveDiscount / 100
+    }
+
+    /// Cena po rabacie — to pokazuje karta rozliczeniowa.
+    public var finalPrice: Double {
+        max(0, price - discountAmount)
+    }
+
+    public var isContractSigned: Bool { contractSignedAt != nil }
+
     public var hasContact: Bool {
         !phone.isEmpty || !email.isEmpty || !address.isEmpty
     }
