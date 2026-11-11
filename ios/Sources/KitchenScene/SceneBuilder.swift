@@ -214,16 +214,22 @@ public enum SceneBuilder {
     @MainActor
     static func makeSun() -> Entity {
         var sun = DirectionalLightComponent()
-        sun.intensity = 5200
-        sun.color = .init(red: 1, green: 0.96, blue: 0.9, alpha: 1)
+        sun.intensity = 6800
+        sun.color = .init(red: 1.0, green: 0.95, blue: 0.86, alpha: 1)
 
         let entity = Entity()
         entity.components.set(sun)
         #if os(iOS)
         // cień to osobny komponent (macOS SDK go nie ma)
-        entity.components.set(DirectionalLightComponent.Shadow(maximumDistance: 60, depthBias: 1.0))
+        // Zasięg 60 m kończył się na trawniku — drzewa i willa rzucały cień
+        // tylko w promieniu kilkudziesięciu metrów, dalej scena była „płaska".
+        entity.components.set(DirectionalLightComponent.Shadow(maximumDistance: 120, depthBias: 0.5))
         #endif
-        entity.orientation = simd_quatf(angle: -.pi / 4, axis: [1, 0, 0])
+        // Słońce z góry-lewej-przodu: cień pada w prawo i do tyłu, jak na
+        // zdjęciach architektonicznych (nie „pod światło").
+        let yaw = simd_quatf(angle: .pi * 0.30, axis: [0, 1, 0])
+        let pitch = simd_quatf(angle: -.pi * 0.30, axis: [1, 0, 0])
+        entity.orientation = pitch * yaw
         return entity
     }
 
@@ -231,7 +237,7 @@ public enum SceneBuilder {
     @MainActor
     static func makeFill() -> Entity {
         var fill = DirectionalLightComponent()
-        fill.intensity = 900
+        fill.intensity = 750
         fill.color = .init(red: 0.72, green: 0.80, blue: 0.92, alpha: 1)
         let entity = Entity()
         entity.components.set(fill)

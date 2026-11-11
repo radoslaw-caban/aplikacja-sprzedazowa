@@ -15,7 +15,7 @@ public enum EnvironmentBuilder {
         public var radius: Float = 210          // promień terenu z teksturą (m)
         public var forestTrees: Int = 900       // gęsty las wokół posesji
         public var forestBackdrop: Bool = true  // uproszczone tło lasu (pierścień)
-        public var grassTufts: Int = 4200
+        public var grassTufts: Int = 9000
         public var undergrowth: Int = 260   // krzaki w lesie (podszycie)       // kępy trawy przy domu (5 cm)
         public var fogBanks: Int = 40           // mgła w dolinach
         public var mountains: Int = 26
@@ -66,22 +66,24 @@ public enum EnvironmentBuilder {
         root.addChild(hillBackdrop(radius: options.radius * 2.6,
                                    heightRange: 18...54,
                                    tint: (0.30, 0.40, 0.30)))
-        root.addChild(fogRings(radius: options.radius * 3.1, count: 24, height: 6, opacity: 0.10))
+        root.addChild(fogRings(radius: options.radius * 3.1, count: 24, height: 4, opacity: 0.05))
         root.addChild(hillBackdrop(radius: options.radius * 4.0,
                                    heightRange: 34...92,
                                    tint: (0.38, 0.47, 0.50)))
-        root.addChild(fogRings(radius: options.radius * 5.0, count: 22, height: 9, opacity: 0.12))
+        root.addChild(fogRings(radius: options.radius * 5.0, count: 22, height: 6, opacity: 0.06))
         root.addChild(hillBackdrop(radius: options.radius * 6.2,
                                    heightRange: 60...150,
                                    tint: (0.50, 0.58, 0.64)))
         root.addChild(mountainRange(options: options, rng: &rng))
-        root.addChild(fogRings(radius: options.radius * 2.0, count: 24, height: 7, opacity: 0.10))
+        root.addChild(fogRings(radius: options.radius * 2.0, count: 24, height: 4, opacity: 0.05))
         root.addChild(fogRings(radius: options.radius * 2.8, count: 22, height: 22, opacity: 0.18))
-        root.addChild(fogRings(radius: options.radius * 4.2, count: 22, height: 12, opacity: 0.14))
+        root.addChild(fogRings(radius: options.radius * 4.2, count: 22, height: 7, opacity: 0.07))
         root.addChild(clouds(options: options, rng: &rng))
         root.addChild(forest(options: options, rng: &rng, room: room))
         root.addChild(grassTufts(options: options, rng: &rng, room: room))
         root.addChild(fence(room: room))
+        root.addChild(sidewalk(room: room))
+        root.addChild(ditch(room: room))
         root.addChild(road(room: room))
         root.addChild(driveway(room: room))
         root.addChild(tesla(position: SIMD3(-1.3, 0, Float(room.depth / 2000) + 9.5)))
@@ -520,61 +522,84 @@ public enum EnvironmentBuilder {
         let patches = GrassFactory.patches()
         guard !patches.isEmpty else { return root }
 
+        // Te same wymiary co ogrodzenie — pas roślin rośnie dokładnie wzdłuż płotu.
+        let halfW = Float(room.width / 2000) + 12
+        let halfD = Float(room.depth / 2000) + 14
         let houseHalfX = Float(room.width / 2000) + 1.5
         let houseHalfZ = Float(room.depth / 2000) + 1.5
 
-        // KĘPY TRAWY: 60 skupisk, w każdym gęsto, między nimi luźno.
-        // Równomierny rozrzut dawał „dywan w kropki" — trawa rośnie łatami.
-        struct Clump { let x: Float; let z: Float; let radius: Float }
-        var clumps: [Clump] = []
-        for _ in 0..<60 {
-            let angle = rng.range(0, .pi * 2)
-            let distance = rng.range(3, 44)
-            clumps.append(Clump(x: cos(angle) * distance, z: sin(angle) * distance,
-                                radius: rng.range(1.2, 4.5)))
-        }
-
         var placed = 0
         var guardCount = 0
-        while placed < options.grassTufts && guardCount < options.grassTufts * 6 {
-            guardCount += 1
+        let target = options.grassTufts
+        let limit = target * 6
 
-            var x: Float
-            var z: Float
-            if rng.next() < 0.75, !clumps.isEmpty {
-                let clump = clumps[Int(rng.next() * Float(clumps.count)) % clumps.count]
-                let a = rng.range(0, .pi * 2)
-                let r = rng.range(0, clump.radius)
-                x = clump.x + cos(a) * r
-                z = clump.z + sin(a) * r
-            } else {
-                let angle = rng.range(0, .pi * 2)
-                let distance = rng.range(3.0, 48)
-                x = cos(angle) * distance
-                z = sin(angle) * distance
-            }
-
-            if abs(x) < houseHalfX && abs(z) < houseHalfZ { continue }
-            if z > 0 && abs(x) < 6.0 { continue }
-            if z > 30 { continue }
-
-            let flowers = patches.count > 1 && rng.next() < 0.22
+        func tuft(_ x: Float, _ z: Float, _ scale: Float = 1) {
+            let flowers = patches.count > 1 && rng.next() < 0.20
             let plainCount = max(1, patches.count - 1)
             let index = flowers ? patches.count - 1 : Int(rng.next() * Float(plainCount))
             let patch = patches[min(index, patches.count - 1)]
-
             let entity = ModelEntity(mesh: patch.mesh, materials: [patch.material])
-            entity.scale = SIMD3(rng.range(0.8, 1.9), rng.range(0.9, 2.1), rng.range(0.8, 1.9))
+            entity.scale = SIMD3(rng.range(1.8, 3.4) * scale,
+                                 rng.range(1.8, 3.6) * scale,
+                                 rng.range(1.8, 3.4) * scale)
             entity.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
             entity.position = [x, terrainHeight(x, z), z]
             entity.name = "grass-\(placed)"
             root.addChild(entity)
             placed += 1
         }
+
+        // 1) GĘSTY PAS WZDŁUŻ PŁOTU — 55% kęp, ±3,5 m od linii ogrodzenia.
+        let bandCount = Int(Float(target) * 0.55)
+        let perimeter = 4 * (halfW + halfD)
+        while placed < bandCount && guardCount < limit {
+            guardCount += 1
+            var t = rng.range(0, perimeter)
+            var x: Float = 0
+            var z: Float = 0
+            if t < halfW * 2 {
+                x = -halfW + t; z = -halfD
+            } else if t < halfW * 2 + halfD * 2 {
+                t -= halfW * 2; x = halfW; z = -halfD + t
+            } else if t < halfW * 4 + halfD * 2 {
+                t -= halfW * 2 + halfD * 2; x = halfW - t; z = halfD
+            } else {
+                t -= halfW * 4 + halfD * 2; x = -halfW; z = halfD - t
+            }
+            x += rng.range(-1.2, 1.2)
+            z += rng.range(-3.5, 3.5)
+            if abs(x) < houseHalfX && abs(z) < houseHalfZ { continue }
+            if z > 0 && abs(x) < 16 { continue }
+            tuft(x, z, 1.25)
+        }
+
+        // 2) CAŁY TRAWNIK W ŚRODKU PŁOTU
+        while placed < target && guardCount < limit {
+            guardCount += 1
+            let x = rng.range(-halfW, halfW)
+            let z = rng.range(-halfD, halfD)
+            if abs(x) < houseHalfX && abs(z) < houseHalfZ { continue }
+            if z > 0 && abs(x) < 16 { continue }
+            tuft(x, z, 1.1)
+        }
+
+        // 3) DZICZ ZA PŁOTEM — rzadziej, ale bez łysych plam
+        var extra = 0
+        let extraTarget = Int(Float(target) * 0.25)
+        while extra < extraTarget && guardCount < limit * 2 {
+            guardCount += 1
+            let angle = rng.range(0, .pi * 2)
+            let distance = rng.range(28, 62)
+            let x = cos(angle) * distance
+            let z = sin(angle) * distance
+            if abs(x) < halfW + 2 && abs(z) < halfD + 2 { continue }
+            tuft(x, z, 0.95)
+            extra += 1
+        }
         return root
     }
 
-    /// Las: drzewa w skupiskach (nie w równym pierścieniu), podszycie między nimi.
+    /// Las w skupiskach + podszycie + miękkie cienie kontaktowe pod drzewami.
     static func forest(options: Options, rng: inout RNG, room: Room) -> Entity {
         let root = Entity()
         root.name = "forest"
@@ -583,12 +608,13 @@ public enum EnvironmentBuilder {
         guard !variants.isEmpty else { return root }
 
         let houseRadius = max(Float(room.width), Float(room.depth)) / 2000 + 12
+        var shadowSpots: [(SIMD3<Float>, Float)] = []
 
         struct Grove { let x: Float; let z: Float; let radius: Float }
         var groves: [Grove] = []
-        for _ in 0..<14 {
+        for _ in 0..<16 {
             let angle = rng.range(0, .pi * 2)
-            let distance = rng.range(houseRadius + 25, options.radius * 0.72)
+            let distance = rng.range(houseRadius + 20, options.radius * 0.72)
             groves.append(Grove(x: cos(angle) * distance,
                                 z: sin(angle) * distance,
                                 radius: rng.range(12, 34)))
@@ -596,7 +622,7 @@ public enum EnvironmentBuilder {
 
         var placed = 0
         var guardCount = 0
-        while placed < options.forestTrees && guardCount < options.forestTrees * 8 {
+        while placed < options.forestTrees && guardCount < options.forestTrees * 10 {
             guardCount += 1
 
             let angle = rng.range(0, .pi * 2)
@@ -613,9 +639,7 @@ public enum EnvironmentBuilder {
                 if (x * x + z * z).squareRoot() < houseRadius + 6 { continue }
             }
 
-            // strefa kamery zewnętrznej — drzewo nie może stać przed obiektywem
-            // cała przednia część działki (od strony kamery) bez drzew —
-            // inaczej pień staje między obiektywem a domem
+            // strefa kamery: nic nie staje między obiektywem a domem
             if abs(x) < 46 && z > -12 && z < 96 { continue }
 
             let sawView = 3 * Float.pi / 2
@@ -638,10 +662,10 @@ public enum EnvironmentBuilder {
             tree.position = [x, terrainHeight(x, z), z]
             tree.name = "tree-\(placed)"
             root.addChild(tree)
+            shadowSpots.append((SIMD3(x, terrainHeight(x, z) + 0.03, z), height * 0.24))
             placed += 1
         }
 
-        // PODSZYCIE: niskie krzewy w lesie
         var undergrowth = PhysicallyBasedMaterial()
         undergrowth.baseColor = .init(tint: PlatformColor(red: 0.20, green: 0.33, blue: 0.18, alpha: 1))
         undergrowth.roughness = .init(floatLiteral: 1.0)
@@ -650,7 +674,6 @@ public enum EnvironmentBuilder {
             let distance = rng.range(houseRadius + 10, options.radius * 0.8)
             let x = cos(angle) * distance
             let z = sin(angle) * distance
-            // tylko poza posesją i poza trawnikiem od frontu
             if abs(x) < 40 && z > -8 && z < 90 { continue }
             let size = rng.range(0.45, 1.3)
             let bush = ModelEntity(mesh: .generateSphere(radius: size * 0.5), materials: [undergrowth])
@@ -658,60 +681,114 @@ public enum EnvironmentBuilder {
             bush.position = [x, terrainHeight(x, z) + size * 0.18, z]
             bush.name = "undergrowth-\(i)"
             root.addChild(bush)
+            shadowSpots.append((SIMD3(x, terrainHeight(x, z) + 0.03, z), size * 0.6))
         }
+
+        root.addChild(contactShadows(shadowSpots))
         return root
     }
 
+    /// Jedna scalona siatka miękkich cieni pod obiektami (AO kontaktowe).
+    static func contactShadows(_ spots: [(SIMD3<Float>, Float)]) -> Entity {
+        let root = Entity()
+        root.name = "contact-shadows"
+        guard !spots.isEmpty, let texture = EnvironmentArt.softShadow() else { return root }
+
+        var builder = TreeFactory.MeshBuilder()
+        for (center, radius) in spots {
+            let r = max(0.35, radius)
+            builder.addQuad(center: center, right: SIMD3(r, 0, 0), up: SIMD3(0, 0, r))
+        }
+        guard let descriptor = builder.descriptor("contact-shadow"),
+              let mesh = try? MeshResource.generate(from: [descriptor]) else { return root }
+
+        var material = UnlitMaterial()
+        material.color = .init(tint: PlatformColor(white: 1, alpha: 1), texture: .init(texture))
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.75))
+        material.faceCulling = .none
+
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        entity.name = "shadow-decals"
+        root.addChild(entity)
+        return root
+    }
+
+    /// OGRODZENIE WILLI: murowane słupki + czarne metalowe pręty, pełna brama
+    /// dwuskrzydłowa w osi podjazdu. Wcześniej był tu płot drewniany — wyglądał
+    /// jak zagroda na konie, nie jak ogrodzenie willi.
     static func fence(room: Room) -> Entity {
         let root = Entity()
         root.name = "fence"
 
         let halfW = Float(room.width / 2000) + 12
         let halfD = Float(room.depth / 2000) + 14
-        let height: Float = 1.25
-        let spacing: Float = 2.4
-        let gateHalf: Float = 3.4
+        let pillarHeight: Float = 1.85
+        let railHeight: Float = 1.45
+        let spacing: Float = 3.2
+        let gateHalf: Float = 2.9          // brama 5,8 m
 
-        var wood = PhysicallyBasedMaterial()
-        if let texture = EnvironmentArt.photoTexture("wood_diff") {
-            wood.baseColor = .init(tint: PlatformColor(white: 0.9, alpha: 1), texture: .init(texture))
+        var stone = PhysicallyBasedMaterial()
+        if let texture = EnvironmentArt.photoTexture("concrete_diff") {
+            stone.baseColor = .init(tint: PlatformColor(white: 0.92, alpha: 1), texture: .init(texture))
+            stone.textureCoordinateTransform = .init(offset: .zero, scale: SIMD2<Float>(1.6, 1.6))
         } else {
-            wood.baseColor = .init(tint: PlatformColor(red: 0.34, green: 0.26, blue: 0.18, alpha: 1))
+            stone.baseColor = .init(tint: PlatformColor(red: 0.86, green: 0.85, blue: 0.82, alpha: 1))
         }
-        wood.roughness = .init(floatLiteral: 0.9)
-        wood.metallic = .init(floatLiteral: 0)
+        stone.roughness = .init(floatLiteral: 0.85)
 
-        var postMaterial = PhysicallyBasedMaterial()
-        postMaterial.baseColor = .init(tint: PlatformColor(red: 0.24, green: 0.19, blue: 0.14, alpha: 1))
-        postMaterial.roughness = .init(floatLiteral: 0.95)
+        var metal = PhysicallyBasedMaterial()
+        metal.baseColor = .init(tint: PlatformColor(red: 0.10, green: 0.11, blue: 0.12, alpha: 1))
+        metal.roughness = .init(floatLiteral: 0.45)
+        metal.metallic = .init(floatLiteral: 0.85)
 
-        func addPost(_ x: Float, _ z: Float) {
+        func pillar(_ x: Float, _ z: Float) {
             let entity = ModelEntity(
-                mesh: .generateBox(width: 0.14, height: height, depth: 0.14, cornerRadius: 0.012),
-                materials: [postMaterial]
+                mesh: .generateBox(width: 0.42, height: pillarHeight, depth: 0.42, cornerRadius: 0.02),
+                materials: [stone]
             )
-            entity.position = [x, terrainHeight(x, z) + height / 2, z]
-            entity.name = "fence-post"
+            entity.position = [x, terrainHeight(x, z) + pillarHeight / 2, z]
+            entity.name = "fence-pillar"
             root.addChild(entity)
+
+            let cap = ModelEntity(
+                mesh: .generateBox(width: 0.52, height: 0.08, depth: 0.52, cornerRadius: 0.02),
+                materials: [stone]
+            )
+            cap.position = [x, terrainHeight(x, z) + pillarHeight + 0.04, z]
+            root.addChild(cap)
         }
 
-        func addRails(from a: SIMD2<Float>, to b: SIMD2<Float>) {
+        /// Przęsło: pręty pionowe + dwie belki poziome.
+        func bay(from a: SIMD2<Float>, to b: SIMD2<Float>) {
             let delta = b - a
             let length = simd_length(delta)
-            guard length > 0.05 else { return }
+            guard length > 0.3 else { return }
             let angle = atan2(delta.x, delta.y)
             let midX = (a.x + b.x) / 2
             let midZ = (a.y + b.y) / 2
             let base = terrainHeight(midX, midZ)
-            for y in [height * 0.42, height * 0.82] {
+
+            for y: Float in [railHeight, 0.35] {
                 let rail = ModelEntity(
-                    mesh: .generateBox(width: 0.07, height: 0.12, depth: length, cornerRadius: 0.005),
-                    materials: [wood]
+                    mesh: .generateBox(width: 0.05, height: 0.06, depth: length - 0.42),
+                    materials: [metal]
                 )
                 rail.position = [midX, base + y, midZ]
                 rail.orientation = simd_quatf(angle: angle, axis: [0, 1, 0])
-                rail.name = "fence-rail"
                 root.addChild(rail)
+            }
+
+            let bars = max(2, Int(length / 0.16))
+            for i in 0...bars {
+                let t = Float(i) / Float(bars)
+                let x = a.x + delta.x * t
+                let z = a.y + delta.y * t
+                let bar = ModelEntity(
+                    mesh: .generateBox(width: 0.025, height: railHeight - 0.32, depth: 0.025),
+                    materials: [metal]
+                )
+                bar.position = [x, base + (railHeight - 0.32) / 2 + 0.32, z]
+                root.addChild(bar)
             }
         }
 
@@ -729,10 +806,105 @@ public enum EnvironmentBuilder {
             let count = max(1, Int((length / spacing).rounded()))
             for i in 0...count {
                 let t = Float(i) / Float(count)
-                addPost(a.x + delta.x * t, a.y + delta.y * t)
+                pillar(a.x + delta.x * t, a.y + delta.y * t)
             }
-            addRails(from: a, to: b)
+            for i in 0..<count {
+                let t0 = Float(i) / Float(count)
+                let t1 = Float(i + 1) / Float(count)
+                bay(from: SIMD2(a.x + delta.x * t0, a.y + delta.y * t0),
+                    to: SIMD2(a.x + delta.x * t1, a.y + delta.y * t1))
+            }
         }
+
+        // BRAMA: dwa skrzydła otwarte na posesję, zawiasy na słupkach.
+        for side in [Float(-1), Float(1)] {
+            let leaf = Entity()
+            leaf.name = "gate-leaf"
+            let width = gateHalf
+            for y: Float in [0.4, 1.35] {
+                let rail = ModelEntity(
+                    mesh: .generateBox(width: width, height: 0.07, depth: 0.06),
+                    materials: [metal]
+                )
+                rail.transform.translation = SIMD3(side * (width / 2), y, 0)
+                leaf.addChild(rail)
+            }
+            let bars = Int(width / 0.16)
+            for i in 0...bars {
+                let x = side * (Float(i) / Float(bars)) * width
+                let bar = ModelEntity(
+                    mesh: .generateBox(width: 0.03, height: 1.0, depth: 0.03),
+                    materials: [metal]
+                )
+                bar.transform.translation = SIMD3(x, 0.88, 0)
+                leaf.addChild(bar)
+            }
+            leaf.transform.translation = SIMD3(side * gateHalf, terrainHeight(side * gateHalf, halfD), halfD)
+            leaf.transform.rotation = simd_quatf(angle: side * .pi * 0.55, axis: [0, 1, 0])
+            root.addChild(leaf)
+        }
+        return root
+    }
+
+    /// CHODNIK wzdłuż drogi — płyty betonowe, 2 m szerokości.
+    static func sidewalk(room: Room) -> Entity {
+        let root = Entity()
+        root.name = "sidewalk"
+        let halfD = Float(room.depth / 2000) + 14
+        let z = halfD + 7.2
+
+        var material = PhysicallyBasedMaterial()
+        if let texture = EnvironmentArt.photoTexture("paving_diff") {
+            material.baseColor = .init(tint: PlatformColor(white: 0.95, alpha: 1), texture: .init(texture))
+            material.textureCoordinateTransform = .init(offset: .zero, scale: SIMD2<Float>(24, 1.2))
+        } else {
+            material.baseColor = .init(tint: PlatformColor(red: 0.72, green: 0.71, blue: 0.68, alpha: 1))
+        }
+        material.roughness = .init(floatLiteral: 0.8)
+
+        let slab = ModelEntity(mesh: .generateBox(width: 160, height: 0.14, depth: 2.0), materials: [material])
+        slab.position = [0, 0.07, z]
+        slab.name = "sidewalk-slab"
+        root.addChild(slab)
+
+        // krawężnik
+        var kerb = PhysicallyBasedMaterial()
+        kerb.baseColor = .init(tint: PlatformColor(red: 0.62, green: 0.62, blue: 0.60, alpha: 1))
+        kerb.roughness = .init(floatLiteral: 0.9)
+        let edge = ModelEntity(mesh: .generateBox(width: 160, height: 0.18, depth: 0.18), materials: [kerb])
+        edge.position = [0, 0.09, z - 1.05]
+        root.addChild(edge)
+        return root
+    }
+
+    /// RÓW odwadniający między chodnikiem a ogrodzeniem (skarpy + dno).
+    static func ditch(room: Room) -> Entity {
+        let root = Entity()
+        root.name = "ditch"
+        let halfD = Float(room.depth / 2000) + 14
+        let z = halfD + 4.6
+
+        var soil = PhysicallyBasedMaterial()
+        soil.baseColor = .init(tint: PlatformColor(red: 0.30, green: 0.27, blue: 0.20, alpha: 1))
+        soil.roughness = .init(floatLiteral: 1.0)
+
+        var gravel = PhysicallyBasedMaterial()
+        gravel.baseColor = .init(tint: PlatformColor(red: 0.46, green: 0.45, blue: 0.42, alpha: 1))
+        gravel.roughness = .init(floatLiteral: 1.0)
+
+        // dwie skarpy pod kątem — od terenu do dna rowu
+        for side in [Float(-1), Float(1)] {
+            let slope = ModelEntity(
+                mesh: .generateBox(width: 150, height: 0.1, depth: 1.3),
+                materials: [soil]
+            )
+            slope.position = [0, -0.18, z + side * 0.55]
+            slope.orientation = simd_quatf(angle: side * .pi * 0.16, axis: [1, 0, 0])
+            root.addChild(slope)
+        }
+        let bottom = ModelEntity(mesh: .generateBox(width: 150, height: 0.06, depth: 0.9), materials: [gravel])
+        bottom.position = [0, -0.36, z]
+        root.addChild(bottom)
         return root
     }
 

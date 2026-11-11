@@ -28,14 +28,14 @@ enum TreeFactory {
 
     // MARK: - budowa siatek
 
-    struct MeshBuilder {
+    public struct MeshBuilder {
         var positions: [SIMD3<Float>] = []
         var normals: [SIMD3<Float>] = []
         var uvs: [SIMD2<Float>] = []
         var indices: [UInt32] = []
 
         /// Karta (quad) — dla liści; `twoSided` dokłada odwrotną stronę.
-        mutating func addQuad(center: SIMD3<Float>, right: SIMD3<Float>, up: SIMD3<Float>, twoSided: Bool = true) {
+        public mutating func addQuad(center: SIMD3<Float>, right: SIMD3<Float>, up: SIMD3<Float>, twoSided: Bool = true) {
             let n = normalize(cross(right, up))
             let halfR = right * 0.5
             let halfU = up * 0.5
@@ -89,7 +89,7 @@ enum TreeFactory {
             }
         }
 
-        func descriptor(_ name: String) -> MeshDescriptor? {
+        public func descriptor(_ name: String) -> MeshDescriptor? {
             guard !positions.isEmpty else { return nil }
             var d = MeshDescriptor(name: name)
             d.positions = MeshBuffer(positions)

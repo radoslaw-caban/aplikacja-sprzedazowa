@@ -411,6 +411,33 @@ public enum EnvironmentArt {
         return texture
     }
 
+    /// Miękki, okrągły cień kontaktowy (AO) pod obiektami. Siatka terenu nie ma
+    /// ambient occlusion, więc bez tego drzewa i auto „lewitują" nad trawą.
+    public static func softShadow() -> TextureResource? {
+        let size = 128
+        guard let ctx = CGContext(
+            data: nil, width: size, height: size,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0))
+        ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
+
+        let center = CGPoint(x: Double(size) / 2, y: Double(size) / 2)
+        let radius = Double(size) / 2
+        // kilka warstw o coraz mniejszej alfie — smoothstep zamiast twardej krawędzi
+        for i in stride(from: 12, through: 1, by: -1) {
+            let t = Double(i) / 12
+            let alpha = 0.055 + (1 - t) * 0.02
+            ctx.setFillColor(CGColor(red: 0.02, green: 0.03, blue: 0.02, alpha: alpha))
+            ctx.fillEllipse(in: CGRect(x: center.x - radius * t, y: center.y - radius * t,
+                                       width: radius * 2 * t, height: radius * 2 * t))
+        }
+        guard let image = ctx.makeImage() else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
     /// Mgła: poziomy gradient bieli — kładziony na pasmach i w dolinach.
     public static func hazeGradient() -> TextureResource? {
         let height = 128
