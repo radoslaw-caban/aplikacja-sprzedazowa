@@ -22,6 +22,17 @@ ios/Sources/KitchenApp/
 - `Runs`: blat o głębokości z nawisem (wyspa) i cokół o realnej wysokości szafek,
 - `Project`: `zones: [Zone]?`.
 
+## Podgląd „magiczny" (cień + gwiazdki)
+
+Nowa strefa powstaje w trybie **podglądu** (`Zone.draft = true`):
+
+- szafki rysowane są jako **półprzezroczysty, ciemny cień** (błękitno-szary, 28%),
+- na froncie cienia **mrugają złote gwiazdki** (małe kule Unlit, animowane sinusem co klatkę),
+- pierwszy krok kreatora to **skala zabudowy** — suwak w mm ograniczony do długości ściany;
+  przesuwanie natychmiast przelicza cień,
+- **„Gotowe ✓"** (albo zamknięcie arkusza) zatwierdza podgląd → cień staje się realną zabudową,
+- porzucone podglądy są zatwierdzane przy starcie aplikacji, żeby nie zostawały „duchy".
+
 ## Jak się używa
 
 1. **Dom (plan)** → klik w ścianę → panel ściany → **Strefa…**
@@ -53,6 +64,8 @@ ios/Sources/KitchenApp/
 - `swift build` i `xcodebuild … -sdk iphonesimulator` → BUILD SUCCEEDED.
 - Symulator iPad Pro 13" (M5): kreator otwiera się z gotową propozycją, pytania
   i podsumowanie działają, strefa jest widoczna w scenie 3D.
+- Podgląd: zweryfikowany na symulatorze — półprzezroczysty cień szafek ze złotymi
+  gwiazdkami; po zatwierdzeniu materiał wraca do normalnego.
 - Poprawka kamery wewnętrznej: `SceneView.baseCamera` stawia kamerę między zabudową
   a przeciwległą ścianą (wcześniej kadr wychodził przed elewację).
 

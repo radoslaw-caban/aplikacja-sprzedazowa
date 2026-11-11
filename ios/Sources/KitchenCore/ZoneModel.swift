@@ -103,13 +103,17 @@ public struct Zone: Identifiable, Codable, Sendable, Equatable {
     public var wallIndex: Int
     public var answers: [String: ZoneValue]
     public var name: String
+    /// true = strefa w podglądzie (cień szafek + gwiazdki), false/nil = zatwierdzona
+    public var draft: Bool?
 
-    public init(id: UUID = UUID(), kind: ZoneKind, wallIndex: Int, answers: [String: ZoneValue], name: String) {
+    public init(id: UUID = UUID(), kind: ZoneKind, wallIndex: Int,
+                answers: [String: ZoneValue], name: String, draft: Bool? = nil) {
         self.id = id
         self.kind = kind
         self.wallIndex = wallIndex
         self.answers = answers
         self.name = name
+        self.draft = draft
     }
 
     public var typedAnswers: ZoneAnswers { ZoneAnswers(answers) }

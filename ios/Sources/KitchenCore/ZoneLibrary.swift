@@ -44,9 +44,7 @@ public enum ZoneLibrary {
                 "wallCabinets": .flag(true),
             ],
             questions: [
-                ZoneQuestion(id: "width", label: "Długość ciągu dolnego", feature: "zone",
-                             help: "Wysoka zabudowa i witryny dochodzą po bokach.",
-                             choices: [c(1500, "1500 mm"), c(1800, "1800 mm"), c(2400, "2400 mm"), c(3000, "3000 mm")]),
+                widthQ("Długość ciągu dolnego", 1200, 3600),
                 alignQuestion,
                 ZoneQuestion(id: "hob", label: "Rodzaj płyty grzewczej", feature: "hob",
                              choices: [
@@ -112,8 +110,7 @@ public enum ZoneLibrary {
                 "wallCabinets": .flag(true), "tallStorage": .flag(false),
             ],
             questions: [
-                ZoneQuestion(id: "width", label: "Długość ciągu", feature: "zone",
-                             choices: [c(1200, "1200 mm"), c(1800, "1800 mm"), c(2400, "2400 mm"), c(3000, "3000 mm")]),
+                widthQ("Długość ciągu", 1200, 4200),
                 alignQuestion,
                 ZoneQuestion(id: "sink", label: "Rodzaj zlewu", feature: "sink",
                              choices: [
@@ -200,8 +197,7 @@ public enum ZoneLibrary {
                 "islandFeature": .text("hob"), "seating": .flag(true),
             ],
             questions: [
-                ZoneQuestion(id: "width", label: "Długość wyspy", feature: "zone",
-                             choices: [c(1800, "1800 mm"), c(2400, "2400 mm"), c(3000, "3000 mm"), c(3600, "3600 mm")]),
+                widthQ("Długość wyspy", 1800, 3600),
                 ZoneQuestion(id: "islandFeature", label: "Co na wyspie", feature: "zone",
                              choices: [c("hob", "Płyta grzewcza"), c("sink", "Zlew"), c("none", "Tylko blat roboczy")]),
                 ZoneQuestion(id: "seating", label: "Nawis na siedzenie", feature: "zone",
@@ -231,8 +227,7 @@ public enum ZoneLibrary {
                 "doors": .number(2), "toCeiling": .flag(true), "interior": .text("rail"),
             ],
             questions: [
-                ZoneQuestion(id: "width", label: "Szerokość szafy", feature: "wardrobe",
-                             choices: [c(1200, "1200 mm"), c(1800, "1800 mm"), c(2400, "2400 mm"), c(3000, "3000 mm")]),
+                widthQ("Szerokość szafy", 900, 4200, feature: "wardrobe"),
                 alignQuestion,
                 ZoneQuestion(id: "doors", label: "Skrzydła w sekcji", feature: "wardrobe",
                              choices: [c(1, "1 skrzydło"), c(2, "2 skrzydła")]),
@@ -264,8 +259,7 @@ public enum ZoneLibrary {
                 "toCeiling": .flag(true), "interior": .text("rail"),
             ],
             questions: [
-                ZoneQuestion(id: "width", label: "Szerokość szafy", feature: "wardrobe",
-                             choices: [c(1800, "1800 mm"), c(2400, "2400 mm"), c(3000, "3000 mm"), c(3600, "3600 mm")]),
+                widthQ("Szerokość szafy", 900, 4200, feature: "wardrobe"),
                 alignQuestion,
                 ZoneQuestion(id: "panels", label: "Liczba paneli", feature: "wardrobe",
                              choices: [c(2, "2 panele"), c(3, "3 panele")]),
@@ -299,8 +293,7 @@ public enum ZoneLibrary {
                 "tvSize": .number(65), "wallUnit": .flag(true),
             ],
             questions: [
-                ZoneQuestion(id: "width", label: "Szerokość szafki RTV", feature: "tv",
-                             choices: [c(1200, "1200 mm"), c(1800, "1800 mm"), c(2400, "2400 mm"), c(3000, "3000 mm")]),
+                widthQ("Szerokość szafki RTV", 1200, 3600, feature: "tv"),
                 alignQuestion,
                 ZoneQuestion(id: "tvSize", label: "Wielkość telewizora", feature: "tv",
                              choices: [c(55, "55\""), c(65, "65\""), c(75, "75\""), c(83, "83\"")]),
@@ -334,8 +327,7 @@ public enum ZoneLibrary {
                 "tall": .flag(true), "worktopHeight": .number(850),
             ],
             questions: [
-                ZoneQuestion(id: "vanity", label: "Szerokość szafki", feature: "sink",
-                             choices: [c(600, "600 mm"), c(800, "800 mm"), c(1000, "1000 mm"), c(1200, "1200 mm")]),
+                widthQ("Szerokość szafki", 600, 1600, feature: "sink", id: "vanity"),
                 alignQuestion,
                 ZoneQuestion(id: "hanging", label: "Montaż szafki",
                              choices: [c(true, "Wisząca"), c(false, "Na cokole")]),
@@ -361,6 +353,13 @@ public enum ZoneLibrary {
 
     private static func c(_ v: Bool, _ label: String, _ hint: String? = nil) -> ZoneChoice {
         ZoneChoice(.flag(v), label, hint: hint)
+    }
+
+    private static func widthQ(_ label: String, _ min: Double, _ max: Double,
+                               feature: String = "zone", id: String = "width") -> ZoneQuestion {
+        ZoneQuestion(id: id, label: label, type: .position, feature: feature,
+                     help: "Skaluj zabudowę wzdłuż ściany — podgląd (cień szafek) zmienia się na żywo.",
+                     min: min, max: max, step: 50, unit: " mm")
     }
 
     private static let alignQuestion = ZoneQuestion(

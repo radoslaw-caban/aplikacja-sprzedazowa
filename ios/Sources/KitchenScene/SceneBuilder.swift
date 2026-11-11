@@ -49,7 +49,8 @@ public enum SceneBuilder {
                     position: SIMD3(b.position.x + c.x, b.position.y, b.position.z + c.z),
                     color: b.color,
                     texture: texture,
-                    rotationY: b.rotationY
+                    rotationY: b.rotationY,
+                    preview: c.preview == true
                 ))
             }
         }
@@ -60,6 +61,8 @@ public enum SceneBuilder {
         for b in boxes {
             root.addChild(entity(for: b))
         }
+        // magiczne gwiazdki nad podglądem strefy (cień szafek)
+        root.addChild(Sparkles.entity(cabinets: cabinets))
 
         // podłoga
         if includeFloor {
@@ -106,6 +109,21 @@ public enum SceneBuilder {
             depth: meters(b.size.z),
             cornerRadius: 0.0015
         )
+        if b.preview {
+            // CIEŃ SZAFEK: półprzezroczysty błękit, bez tekstur i metaliczności.
+            var ghost = PhysicallyBasedMaterial()
+            ghost.baseColor = .init(tint: color("#4f7f9e"))
+            ghost.roughness = .init(floatLiteral: 0.9)
+            ghost.metallic = .init(floatLiteral: 0)
+            ghost.blending = .transparent(opacity: .init(floatLiteral: 0.28))
+            let ghostEntity = ModelEntity(mesh: mesh, materials: [ghost])
+            ghostEntity.position = [meters(b.position.x), meters(b.position.y), meters(b.position.z)]
+            ghostEntity.name = b.id
+            if b.rotationY != 0 {
+                ghostEntity.orientation = simd_quatf(angle: Float(b.rotationY * .pi / 180), axis: [0, 1, 0])
+            }
+            return ghostEntity
+        }
         var material = PhysicallyBasedMaterial()
         // front może mieć teksturę z biblioteki (nazwa pliku w `Box.texture`)
         if let textureName = b.texture,

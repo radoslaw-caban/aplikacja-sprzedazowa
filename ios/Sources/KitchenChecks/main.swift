@@ -125,6 +125,18 @@ func runZoneChecks(_ r: Reporter) {
     r.check("usunięcie strefy: zostaje tylko ręczna",
             cleared.count == 1 && cleared.first?.id == manual.id)
 
+    // podgląd: cień szafek + gwiazdki, po zatwierdzeniu realna zabudowa
+    var draftZone = zone
+    draftZone.draft = true
+    let draftCabs = Zones.cabinets(for: draftZone, plan: plan)
+    r.check("podgląd: szafki są cieniem", draftCabs.allSatisfy { $0.preview == true })
+    draftZone.draft = false
+    let solidCabs = Zones.cabinets(for: draftZone, plan: plan)
+    r.check("zatwierdzenie: szafki bez cienia", solidCabs.allSatisfy { $0.preview != true })
+    r.check("skala: szerokość to suwak (min/max)",
+            ZoneLibrary.spec(.kitchenCook).questions.first?.type == .position
+            && ZoneLibrary.spec(.kitchenCook).questions.first?.max == 3600)
+
     // zapis/odczyt strefy (Codable — projekt na dysku)
     if let data = try? JSONEncoder().encode(zone),
        let back = try? JSONDecoder().decode(Zone.self, from: data) {

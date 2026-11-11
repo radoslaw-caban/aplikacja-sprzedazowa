@@ -63,7 +63,8 @@ public enum Zones {
                 appliances: part.appliances.isEmpty ? nil : part.appliances,
                 slidingPanels: part.slidingPanels,
                 worktopDepth: part.worktopDepth,
-                worktopShift: part.worktopShift
+                worktopShift: part.worktopShift,
+                preview: zone.draft == true ? true : nil
             )
             // front rysuje Generator: szuflady z elementów, skrzydło gdy brak szuflad;
             // AGD (piekarnik, lodówka, zmywarka) ma własny panel w Generator.appliances

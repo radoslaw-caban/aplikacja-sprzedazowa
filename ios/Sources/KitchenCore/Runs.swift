@@ -19,6 +19,8 @@ public enum Runs {
         public let worktopShift: Double
         /// realna wysokość cokołu w biegu
         public let plinthHeight: Double
+        /// bieg w podglądzie strefy (wszystkie szafki to cień)
+        public let preview: Bool
     }
 
     public struct WorktopParams: Sendable {
@@ -70,7 +72,8 @@ public enum Runs {
                     hasBase: arr.contains { $0.type == .base },
                     worktopDepth: arr.compactMap(\.worktopDepth).max(),
                     worktopShift: arr.compactMap(\.worktopShift).first ?? 0,
-                    plinthHeight: arr.map { $0.type == .wall ? 0 : $0.plinth }.max() ?? 0
+                    plinthHeight: arr.map { $0.type == .wall ? 0 : $0.plinth }.max() ?? 0,
+                    preview: arr.allSatisfy { $0.preview == true }
                 ))
             }
 
@@ -99,7 +102,8 @@ public enum Runs {
                 position: SIMD3(r.cx + shift * sin(rad), r.bodyTop + p.thickness / 2,
                                 r.cz + shift * cos(rad)),
                 color: p.color,
-                rotationY: r.rotation
+                rotationY: r.rotation,
+                preview: r.preview
             )
         }
     }
@@ -116,7 +120,8 @@ public enum Runs {
                 size: SIMD3(r.length, h, 540 - p.setback),
                 position: SIMD3(r.cx, h / 2, r.cz + p.setback / 2),
                 color: p.color,
-                rotationY: r.rotation
+                rotationY: r.rotation,
+                preview: r.preview
             )
         }
     }

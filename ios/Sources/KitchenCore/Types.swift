@@ -97,6 +97,8 @@ public struct Cabinet: Identifiable, Codable, Sendable {
     public var worktopDepth: Double?
     /// przesunięcie blatu w głąb, lokalne +Z — mm
     public var worktopShift: Double?
+    /// podgląd strefy: cień szafki (półprzezroczysty) zamiast materiału
+    public var preview: Bool?
 
     public init(
         id: UUID = UUID(),
@@ -118,7 +120,8 @@ public struct Cabinet: Identifiable, Codable, Sendable {
         appliances: [ApplianceKind]? = nil,
         slidingPanels: Int? = nil,
         worktopDepth: Double? = nil,
-        worktopShift: Double? = nil
+        worktopShift: Double? = nil,
+        preview: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -140,6 +143,7 @@ public struct Cabinet: Identifiable, Codable, Sendable {
         self.slidingPanels = slidingPanels
         self.worktopDepth = worktopDepth
         self.worktopShift = worktopShift
+        self.preview = preview
     }
 }
 
@@ -158,6 +162,8 @@ public struct Box: Identifiable, Sendable {
     /// Nazwa pliku tekstury (opcjonalnie) — materiały z biblioteki.
     public var texture: String? = nil
     public var rotationY: Double = 0
+    /// podgląd strefy — bryła rysowana jako cień (przezroczysty błękit)
+    public var preview: Bool = false
 
     public init(
         id: String,
@@ -167,7 +173,8 @@ public struct Box: Identifiable, Sendable {
         position: SIMD3<Double>,
         color: String,
         texture: String? = nil,
-        rotationY: Double = 0
+        rotationY: Double = 0,
+        preview: Bool = false
     ) {
         self.id = id
         self.role = role
@@ -177,5 +184,6 @@ public struct Box: Identifiable, Sendable {
         self.color = color
         self.texture = texture
         self.rotationY = rotationY
+        self.preview = preview
     }
 }

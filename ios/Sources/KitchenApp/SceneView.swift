@@ -59,6 +59,8 @@ struct SceneView: View {
         var environment: Entity?
         var fitted: PreviewCamera?
         var cabinetFocus: SIMD3<Float>?
+        /// gwiazdki podglądu strefy (mrugają co klatkę)
+        var sparkles: Entity?
     }
     @State private var cache = SceneCache()
     /// Ustawienia: ogniskowa (domyślnie 47°), czułości gestów.
@@ -92,6 +94,7 @@ struct SceneView: View {
             #endif
             let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
             let cabinetRoot = built.root
+            cache.sparkles = cabinetRoot.findEntity(named: "sparkles")
             content.add(cabinetRoot)
             let scanEntity = scanEntityToAdd()
             if let scanEntity { content.add(scanEntity) }
@@ -109,6 +112,11 @@ struct SceneView: View {
             var lastLog = Date()
             _ = content.subscribe(to: SceneEvents.Update.self) { _ in
                 stepCamera()
+                MainActor.assumeIsolated {
+                    if let sparks = cache.sparkles {
+                        Sparkles.update(root: sparks, time: Float(Date().timeIntervalSinceReferenceDate))
+                    }
+                }
                 if let camera = cache.camera, let base = cache.fitted {
                     applyCameraControl(camera, base: base)
                 }
@@ -142,6 +150,7 @@ struct SceneView: View {
                 content.add(ScanCloudOverlay.entity(plan: scanPlan))
             }
             let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
+                cache.sparkles = built.root.findEntity(named: "sparkles")
                 content.add(built.root)
                 let scanEntity = scanEntityToAdd()
                 if let scanEntity { content.add(scanEntity) }
@@ -273,11 +282,11 @@ struct SceneView: View {
                 let halfD = Float(room.depth / 1000) / 2 - 0.45
                 let radius = max(0.001, sqrt(c.x * c.x + c.z * c.z))
                 let dir = SIMD2<Float>(-c.x / radius, -c.z / radius)
-                let dist = min(4.6, max(2.2, max(e.x, e.z) * 1.1 + 1.3))
+                let dist = min(6.4, max(2.6, max(e.x, e.z) * 1.15 + 1.5))
                 let px = min(halfW, max(-halfW, c.x + dir.x * dist))
                 let pz = min(halfD, max(-halfD, c.z + dir.y * dist))
-                let eyeY = min(Float(room.height / 1000) - 0.25,
-                               max(1.5, c.y + e.y * 0.75))
+                let eyeY = min(Float(room.height / 1000) - 0.3,
+                               max(1.55, c.y + 0.3))
                 return PreviewCamera(position: [px, eyeY, pz],
                                      target: [c.x, max(0.6, c.y), c.z])
             }

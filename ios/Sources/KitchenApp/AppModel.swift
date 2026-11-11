@@ -346,7 +346,8 @@ final class AppModel {
     /// Nowa strefa na ścianie planu — od razu z gotową propozycją.
     @discardableResult
     func addZone(kind: ZoneKind, wallIndex: Int) -> Zone {
-        let z = Zones.makeZone(kind: kind, wallIndex: wallIndex)
+        var z = Zones.makeZone(kind: kind, wallIndex: wallIndex)
+        z.draft = true            // najpierw podgląd: cień szafek + gwiazdki
         guard projects.indices.contains(currentIndex) else { return z }
         var zones = projects[currentIndex].zones ?? []
         zones.append(z)
@@ -356,6 +357,20 @@ final class AppModel {
         persist()
         status = "Strefa: \(z.name) — gotowa propozycja"
         return z
+    }
+
+    /// Zatwierdza podgląd strefy — cień staje się realną zabudową.
+    func finalizeZone(_ id: UUID) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var zones = projects[currentIndex].zones ?? []
+        guard let i = zones.firstIndex(where: { $0.id == id }) else { return }
+        if zones[i].draft != nil {
+            zones[i].draft = false
+            projects[currentIndex].zones = zones
+            rebuildZones()
+            projects[currentIndex].updatedAt = Date()
+            persist()
+        }
     }
 
     func updateZone(_ zone: Zone, persistNow: Bool = false) {

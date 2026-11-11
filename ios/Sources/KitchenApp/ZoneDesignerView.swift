@@ -45,7 +45,10 @@ struct ZoneDesignerView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Zamknij") { dismiss() }
+                    Button("Zamknij") {
+                        if let z = draft { model.finalizeZone(z.id) }
+                        dismiss()
+                    }
                 }
             }
         }
@@ -191,6 +194,7 @@ struct ZoneDesignerView: View {
         let q = questions.indices.contains(step) ? questions[step] : nil
         let zplan = Zones.zonePlan(for: zone, in: plan)
         let sum = Zones.summary(model.current.cabinets, zone: zone)
+        let wallLength = plan.wall(zone.wallIndex)?.length ?? 0
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
@@ -213,8 +217,21 @@ struct ZoneDesignerView: View {
             }
 
             ProgressView(value: Double(min(step + 1, questions.count)), total: Double(max(1, questions.count)))
-            Text("Pytanie \(min(step + 1, questions.count)) / \(max(1, questions.count))")
-                .font(.caption2).foregroundStyle(.secondary)
+            HStack {
+                Text("Pytanie \(min(step + 1, questions.count)) / \(max(1, questions.count))")
+                Spacer()
+                if zone.draft == true {
+                    Label("podgląd", systemImage: "sparkles")
+                        .foregroundStyle(.cyan)
+                }
+            }
+            .font(.caption2).foregroundStyle(.secondary)
+
+            if zone.draft == true {
+                Text("Cień szafek z magicznymi gwiazdkami to podgląd. Skaluj strefę suwakiem, a „Gotowe” zamienia podgląd w realną zabudowę.")
+                    .font(.caption2).foregroundStyle(.cyan)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if let q {
                 VStack(alignment: .leading, spacing: 10) {
@@ -248,19 +265,25 @@ struct ZoneDesignerView: View {
                             }
                         }
                     } else {
+                        // „width” skaluje zabudowę wzdłuż ściany — górna granica to realna ściana
+                        let qMax: Double = q.id == "width"
+                            ? max(q.min, min(q.max, wallLength - 100))
+                            : q.max
                         HStack {
                             Slider(
                                 value: Binding(
-                                    get: { answers.number(q.id, 50) },
+                                    get: { min(qMax, max(q.min, answers.number(q.id, q.min))) },
                                     set: { model.setZoneValue(zone.id, key: q.id, value: .number($0)) }
                                 ),
-                                in: q.min...q.max,
+                                in: q.min...max(q.min + 1, qMax),
                                 step: q.step
                             )
-                            Text("\(Int(answers.number(q.id, 50)))\(q.unit)")
+                            Text("\(Int(answers.number(q.id, q.min)))\(q.unit)")
                                 .font(.callout.monospacedDigit())
-                                .frame(width: 52, alignment: .trailing)
+                                .frame(width: 74, alignment: .trailing)
                         }
+                        Text("Ściana: \(Int(wallLength)) mm · skala zabudowy: \(Int(answers.number(q.id, q.min))) mm")
+                            .font(.caption2).foregroundStyle(.secondary)
                         if q.placement {
                             Text("Przesuń suwakiem — pozycja urządzenia na blacie aktualizuje się w 3D.")
                                 .font(.caption2).foregroundStyle(.secondary)
@@ -280,13 +303,20 @@ struct ZoneDesignerView: View {
                     .buttonStyle(.bordered)
                     .disabled(step == 0)
                 Button(step < questions.count - 1 ? "Dalej →" : "Gotowe ✓") {
-                    if step < questions.count - 1 { step += 1 } else { draftID = nil; step = 0 }
+                    if step < questions.count - 1 {
+                        step += 1
+                    } else {
+                        model.finalizeZone(zone.id)
+                        draftID = nil
+                        step = 0
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 Spacer()
                 Button("↺ Propozycja") {
                     var fresh = Zones.makeZone(kind: zone.kind, wallIndex: zone.wallIndex)
                     fresh.id = zone.id
+                    fresh.draft = zone.draft
                     model.updateZone(fresh, persistNow: true)
                 }
                 .buttonStyle(.bordered)
