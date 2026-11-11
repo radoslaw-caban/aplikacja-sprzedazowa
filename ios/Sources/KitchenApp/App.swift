@@ -26,6 +26,7 @@ struct ContentView: View {
     @Bindable var model: AppModel
 
     @State private var showDocuments = false
+    @State private var interiorView = true
 
     var body: some View {
         NavigationSplitView {
@@ -38,6 +39,7 @@ struct ContentView: View {
         }
         .task {
             if UserDefaults.standard.bool(forKey: "showDocuments") { showDocuments = true }
+            if UserDefaults.standard.bool(forKey: "extView") { interiorView = false }
             #if os(iOS)
             if UserDefaults.standard.bool(forKey: "demoDocuments") {
                 // tworzy prawdziwy PDF i przeprowadza go przez import dokumentów
@@ -147,7 +149,7 @@ struct ContentView: View {
                 documentViewer(doc)
             } else {
                 ZStack(alignment: .topLeading) {
-                    SceneView(cabinets: model.current.cabinets, room: model.current.room)
+                    SceneView(cabinets: model.current.cabinets, room: model.current.room, interiorView: interiorView)
                     swipeHint
                 }
                 .contentShape(Rectangle())
@@ -229,6 +231,12 @@ struct ContentView: View {
                 Text("· \(status)").font(.callout).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
+            Button {
+                interiorView.toggle()
+            } label: {
+                Label(interiorView ? "Wnętrze" : "Otoczenie",
+                      systemImage: interiorView ? "house" : "tree")
+            }
             Button { showDocuments = true } label: {
                 Label("Dokumenty", systemImage: "folder")
             }

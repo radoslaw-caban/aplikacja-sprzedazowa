@@ -85,6 +85,8 @@ TestFlight: po wgraniu build pojawia się w App Store Connect → TestFlight.
 - [x] Interfejs: projekty w panelu, dokumenty klienta (import z plików, QuickLook, usuwanie)
 - [x] Gesty: pion = projekt, poziom = dokument (logika w GestureNav, 8 testów)
 - [x] Zapis projektów na dysk (Documents/Projekty + pliki w katalogu projektu)
+- [x] Otoczenie domu: las 220 drzew, góry w tle, niebo z gradientem, podjazd, auto, ptaki (lot + machanie skrzydeł)
+- [x] Dach domu + widok zewnętrzny (przełącznik Wnętrze/Otoczenie)
 - [ ] Panele: edycja wnętrza, wycena, oferta PDF, warianty
 - [ ] Oświetlenie: HDRI w bundle + `EnvironmentResource` dla IBL
 - [ ] Zapis projektów i plików: SwiftData

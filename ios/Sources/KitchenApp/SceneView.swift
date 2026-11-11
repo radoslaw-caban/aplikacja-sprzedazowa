@@ -14,6 +14,10 @@ struct SceneView: View {
     var surfaceEntity: ScanSurface?
     /// pokaż chmurę punktów zamiast powierzchni
     var showPoints = false
+    /// otoczenie: las, góry, podjazd, auto, ptaki
+    var showEnvironment = true
+    /// false = widok z zewnątrz (dom w otoczeniu)
+    var interiorView = true
     /// tryb wskazywania punktów skanu
     var picking = false
     /// znormalizowany punkt ekranu (0…1) po dotknięciu
@@ -23,6 +27,9 @@ struct SceneView: View {
         RealityView { content in
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
+            if showEnvironment, scan == nil {
+                content.add(EnvironmentBuilder.makeEntity(room: room))
+            }
             let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
             let cabinetRoot = built.root
             content.add(cabinetRoot)
@@ -36,6 +43,9 @@ struct SceneView: View {
             content.entities.removeAll()
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
+            if showEnvironment, scan == nil {
+                content.add(EnvironmentBuilder.makeEntity(room: room))
+            }
             let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
             let cabinetRoot = built.root
             content.add(cabinetRoot)
@@ -65,6 +75,15 @@ struct SceneView: View {
     }
 
     private func makeCamera(scanEntity: Entity?, built: KitchenScene.SceneBuilder.Built) -> Entity {
+        if !interiorView {
+            // kadr zewnętrzny: dom w otoczeniu, z podjazdem i autem
+            let cam = PreviewCamera.exterior(room: room)
+            let camera = Entity()
+            camera.components.set(PerspectiveCameraComponent(near: 0.05, far: 9000, fieldOfViewInDegrees: cam.verticalFOVDegrees))
+            camera.position = cam.position
+            camera.look(at: cam.target, from: cam.position, relativeTo: nil)
+            return camera
+        }
         let cam: PreviewCamera
         if let scanEntity, scanEntity.children.count > 0 {
             cam = PreviewCamera.fit(center: built.center, extents: built.extents)
@@ -76,7 +95,7 @@ struct SceneView: View {
         let camera = Entity()
         camera.components.set(PerspectiveCameraComponent(
             near: 0.02,
-            far: 200,
+            far: 9000,
             fieldOfViewInDegrees: cam.verticalFOVDegrees
         ))
         camera.position = cam.position

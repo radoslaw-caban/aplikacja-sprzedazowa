@@ -44,6 +44,18 @@ public struct PreviewCamera: Sendable {
         return PreviewCamera(position: [px, eyeY, pz], target: target)
     }
 
+    /// Kadr zewnętrzny: dom z podjazdem i otoczeniem, kamera 3/4 z góry.
+    public static func exterior(room: Room) -> PreviewCamera {
+        let w = Float(room.width / 1000)
+        let d = Float(room.depth / 1000)
+        let h = Float(room.height / 1000)
+        let distance = max(w, d) * 2.6 + 12
+        return PreviewCamera(
+            position: [-distance * 0.55, h + 9, d / 2 + distance],
+            target: [0, h * 0.45, 0]
+        )
+    }
+
     /// Kadr z rzeczywistego obrysu geometrii: kamera na zewnątrz bryły,
     /// na wysokości oczu, patrzy w środek.
     public static func fit(center: SIMD3<Float>, extents: SIMD3<Float>) -> PreviewCamera {

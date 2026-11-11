@@ -143,6 +143,15 @@ public enum SceneBuilder {
             root.addChild(wall)
         }
 
+        // dach: płaski, z lekkim nawisem — bez niego dom wygląda jak otwarte pudełko
+        let roof = ModelEntity(
+            mesh: .generateBox(width: meters(room.width) + 0.6, height: 0.22, depth: meters(room.depth) + 0.6, cornerRadius: 0.02),
+            materials: [SimpleMaterial(color: color("#54585e"), isMetallic: false)]
+        )
+        roof.position = [0, meters(room.height) + 0.11, 0]
+        roof.name = "roof"
+        root.addChild(roof)
+
         // listwy 80 × 20 mm
         let skirting = SimpleMaterial(color: color("#f4f1ea"), isMetallic: false)
         for i in 0..<4 {
