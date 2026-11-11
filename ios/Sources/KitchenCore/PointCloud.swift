@@ -38,6 +38,14 @@ public struct PointCloud: Sendable {
         return (SIMD3(x.0, y.0, z.0), SIMD3(x.1, y.1, z.1))
     }
 
+    /// Ile metrów ma jedna jednostka pliku: CloudCompare zapisuje metry,
+    /// ale bywają pliki w milimetrach — rozstrzyga obrys (pokój to kilka metrów).
+    public var unitScaleToMeters: Float {
+        let b = bounds
+        let e = Swift.max(b.max.x - b.min.x, Swift.max(b.max.y - b.min.y, b.max.z - b.min.z))
+        return e > 100 ? 0.001 : 1
+    }
+
     /// Decymacja równomierna — do limitu punktów wyświetlanych w scenie.
     public func decimated(maxPoints: Int) -> PointCloud {
         guard positions.count > maxPoints, maxPoints > 0 else { return self }

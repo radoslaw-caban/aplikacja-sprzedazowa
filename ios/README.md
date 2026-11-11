@@ -72,7 +72,8 @@ TestFlight: po wgraniu build pojawia się w App Store Connect → TestFlight.
 
 - [ ] Dekoder E57 (własny parser `CompressedVector` albo bridge do C++ libE57)
 - [x] Render chmury w RealityKit (LowLevelMesh, kubełki RGB, 0,49 mln pkt na iPadzie)
-- [ ] Wyrównanie skanu do układu projektu (rejestracja chmury)
+- [x] Wyrównanie skanu: auto-dopasowanie (skala/środek/podłoga) + ręczne odsunięcia i obrót
+- [x] Model pomieszczenia (podłoga, ściany, listwy) jako punkt odniesienia
 - [ ] Większe punkty (geometra Modifier w Metal) — teraz 1 px
 - [ ] Panele: edycja wnętrza, wycena, oferta PDF, warianty
 - [ ] Oświetlenie: HDRI w bundle + `EnvironmentResource` dla IBL

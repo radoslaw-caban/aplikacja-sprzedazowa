@@ -23,7 +23,11 @@ public enum PointCloudRenderer {
     }
 
     /// Encja z chmurą, wyśrodkowana na własnym obrysie i ustawiona na podłodze.
-    public static func makeEntity(_ source: PointCloud, options: Options = Options()) -> ModelEntity {
+    public static func makeEntity(
+        _ source: PointCloud,
+        transform: ScanTransform = ScanTransform(),
+        options: Options = Options()
+    ) -> ModelEntity {
         let cloud = source.decimated(maxPoints: options.maxPoints)
         let root = ModelEntity()
         root.name = "point-cloud"
@@ -33,11 +37,7 @@ public enum PointCloudRenderer {
         // centrowanie: X/Z na środku, Y od podłogi
         let b = cloud.robustBounds()
         let center = SIMD3<Float>((b.min.x + b.max.x) / 2, b.min.y, (b.min.z + b.max.z) / 2)
-        let extent = Swift.max(b.max.x - b.min.x, Swift.max(b.max.y - b.min.y, b.max.z - b.min.z))
-        // CloudCompare zapisuje zwykle metry, ale bywają pliki w mm —
-        // rozstrzyga obrys: pokój ma kilka metrów, więc > 100 jednostek to mm.
-        let toMeters: Float = extent > 100 ? 0.001 : 1.0
-        print("[scan] \(cloud.count) pkt, jednostki: \(extent > 100 ? "mm" : "m"), obrys \(Int(extent)) j.")
+        let toMeters = cloud.unitScaleToMeters
         let height = max(0.001, (b.max.y - b.min.y) * toMeters)
 
         // Kolor: jeśli skan ma RGB, grupujemy punkty po kolorze (64 kubełki),
@@ -49,7 +49,7 @@ public enum PointCloudRenderer {
             for (i, p) in cloud.positions.enumerated() {
                 let c = colors[i]
                 let key = Int(c.x >> 6) * 16 + Int(c.y >> 6) * 4 + Int(c.z >> 6)
-                buckets[key].append((p - center) * toMeters)
+                buckets[key].append(transform.apply(p * toMeters))
                 sums[key] += SIMD3(Float(c.x), Float(c.y), Float(c.z))
             }
             for key in 0..<64 where !buckets[key].isEmpty {
@@ -70,7 +70,7 @@ public enum PointCloudRenderer {
         for p in cloud.positions {
             let t = (p.y - b.min.y) / max(0.001, b.max.y - b.min.y)
             let idx = Swift.min(bands - 1, Swift.max(0, Int(t * Float(bands))))
-            buckets[idx].append((p - center) * toMeters)
+            buckets[idx].append(transform.apply(p * toMeters))
         }
         for (i, points) in buckets.enumerated() where !points.isEmpty {
             guard let mesh = try? pointMesh(points) else { continue }

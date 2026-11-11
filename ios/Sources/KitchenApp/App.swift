@@ -26,6 +26,10 @@ struct ContentView: View {
     @State private var showScan = false
     @State private var loadingScan = false
     @State private var status: String?
+    @State private var room = Room(width: 5000, depth: 5000, height: 2600)
+    @State private var transform = ScanTransform()
+    @State private var rotationDeg: Double = 0
+    @State private var scale: Double = 1
 
     var body: some View {
         NavigationSplitView {
@@ -45,6 +49,46 @@ struct ContentView: View {
                         Button { add(t) } label: { row(t) }
                     }
                 }
+
+                Section("Skan i pomieszczenie") {
+                    Button {
+                        Task { await toggleScan() }
+                    } label: {
+                        Label(showScan ? "Skan: włączony" : "Skan: wyłączony", systemImage: "cube.transparent")
+                    }
+                    if showScan {
+                        Button {
+                            autoAlign()
+                        } label: {
+                            Label("Auto-dopasuj do pokoju", systemImage: "square.dashed")
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Obrót: \(Int(rotationDeg))°").font(.caption)
+                            Slider(value: $rotationDeg, in: 0...360, step: 1) { _ in
+                                applyTransform()
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(String(format: "Skala: %.2f", scale)).font(.caption)
+                            Slider(value: $scale, in: 0.3...2.0, step: 0.01) { _ in
+                                applyTransform()
+                            }
+                        }
+                        Stepper("Odsunięcie X: \(Int(transform.offset.x * 1000)) mm") {
+                            transform.offset.x += 0.1
+                        } onDecrement: {
+                            transform.offset.x -= 0.1
+                        }
+                        Stepper("Odsunięcie Z: \(Int(transform.offset.z * 1000)) mm") {
+                            transform.offset.z += 0.1
+                        } onDecrement: {
+                            transform.offset.z -= 0.1
+                        }
+                    }
+                    Text("\(room.name): \(Int(room.width)) × \(Int(room.depth)) × \(Int(room.height)) mm · \(String(format: "%.1f", room.area)) m²")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .navigationTitle("Biblioteka")
             #if os(macOS)
@@ -52,7 +96,7 @@ struct ContentView: View {
             #endif
         } detail: {
             VStack(spacing: 0) {
-                SceneView(cabinets: cabinets, scan: showScan ? scan : nil)
+                SceneView(cabinets: cabinets, room: room, scan: showScan ? scan : nil, transform: transform)
 
                 HStack(spacing: 12) {
                     Text("\(cabinets.count) szafek").font(.callout)
@@ -115,8 +159,43 @@ struct ContentView: View {
             }
             scan = loaded.0
             status = loaded.1
+            showScan = true
+            autoAlign()
+            return
         }
         showScan = true
+    }
+
+    /// Auto-dopasowanie: skala z obrytu, środek na środku pokoju, podłoga na 0.
+    private func autoAlign() {
+        guard let scan else { return }
+        let b = scan.robustBounds()
+        let k = scan.unitScaleToMeters
+        let fitted = ScanTransform.autoFit(
+            cloudMin: b.min * k,
+            cloudMax: b.max * k,
+            room: room,
+            rotationDeg: rotationDeg
+        )
+        transform = fitted
+        scale = fitted.scale
+        status = String(format: "skan dopasowany (skala %.2f)", fitted.scale)
+    }
+
+    /// Suwaki obrotu i skali przeliczają transformację od nowa (z zachowaniem auto-dopasowania).
+    private func applyTransform() {
+        guard let scan else { return }
+        let b = scan.robustBounds()
+        let k = scan.unitScaleToMeters
+        var fitted = ScanTransform.autoFit(
+            cloudMin: b.min * k,
+            cloudMax: b.max * k,
+            room: room,
+            rotationDeg: rotationDeg
+        )
+        fitted.scale *= scale
+        fitted.offset.y *= scale
+        transform = fitted
     }
 
     /// W aplikacji: z bundle. W `swift run` na Macu: z repo.

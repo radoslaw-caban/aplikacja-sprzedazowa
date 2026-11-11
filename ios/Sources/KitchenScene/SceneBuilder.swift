@@ -100,6 +100,48 @@ public enum SceneBuilder {
         return entity
     }
 
+    /// Pomieszczenie: podłoga, cztery ściany i listwy przypodłogowe.
+    @MainActor
+    public static func buildRoom(_ room: Room) -> Entity {
+        let root = Entity()
+        root.name = "room"
+
+        let floor = ModelEntity(
+            mesh: .generateBox(width: meters(room.width), height: 0.02, depth: meters(room.depth), cornerRadius: 0),
+            materials: [SimpleMaterial(color: color("#c8b39a"), isMetallic: false)]
+        )
+        floor.position = [0, -0.01, 0]
+        root.addChild(floor)
+
+        let wallMaterial = SimpleMaterial(color: color("#e8e0d5"), isMetallic: false)
+        for i in 0..<4 {
+            let size = room.wallSize(i)
+            let pos = room.wallPosition(i)
+            let wall = ModelEntity(
+                mesh: .generateBox(width: meters(size.x), height: meters(size.y), depth: meters(size.z), cornerRadius: 0),
+                materials: [wallMaterial]
+            )
+            wall.position = [meters(pos.x), meters(pos.y), meters(pos.z)]
+            wall.name = "wall-\(i)"
+            root.addChild(wall)
+        }
+
+        // listwy 80 × 20 mm
+        let skirting = SimpleMaterial(color: color("#f4f1ea"), isMetallic: false)
+        for i in 0..<4 {
+            let along: Float = (i < 2) ? meters(room.width) : 0.02
+            let deep: Float = (i < 2) ? 0.02 : meters(room.depth)
+            let strip = ModelEntity(
+                mesh: .generateBox(width: along, height: 0.08, depth: deep, cornerRadius: 0),
+                materials: [skirting]
+            )
+            let pos = room.wallPosition(i, thickness: 40)
+            strip.position = [meters(pos.x), 0.04, meters(pos.z)]
+            root.addChild(strip)
+        }
+        return root
+    }
+
     /// Kierunkowe światło dzienne jako komponent (na macOS nie ma `.shadow`).
     @MainActor
     public static func sunlight() -> Entity {
