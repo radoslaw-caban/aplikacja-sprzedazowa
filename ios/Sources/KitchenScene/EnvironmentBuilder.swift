@@ -13,10 +13,13 @@ public enum EnvironmentBuilder {
 
     public struct Options: Sendable {
         public var radius: Float = 210          // promień terenu z teksturą (m)
-        public var forestTrees: Int = 600       // gęsty las wokół posesji
+        public var forestTrees: Int = 900       // gęsty las wokół posesji
+        public var forestBackdrop: Bool = true  // uproszczone tło lasu (pierścień)
+        public var grassTufts: Int = 2600       // kępy trawy przy domu
+        public var fogBanks: Int = 40           // mgła w dolinach
         public var mountains: Int = 26
         public var birds: Int = 6
-        public var clouds: Int = 16
+        public var clouds: Int = 20
         public var seed: UInt64 = 20261111
         public init() {}
     }
@@ -44,9 +47,16 @@ public enum EnvironmentBuilder {
         root.addChild(sky(radius: 24000))
         root.addChild(ground(radius: options.radius))
         root.addChild(farMeadow(inner: options.radius - 2, outer: 6000))
+        // Bieszczady: pasma w warstwach, za nimi uproszczone tło lasu,
+        // a między nimi mgła w dolinach. Kolejność = kolejność malowania pleneru.
         root.addChild(mountainRange(options: options, rng: &rng))
+        if options.forestBackdrop {
+            root.addChild(forestBackdrop(radius: options.radius))
+        }
+        root.addChild(fogBanks(options: options, rng: &rng))
         root.addChild(clouds(options: options, rng: &rng))
         root.addChild(forest(options: options, rng: &rng, room: room))
+        root.addChild(grassTufts(options: options, rng: &rng, room: room))
         root.addChild(road(room: room))
         root.addChild(driveway(room: room))
         root.addChild(tesla(position: SIMD3(-1.3, 0, Float(room.depth / 2000) + 9.5)))
@@ -64,10 +74,11 @@ public enum EnvironmentBuilder {
                                   bytesPerRow: 0, space: colorSpace,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         let colors = [
-            CGColor(red: 0.29, green: 0.52, blue: 0.82, alpha: 1),
-            CGColor(red: 0.47, green: 0.66, blue: 0.88, alpha: 1),
-            CGColor(red: 0.78, green: 0.85, blue: 0.90, alpha: 1),
-            CGColor(red: 0.92, green: 0.91, blue: 0.86, alpha: 1),
+            // Bieszczady: zachmurzone, chłodne niebo — bez nasyconego błękitu
+            CGColor(red: 0.60, green: 0.68, blue: 0.74, alpha: 1),
+            CGColor(red: 0.72, green: 0.78, blue: 0.82, alpha: 1),
+            CGColor(red: 0.83, green: 0.86, blue: 0.88, alpha: 1),
+            CGColor(red: 0.90, green: 0.92, blue: 0.92, alpha: 1),
         ] as CFArray
         guard let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 0.45, 0.72, 1]) else { return nil }
         ctx.drawLinearGradient(gradient, start: CGPoint(x: 0, y: size), end: CGPoint(x: 0, y: 0), options: [])
@@ -105,9 +116,12 @@ public enum EnvironmentBuilder {
     static func ground(radius: Float) -> Entity {
         var material = PhysicallyBasedMaterial()
         if let grass = EnvironmentArt.grass() {
-            material.baseColor = .init(tint: .white, texture: .init(grass))
+            // Bieszczady: połonina to jasna, żółto-zielona trawa — sam szum
+            // tekstury daje ciemną zieleń, więc podbijamy tint w stronę słońca
+            material.baseColor = .init(tint: PlatformColor(red: 0.78, green: 0.98, blue: 0.50, alpha: 1),
+                                       texture: .init(grass))
         } else {
-            material.baseColor = .init(tint: PlatformColor(red: 0.36, green: 0.46, blue: 0.26, alpha: 1))
+            material.baseColor = .init(tint: PlatformColor(red: 0.42, green: 0.52, blue: 0.26, alpha: 1))
         }
         material.roughness = .init(floatLiteral: 0.95)
         material.metallic = .init(floatLiteral: 0)
@@ -181,10 +195,12 @@ public enum EnvironmentBuilder {
         let root = Entity()
         root.name = "mountains"
 
-        // dwie warstwy: dalsza bledsza, bliższa ciemniejsza (perspektywa powietrzna)
+        // Trzy plany jak w plenerze: bliski las → ciemne pasmo → blade pasmo w mgle.
+        // Wcześniej pasma stały na 8–12 km i przy far plane 9 km były ucinane,
+        // więc nieba nie przesłaniało nic — horyzont był pusty.
         let layers: [(radius: Float, minH: Float, maxH: Float, tint: (Float, Float, Float))] = [
-            (12000, 700, 1500, (0.74, 0.79, 0.86)),
-            (8200, 300, 700, (0.60, 0.67, 0.76)),
+            (5200, 340, 820, (0.44, 0.53, 0.58)),   // najdalsze: Niebiesko-szare
+            (3300, 180, 460, (0.26, 0.38, 0.36)),   // średnie: ciemna zieleń buczyny
         ]
 
         for layer in layers {
@@ -244,6 +260,149 @@ public enum EnvironmentBuilder {
         return root
     }
 
+    /// Uproszczone tło lasu: pierścień z poszarpaną górną krawędzią.
+    ///
+    /// PO CO: pojedyncze drzewa kończą się w pewnej odległości i horyzont robi
+    /// się pusty. Zamiast sadzić tysiące dodatkowych modeli, stawiamy jedną
+    /// taflę w kolorze lasu z nierównym grzbietem — z dystansu nie do odróżnienia,
+    /// a koszt to kilkaset trójkątów.
+    static func forestBackdrop(radius: Float) -> Entity {
+        let root = Entity()
+        root.name = "forest-backdrop"
+
+        let ringRadius = radius * 3.4
+        let segments = 200
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+
+        // wysokości grzbietu: suma sinusów o różnych okresach — bez szumu
+        func ridge(_ i: Int) -> Float {
+            let a = Float(i) / Float(segments) * .pi * 2
+            let n1 = 0.5 + 0.5 * sin(a * 7.0 + 0.9)
+            let n2 = 0.5 + 0.5 * sin(a * 17.0 + 2.3)
+            let n3 = 0.5 + 0.5 * sin(a * 31.0 + 4.1)
+            // niska ściana lasu: ma być tłem dla pasm górskich, nie je zasłaniać
+            return 12 + (n1 * 0.55 + n2 * 0.3 + n3 * 0.15) * 22
+        }
+
+        for i in 0..<segments {
+            let a0 = Float(i) / Float(segments) * .pi * 2
+            let a1 = Float(i + 1) / Float(segments) * .pi * 2
+            let x0 = cos(a0) * ringRadius, z0 = sin(a0) * ringRadius
+            let x1 = cos(a1) * ringRadius, z1 = sin(a1) * ringRadius
+            let h0 = ridge(i), h1 = ridge(i + 1)
+
+            let base = UInt32(positions.count)
+            positions += [
+                SIMD3(x0, -3, z0), SIMD3(x1, -3, z1),
+                SIMD3(x1, h1, z1), SIMD3(x0, h0, z0),
+            ]
+            let inward = normalize(SIMD3<Float>(-(x0 + x1) / 2, 0, -(z0 + z1) / 2))
+            normals += [inward, inward, inward, inward]
+            uvs += [SIMD2(0, 0), SIMD2(1, 0), SIMD2(1, 1), SIMD2(0, 1)]
+            indices += [base, base + 1, base + 2, base, base + 2, base + 3]
+        }
+
+        var descriptor = MeshDescriptor(name: "forestBackdrop")
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.normals = MeshBuffer(normals)
+        descriptor.textureCoordinates = MeshBuffer(uvs)
+        descriptor.primitives = .triangles(indices)
+        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return root }
+
+        // ciemna zieleń buczyny, lekko rozjaśniona mgłą (Unlit = bez odblasków)
+        let material = UnlitMaterial(color: PlatformColor(red: 0.16, green: 0.27, blue: 0.24, alpha: 1))
+        let entity = ModelEntity(mesh: mesh, materials: [material])
+        entity.name = "forest-silhouette"
+        root.addChild(entity)
+        return root
+    }
+
+    /// Mgła w dolinach: płaskie, rozmyte karty nisko nad terenem.
+    /// Bieszczady bez mgły to tylko pagórki — ona daje głębię planów.
+    static func fogBanks(options: Options, rng: inout RNG) -> Entity {
+        let root = Entity()
+        root.name = "fog"
+        guard let texture = EnvironmentArt.cloud() else { return root }
+
+        var material = UnlitMaterial()
+        material.color = .init(tint: PlatformColor(red: 0.93, green: 0.95, blue: 0.96, alpha: 1),
+                               texture: .init(texture))
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.45))
+        material.faceCulling = .none
+
+        let mesh = MeshFactory.ground(size: 1, tile: 1) ?? .generatePlane(width: 1, depth: 1)
+        for i in 0..<options.fogBanks {
+            let bank = ModelEntity(mesh: mesh, materials: [material])
+            let angle = rng.range(0, .pi * 2)
+            let distance = rng.range(100, 520)
+            let size = rng.range(90, 260)
+            bank.scale = [size, 1, size * rng.range(0.5, 0.8)]
+            bank.position = [cos(angle) * distance, rng.range(1.5, 10), sin(angle) * distance]
+            bank.orientation = simd_quatf(angle: rng.range(0, .pi), axis: [0, 1, 0])
+            bank.name = "fog-\(i)"
+            root.addChild(bank)
+        }
+        return root
+    }
+
+    /// Gęsta trawa: kępy z dwóch skrzyżowanych billboardów.
+    ///
+    /// Rozstawiamy je tylko w pasie do ~45 m od domu — dalej i tak zlewają się
+    /// w jednolitą zieleń, a kosztowałoby to tysiące encji.
+    static func grassTufts(options: Options, rng: inout RNG, room: Room) -> Entity {
+        let root = Entity()
+        root.name = "grass-tufts"
+        guard let texture = EnvironmentArt.grassBlades() else { return root }
+
+        var material = PhysicallyBasedMaterial()
+        material.baseColor = .init(tint: .white, texture: .init(texture))
+        material.roughness = .init(floatLiteral: 1.0)
+        material.metallic = .init(floatLiteral: 0)
+        material.blending = .transparent(opacity: .init(floatLiteral: 1.0))
+        material.opacityThreshold = 0.45
+        material.faceCulling = .none
+
+        let plane = MeshResource.generatePlane(width: 1, height: 1)
+        let houseHalfX = Float(room.width / 2000) + 1.5
+        let houseHalfZ = Float(room.depth / 2000) + 1.5
+
+        var placed = 0
+        var guardCount = 0
+        while placed < options.grassTufts && guardCount < options.grassTufts * 5 {
+            guardCount += 1
+            let angle = rng.range(0, .pi * 2)
+            let distance = rng.range(6, 45)
+            let x = cos(angle) * distance
+            let z = sin(angle) * distance
+
+            // nie na domu, nie na podjeździe, nie na drodze
+            if abs(x) < houseHalfX && abs(z) < houseHalfZ { continue }
+            if abs(x) < 6.5 && z > 0 { continue }
+            if z > 30 { continue }
+
+            let tuft = Entity()
+            // 4 skrzyżowane płaszczyzny: z każdej strony widać źdźbła,
+            // a nie „kartkę" obracającą się z kamerą
+            let baseHeight = rng.range(0.35, 0.80)
+            for turn in 0..<4 {
+                let blade = ModelEntity(mesh: plane, materials: [material])
+                let h = baseHeight * rng.range(0.75, 1.25)
+                blade.scale = [h * rng.range(0.9, 1.5), h, 1]
+                blade.position = [rng.range(-0.18, 0.18), h / 2, rng.range(-0.18, 0.18)]
+                blade.orientation = simd_quatf(angle: Float(turn) * .pi / 4 + rng.range(0, 0.5), axis: [0, 1, 0])
+                tuft.addChild(blade)
+            }
+            tuft.position = [x, 0, z]
+            tuft.name = "grass-\(placed)"
+            root.addChild(tuft)
+            placed += 1
+        }
+        return root
+    }
+
     static func forest(options: Options, rng: inout RNG, room: Room) -> Entity {
         let root = Entity()
         root.name = "forest"
@@ -278,15 +437,18 @@ public enum EnvironmentBuilder {
         while placed < options.forestTrees && guardCount < options.forestTrees * 6 {
             guardCount += 1
             let angle = rng.range(0, .pi * 2)
-            let distance = rng.range(houseRadius + 2, options.radius * 0.82)
+            // las podchodzi bliżej domu niż wcześniej — ma go otaczać, nie być tłem
+            let distance = rng.range(houseRadius * 0.72, options.radius * 0.82)
             let x = cos(angle) * distance
             let z = sin(angle) * distance
             // nie sadzimy na podjeździe (pas szerokości 6 m wzdłuż +Z)
-            if abs(x) < 9 && z > 0 { continue }   // pas podjazdu i trawnika przed domem
+            // i nie w korytarzu kamery zewnętrznej (inaczej drzewo zasłania cały dom)
+            if z > 0 && abs(x) < 26 { continue }   // podjazd, trawnik i kadr z zewnątrz
 
-            // co któryś model z paczki (współdzielona siatka = jedna pamięć)
-            if placed % 4 == 0,
-               let model = ModelLibrary.entity(named: "IslandTree", targetSize: rng.range(6, 9)) {
+            // co któryś model z paczki (współdzielona siatka, ale każda instancja
+            // to osobny węzeł — dlatego rzadko, przy 900 drzewach)
+            if placed % 12 == 0,
+               let model = ModelLibrary.entity(named: "IslandTree", targetSize: rng.range(8, 13)) {
                 model.position = [x, 0, z]
                 model.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
                 model.name = "tree-model-\(placed)"
@@ -298,7 +460,7 @@ public enum EnvironmentBuilder {
             // gatunki: 45% świerk, 22% sosna, 20% brzoza, 13% dąb
             let roll = rng.next()
             let species: TreeSpecies = roll < 0.45 ? .spruce : (roll < 0.67 ? .pine : (roll < 0.87 ? .birch : .oak))
-            let height = rng.range(5.0, 14.0)
+            let height = rng.range(8.0, 24.0)
             let tree = treeEntity(
                 species: species,
                 height: height,

@@ -22,6 +22,16 @@ struct SceneView: View {
     var picking = false
     /// znormalizowany punkt ekranu (0…1) po dotknięciu
     var onPick: ((CGPoint, CGSize) -> Void)?
+    /// true = projekt zablokowany: przeciąganie PRZESUWA widok.
+    /// false = odblokowany: przeciąganie OBRACA projekt wokół celu.
+    var locked: Bool = true
+
+    /// Stan kamery niezależny od modelu: przesunięcie celu (m), obrót i zbliżenie.
+    @State private var pan = SIMD2<Float>.zero
+    @State private var yaw: Float = 0
+    @State private var pitch: Float = 0
+    @State private var distanceScale: Float = 1
+    @State private var lastDrag: CGSize = .zero
 
     var body: some View {
         RealityView { content in
@@ -69,8 +79,51 @@ struct SceneView: View {
             }
             #endif
         }
+        .contentShape(Rectangle())
+        .simultaneousGesture(cameraDrag)
+        #if os(iOS)
+        .simultaneousGesture(cameraZoom)
+        #endif
         .background(Color(red: 0.93, green: 0.92, blue: 0.90))
     }
+
+    // MARK: - sterowanie kamerą
+
+    /// Zablokowany: przesuwanie widoku (góra/dół/lewo/prawo).
+    /// Odblokowany: obrót projektu wokół celu (yaw + pochylenie).
+    private var cameraDrag: some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { value in
+                let dx = Float(value.translation.width - lastDrag.width)
+                let dy = Float(value.translation.height - lastDrag.height)
+                lastDrag = value.translation
+                if locked {
+                    // przesunięcie w metrach, proporcjonalne do skali sceny
+                    let speed: Float = interiorView ? 0.006 : 0.05
+                    pan.x -= dx * speed
+                    pan.y -= dy * speed
+                    pan.x = min(120, max(-120, pan.x))
+                    pan.y = min(120, max(-120, pan.y))
+                } else {
+                    yaw -= dx * 0.006
+                    pitch = min(1.15, max(-0.35, pitch + dy * 0.004))
+                }
+            }
+            .onEnded { _ in
+                lastDrag = .zero
+            }
+    }
+
+    #if os(iOS)
+    /// Zbliżenie: pinch zmienia odległość kamery od celu.
+    private var cameraZoom: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                let next = distanceScale / Float(value.magnification)
+                distanceScale = min(3.0, max(0.25, next))
+            }
+    }
+    #endif
 
     /// Encja skanu: gotowa powierzchnia albo chmura punktów.
     @MainActor
@@ -81,32 +134,60 @@ struct SceneView: View {
     }
 
     private func makeCamera(scanEntity: Entity?, built: KitchenScene.SceneBuilder.Built) -> Entity {
-        if !interiorView {
-            // kadr zewnętrzny: dom w otoczeniu, z podjazdem i autem
-            let cam = PreviewCamera.exterior(room: room)
-            let camera = Entity()
-            camera.components.set(PerspectiveCameraComponent(near: 0.05, far: 9000, fieldOfViewInDegrees: cam.verticalFOVDegrees))
-            camera.position = cam.position
-            camera.look(at: cam.target, from: cam.position, relativeTo: nil)
-            return camera
-        }
-        let cam: PreviewCamera
-        if let scanEntity, scanEntity.children.count > 0 {
-            cam = PreviewCamera.fit(center: built.center, extents: built.extents)
-        } else if !built.extents.x.isZero {
-            cam = PreviewCamera.fit(center: built.center, extents: built.extents)
-        } else {
-            cam = PreviewCamera.make(room: room, scanBounds: nil)
-        }
+        let base = baseCamera(scanEntity: scanEntity, built: built)
+        let cam = controlled(base)
+
         let camera = Entity()
         camera.components.set(PerspectiveCameraComponent(
             near: 0.02,
-            far: 9000,
+            far: 20000,
             fieldOfViewInDegrees: cam.verticalFOVDegrees
         ))
         camera.position = cam.position
         camera.look(at: cam.target, from: cam.position, relativeTo: nil)
         return camera
+    }
+
+    /// Kamera wynikająca z danych (kadr zewnętrzny lub dopasowany do zabudowy).
+    private func baseCamera(scanEntity: Entity?, built: KitchenScene.SceneBuilder.Built) -> PreviewCamera {
+        if !interiorView {
+            return PreviewCamera.exterior(room: room)
+        }
+        if let scanEntity, scanEntity.children.count > 0 {
+            return PreviewCamera.fit(center: built.center, extents: built.extents)
+        }
+        if !built.extents.x.isZero {
+            return PreviewCamera.fit(center: built.center, extents: built.extents)
+        }
+        return PreviewCamera.make(room: room, scanBounds: nil)
+    }
+
+    /// Nakłada sterowanie użytkownika na kamerę bazową.
+    ///
+    /// Zablokowany: przesuwamy cel i kamerę o `pan` (rzut na płaszczyznę XZ).
+    /// Odblokowany: obracamy kamerę wokół celu o `yaw`/`pitch`, z odległością
+    /// pomnożoną przez `distanceScale` (pinch).
+    private func controlled(_ base: PreviewCamera) -> PreviewCamera {
+        let target = base.target + SIMD3<Float>(pan.x, 0, pan.y)
+        var position = base.position + SIMD3<Float>(pan.x, 0, pan.y)
+
+        if yaw != 0 || pitch != 0 || distanceScale != 1 {
+            let offset = position - target
+            let radius = max(0.5, simd_length(offset) * distanceScale)
+            let baseYaw = atan2(offset.x, offset.z)
+            let horizontal = max(0.001, sqrt(offset.x * offset.x + offset.z * offset.z))
+            let basePitch = atan2(offset.y, horizontal)
+            let angle = baseYaw + yaw
+            let elevation = min(1.45, max(0.04, basePitch + pitch))
+            position = target + SIMD3<Float>(
+                radius * cos(elevation) * sin(angle),
+                radius * sin(elevation),
+                radius * cos(elevation) * cos(angle)
+            )
+        } else if distanceScale != 1 {
+            position = target + (position - target) * distanceScale
+        }
+        return PreviewCamera(position: position, target: target, verticalFOVDegrees: base.verticalFOVDegrees)
     }
 
     /// Obrys chmury po transformacji (metry) — do kadrowania.

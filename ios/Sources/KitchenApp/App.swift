@@ -30,13 +30,38 @@ struct ContentView: View {
     @State private var showScan = false
     @State private var showPlan = false
     @State private var planDraft = FloorPlan.rectangle()
+    /// Projekt zablokowany: na ekranie tylko 3D i kłódka (przeciąganie przesuwa).
+    @State private var locked = true
+    /// Menu wysunięte z lewej krawędzi.
+    @State private var drawerOpen = false
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            detail
+        ZStack(alignment: .leading) {
+            // Pole robocze: zablokowany = tylko 3D + kłódka,
+            // odblokowany = pełny interfejs (zakładki, formularze, paski).
+            if locked {
+                LockedWorkspace(model: model, interiorView: interiorView, locked: $locked)
+                    .ignoresSafeArea(edges: .bottom)
+            } else {
+                detail
+            }
+
+            // Menu wyciągane z lewej krawędzi — zamiast stałego panelu.
+            if drawerOpen {
+                Color.black.opacity(0.28)
+                    .ignoresSafeArea()
+                    .onTapGesture { drawerOpen = false }
+                    .transition(.opacity)
+                    .zIndex(2)
+                drawerPanel
+                    .transition(.move(edge: .leading))
+                    .zIndex(3)
+            }
+            edgeHandle
+                .zIndex(4)
         }
+        .animation(.easeInOut(duration: 0.22), value: drawerOpen)
+        .animation(.easeInOut(duration: 0.2), value: locked)
         .sheet(isPresented: $showDocuments) {
             DocumentsSheet(model: model)
         }
@@ -76,6 +101,14 @@ struct ContentView: View {
                 print("[ui] dokumenty dodane: \(added), razem \(model.documents.count)")
             }
             #endif
+            if UserDefaults.standard.bool(forKey: "demoUnlocked") {
+                // weryfikacja trybu odblokowanego (obrót projektu + pełny interfejs)
+                locked = false
+            }
+            if UserDefaults.standard.bool(forKey: "demoDrawer") {
+                // weryfikacja menu wysuwanego z krawędzi
+                drawerOpen = true
+            }
             if UserDefaults.standard.bool(forKey: "demoPlan") {
                 // weryfikacja widoku mapy bez dotykania ekranu
                 planDraft = model.currentPlan
@@ -195,6 +228,7 @@ struct ContentView: View {
                 OrderFlowView(
                     model: model,
                     interiorView: $interiorView,
+                    locked: $locked,
                     openPlan: {
                         planDraft = model.currentPlan
                         showPlan = true
@@ -207,34 +241,37 @@ struct ContentView: View {
         }
     }
 
-    /// Gesty: pion = projekt, poziom = dokument (logika w GestureNav + testy).
-    private var swipe: some Gesture {
-        DragGesture(minimumDistance: 40)
-            .onEnded { value in
-                let axis = GestureNav.axis(dx: value.translation.width, dy: value.translation.height)
-                let step = GestureNav.step(for: axis, dx: value.translation.width, dy: value.translation.height)
-                guard step != 0 else { return }
-                switch axis {
-                case .vertical: model.switchProject(step: step)
-                case .horizontal: model.switchDocument(step: step)
-                case .none: break
-                }
-            }
+    // MARK: - menu z krawędzi
+
+    /// Panel projektów i biblioteki wysuwany z lewej krawędzi.
+    /// Stały pasek boczny zjadał miejsce na pole robocze — teraz jest schowany.
+    private var drawerPanel: some View {
+        NavigationStack { sidebar }
+            .frame(width: 340)
+            .background(.regularMaterial)
+            .ignoresSafeArea(edges: .vertical)
     }
 
-    private var swipeHint: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "arrow.up.arrow.down")
-            Text("projekty")
-            Text("·")
-            Image(systemName: "arrow.left.arrow.right")
-            Text("dokumenty")
+    /// Uchwyt przy lewej krawędzi: przeciągnięcie w prawo otwiera menu.
+    private var edgeHandle: some View {
+        HStack {
+            ZStack(alignment: .center) {
+                Rectangle().fill(.clear)
+                Capsule()
+                    .fill(.secondary.opacity(0.30))
+                    .frame(width: 4, height: 84)
+            }
+            .frame(width: 26)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 8)
+                    .onEnded { value in
+                        if value.translation.width > 36 { drawerOpen = true }
+                    }
+            )
+            .help("Przeciągnij w prawo, aby wysunąć menu")
+            Spacer()
         }
-        .font(.caption2)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: Capsule())
-        .padding(12)
     }
 
     private func documentViewer(_ doc: ClientDocument) -> some View {

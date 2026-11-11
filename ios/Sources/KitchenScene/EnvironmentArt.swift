@@ -206,6 +206,54 @@ public enum EnvironmentArt {
         return try? TextureResource.generate(from: image, options: .init(semantic: .color))
     }
 
+    /// Gęsta trawa: kępy źdźbeł z przezroczystym tłem — do billboardów.
+    ///
+    /// Sama tekstura podłoża nie daje wrażenia „gęstej trawy": z bliska widać
+    /// płaski dywan. Dopiero kępy postawione w terenie dają wysokość i ruch
+    /// światła jak na połoninie.
+    public static func grassBlades() -> TextureResource? {
+        let size = 256
+        guard let image = makeImage(width: size, height: size, draw: { ctx in
+            ctx.clear(CGRect(x: 0, y: 0, width: size, height: size))
+            // kilkadziesiąt źdźbeł, gęsto u dołu
+            for _ in 0..<70 {
+                let x = CGFloat.random(in: 6...CGFloat(size) - 6)
+                let h = CGFloat.random(in: CGFloat(size) * 0.45...CGFloat(size) * 0.95)
+                let curl = CGFloat.random(in: -14...14)
+                let shade = CGFloat.random(in: 0.55...1.0)
+                ctx.setStrokeColor(CGColor(red: 0.42 * shade, green: 0.62 * shade, blue: 0.20 * shade, alpha: 1))
+                ctx.setLineWidth(CGFloat.random(in: 1.6...3.2))
+                ctx.move(to: CGPoint(x: x, y: 0))
+                ctx.addQuadCurve(to: CGPoint(x: x + curl, y: h),
+                                 control: CGPoint(x: x + curl * 1.6, y: h * 0.55))
+                ctx.strokePath()
+            }
+            // żółte kwiaty — Bieszczady w czerwcu
+            for _ in 0..<10 {
+                let x = CGFloat.random(in: 10...CGFloat(size) - 10)
+                let y = CGFloat.random(in: CGFloat(size) * 0.55...CGFloat(size) * 0.9)
+                ctx.setFillColor(CGColor(red: 0.95, green: 0.87, blue: 0.35, alpha: 0.95))
+                ctx.fillEllipse(in: CGRect(x: x, y: y, width: 4, height: 4))
+            }
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
+    /// Mgła: poziomy gradient bieli — kładziony na pasmach i w dolinach.
+    public static func hazeGradient() -> TextureResource? {
+        let height = 128
+        guard let image = makeImage(width: 1, height: height, draw: { ctx in
+            guard let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
+                CGColor(red: 1, green: 1, blue: 1, alpha: 0),
+                CGColor(red: 0.92, green: 0.95, blue: 0.96, alpha: 0.55),
+                CGColor(red: 0.88, green: 0.92, blue: 0.94, alpha: 0.85),
+            ] as CFArray, locations: [0, 0.55, 1]) else { return }
+            ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: 0),
+                                   end: CGPoint(x: 0, y: CGFloat(height)), options: [])
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
     // MARK: - środowisko (IBL)
 
     /// Equirectangular skybox: gradient nieba + słońce + pas mgły przy horyzoncie.

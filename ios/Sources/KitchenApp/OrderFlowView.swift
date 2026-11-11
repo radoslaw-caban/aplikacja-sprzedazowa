@@ -10,6 +10,7 @@ import KitchenCore
 struct OrderFlowView: View {
     @Bindable var model: AppModel
     @Binding var interiorView: Bool
+    @Binding var locked: Bool
     var openPlan: () -> Void
     var openScan: () -> Void
     var openDocuments: () -> Void
@@ -38,9 +39,11 @@ struct OrderFlowView: View {
                     .tag(1)
                 OrderDetailsPage(model: model)
                     .tag(2)
-                ProjectScenePage(model: model, interior: false, note: "Dom w otoczeniu — widok dla klienta")
+                ProjectScenePage(model: model, interior: false, locked: locked,
+                                 note: "Dom w otoczeniu — widok dla klienta")
                     .tag(3)
-                ProjectScenePage(model: model, interior: true, note: "Kuchnia — zabudowa w skali 1:1")
+                ProjectScenePage(model: model, interior: true, locked: locked,
+                                 note: "Kuchnia — zabudowa w skali 1:1")
                     .tag(4)
                 NextRoomPage(model: model)
                     .tag(5)
@@ -76,6 +79,15 @@ struct OrderFlowView: View {
                 .buttonStyle(.plain)
             }
             Spacer(minLength: 0)
+            Button {
+                locked = true
+            } label: {
+                Label("Zablokuj", systemImage: "lock.open.fill")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Zablokuj projekt: widok wraca do przewijania, UI się chowa")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -347,11 +359,63 @@ struct OrderDetailsPage: View {
     }
 }
 
-// MARK: - 4–6. Widoki projektu 3D
+// MARK: - 7. Widok zablokowany (pole robocze)
+
+/// Projekt zablokowany: na ekranie zostaje TYLKO pole robocze i kłódka.
+///
+/// Po co: przy kliencie ekran ma pokazywać kuchnię, a nie formularze. Pasek
+/// zakładek, przyciski i menu znikają; wraca je kłódką albo wyciągnięciem
+/// menu z lewej krawędzi.
+struct LockedWorkspace: View {
+    @Bindable var model: AppModel
+    var interiorView: Bool
+    @Binding var locked: Bool
+
+    var body: some View {
+        ZStack {
+            SceneView(
+                cabinets: model.current.cabinets,
+                room: model.current.room,
+                scan: model.scan,
+                transform: model.scanTransform,
+                interiorView: interiorView,
+                locked: true
+            )
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        locked = false
+                    } label: {
+                        Label("Odblokuj", systemImage: "lock.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Odblokuj projekt: wraca interfejs i obracanie projektu")
+                }
+                Spacer()
+                Text("Przeciągnij, aby przesuwać  ·  kłódka = obrót projektu")
+                    .font(.caption2)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.bottom, 14)
+            }
+            .padding(14)
+        }
+    }
+}
+
 
 struct ProjectScenePage: View {
     @Bindable var model: AppModel
     var interior: Bool
+    /// false = odblokowany: przeciąganie obraca projektem
+    var locked: Bool
     var note: String
 
     var body: some View {
@@ -361,7 +425,8 @@ struct ProjectScenePage: View {
                 room: model.current.room,
                 scan: model.scan,
                 transform: model.scanTransform,
-                interiorView: interior
+                interiorView: interior,
+                locked: locked
             )
             Text(note)
                 .font(.caption2)
