@@ -25,6 +25,7 @@ public enum CabinetType: String, Codable, Sendable {
     case base       // podblatowa
     case wall       // wisząca
     case tall       // stojąca
+    case panel      // zaślepka 18 mm — płyta widoczna obrzeżem, nie korpus
 }
 
 public enum ElementKind: String, Codable, Sendable {
@@ -81,6 +82,8 @@ public struct Cabinet: Identifiable, Codable, Sendable {
     public var mountHeight: Double  // dla szafek wiszących
     public var elements: [CabinetElement]
     public var color: String
+    /// Nazwa pliku tekstury frontu (biblioteka tekstur). `nil` = kolor jednolity.
+    public var texture: String?
 
     public init(
         id: UUID = UUID(),
@@ -95,7 +98,8 @@ public struct Cabinet: Identifiable, Codable, Sendable {
         rotation: Double = 0,
         mountHeight: Double = 0,
         elements: [CabinetElement] = [],
-        color: String = "#c8bca9"
+        color: String = "#c8bca9",
+        texture: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -110,6 +114,7 @@ public struct Cabinet: Identifiable, Codable, Sendable {
         self.mountHeight = mountHeight
         self.elements = elements
         self.color = color
+        self.texture = texture
     }
 }
 
@@ -125,6 +130,8 @@ public struct Box: Identifiable, Sendable {
     public let size: SIMD3<Double>
     public let position: SIMD3<Double>
     public let color: String
+    /// Nazwa pliku tekstury (opcjonalnie) — materiały z biblioteki.
+    public var texture: String? = nil
     public var rotationY: Double = 0
 
     public init(
@@ -134,6 +141,7 @@ public struct Box: Identifiable, Sendable {
         size: SIMD3<Double>,
         position: SIMD3<Double>,
         color: String,
+        texture: String? = nil,
         rotationY: Double = 0
     ) {
         self.id = id
@@ -142,6 +150,7 @@ public struct Box: Identifiable, Sendable {
         self.size = size
         self.position = position
         self.color = color
+        self.texture = texture
         self.rotationY = rotationY
     }
 }

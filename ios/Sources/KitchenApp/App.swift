@@ -35,6 +35,7 @@ struct ContentView: View {
     @State private var showScanCloud = UserDefaults.standard.bool(forKey: "showScanCloud")
     @State private var showScan = false
     @State private var showPlan = false
+    @State private var showTextures = false
     @State private var planDraft = FloorPlan.rectangle()
     /// Projekt zablokowany: na ekranie tylko 3D i kłódka (przeciąganie przesuwa).
     @State private var locked = true
@@ -75,12 +76,23 @@ struct ContentView: View {
             DocumentsSheet(model: model)
         }
         .sheet(isPresented: $showPlan) {
-            PlanEditorView(plan: $planDraft) { newPlan in
-                model.updatePlan(newPlan)
-            }
+            PlanEditorView(
+                plan: $planDraft,
+                onChange: { newPlan in
+                    model.updatePlan(newPlan)
+                },
+                onFillWall: { wallIndex in
+                    fillWall(wallIndex)
+                }
+            )
             #if os(iOS)
             .presentationSizing(.page)
             #endif
+        }
+        .sheet(isPresented: $showTextures) {
+            TextureLibraryView { texture in
+                applyTexture(named: texture.name)
+            }
         }
         .sheet(isPresented: $showScan) {
             #if os(iOS)
@@ -117,6 +129,10 @@ struct ContentView: View {
             if UserDefaults.standard.bool(forKey: "demoDrawer") {
                 // weryfikacja menu wysuwanego z krawędzi
                 drawerOpen = true
+            }
+            if UserDefaults.standard.bool(forKey: "demoTextures") {
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                showTextures = true
             }
             if UserDefaults.standard.bool(forKey: "demoPlan") {
                 // weryfikacja widoku mapy bez dotykania ekranu
@@ -211,6 +227,41 @@ struct ContentView: View {
             Text(t.name).font(.callout)
             Text(t.summary).font(.caption).foregroundStyle(.secondary)
         }
+    }
+
+    /// Nakłada teksturę (nazwa pliku) na fronty wszystkich szafek projektu.
+    private func applyTexture(named name: String) {
+        var cabinets = model.current.cabinets
+        guard !cabinets.isEmpty else {
+            model.status = "Brak szafek — najpierw wstaw zabudowę"
+            return
+        }
+        for index in cabinets.indices {
+            cabinets[index].texture = name
+        }
+        model.updateCabinets(cabinets)
+        model.persist()
+        model.status = "Tekstura frontów: \(name)"
+    }
+
+    /// Klik na ścianę → program sam rozstawia szafki o równych szerokościach,
+    /// z zaślepkami 18 mm przy narożnikach, i wstawia je do projektu.
+    private func fillWall(_ index: Int) {
+        let result = WallFill.fill(plan: planDraft, wallIndex: index)
+        guard !result.cabinets.isEmpty || !result.panels.isEmpty else {
+            model.status = result.note
+            return
+        }
+
+        // podmieniamy poprzednią automatyczną zabudowę tej ściany, jeśli była
+        var cabinets = model.current.cabinets.filter { cabinet in
+            !(cabinet.name.hasPrefix("Szafka ") || cabinet.name.hasPrefix("Zaślepka "))
+        }
+        cabinets.append(contentsOf: result.cabinets)
+        cabinets.append(contentsOf: result.panels)
+        model.updateCabinets(cabinets)
+        model.persist()
+        model.status = "Ściana \(index + 1): " + result.note
     }
 
     private func add(_ t: Library.Template) {
@@ -363,6 +414,9 @@ struct ContentView: View {
                 Button { model.clearScan() } label: {
                     Label("Usuń skan", systemImage: "xmark.circle")
                 }
+            }
+            Button { showTextures = true } label: {
+                Label("Tekstury", systemImage: "photo.on.rectangle.angled")
             }
             Button { showDocuments = true } label: {
                 Label("Dokumenty", systemImage: "folder")

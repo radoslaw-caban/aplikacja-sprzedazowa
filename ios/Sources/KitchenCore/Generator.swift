@@ -6,6 +6,21 @@ public enum Generator {
 
     /// Bryły jednej szafki, w układzie lokalnym: środek w (0,0,0), y od podłogi, front w +Z.
     public static func build(_ c: Cabinet) -> [Box] {
+        // Zaślepka: jedna płyta, bez korpusu, cokołu i frontu. Stoi przy ścianie
+        // i ma być widoczna obrzeżem — dlatego jest grubości 18 mm.
+        if c.type == .panel {
+            return [
+                Box(
+                    id: "\(c.id):panel",
+                    role: .side,
+                    cabinetID: c.id,
+                    size: SIMD3(c.width, c.height, c.depth),
+                    position: SIMD3(0, c.height / 2, 0),
+                    color: c.color
+                )
+            ]
+        }
+
         var out: [Box] = []
         let p = Standards.panel
         let bodyH = c.type == .base ? max(0, c.height - c.plinth) : c.height

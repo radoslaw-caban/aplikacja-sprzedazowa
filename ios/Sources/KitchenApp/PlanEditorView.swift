@@ -12,6 +12,8 @@ struct PlanEditorView: View {
     @Binding var plan: FloorPlan
     /// wywoływane po każdej zmianie (zapis do projektu)
     var onChange: (FloorPlan) -> Void
+    /// wywoływane po kliknięciu „Wstaw szafki" na zaznaczonej ścianie
+    var onFillWall: ((Int) -> Void)? = nil
 
     /// Sposób wprowadzania planu.
     enum Mode: String, CaseIterable, Identifiable {
@@ -83,6 +85,21 @@ struct PlanEditorView: View {
             syncFields(from: new)
             onChange(new)
         }
+        .task {
+            // hak diagnostyczny: zaznaczenie ściany bez dotykania ekranu
+            if UserDefaults.standard.object(forKey: "demoWall") != nil {
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                let index = UserDefaults.standard.integer(forKey: "demoWall")
+                NSLog("[plan] demoWall=\(index), ścian=\(plan.wallCount), wall0=\(plan.wall(0) != nil)")
+                if let wall = plan.wall(index) {
+                    selectedWall = index
+                    lengthText = String(Int(wall.length.rounded()))
+                    if UserDefaults.standard.bool(forKey: "demoFill") {
+                        onFillWall?(index)
+                    }
+                }
+            }
+        }
         .onAppear {
             syncFields(from: plan)
             // hak diagnostyczny: `defaults write ... planMode Wymiary` otwiera panel wymiarów
@@ -122,14 +139,12 @@ struct PlanEditorView: View {
         .padding(.vertical, 12)
     }
 
+    /// Wszystko w milimetrach — tak, jak się to podaje na produkcji.
     private var summary: String {
         let size = plan.size
-        let w = String(format: "%.2f", size.x / 1000)
-        let d = String(format: "%.2f", size.y / 1000)
-        let m2 = String(format: "%.2f", plan.areaM2)
-        let height = String(format: "%.2f", plan.height / 1000)
-        let wall = String(format: "%.0f", plan.thickness)
-        return "\(w) × \(d) m · \(m2) m² · wys. \(height) m · ściana \(wall) mm"
+        return "\(Units.mm(size.x)) × \(Units.mm(size.y)) mm · "
+            + "\(Units.m2Area(plan.areaM2 * 1_000_000)) · "
+            + "wys. \(Units.mm(plan.height)) mm · ściana \(Units.mm(plan.thickness)) mm"
     }
 
     // MARK: - wybór trybu
@@ -386,6 +401,10 @@ struct PlanEditorView: View {
                         }
                     }
 
+                    if onFillWall != nil {
+                        wallFillRow(index: index, wall: wall)
+                    }
+
                     HStack(spacing: 12) {
                         Text(String(format: "kąt %.1f°", wall.angleDeg))
                         Text(String(format: "od (%.0f, %.0f) do (%.0f, %.0f)",
@@ -396,6 +415,33 @@ struct PlanEditorView: View {
                 }
                 .padding(14)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
+    }
+
+    /// Podgląd rozstawu i przycisk „Wstaw szafki" — program sam dzieli ścianę.
+    private func wallFillRow(index: Int, wall: (a: SIMD2<Double>, b: SIMD2<Double>, length: Double, angleDeg: Double)) -> some View {
+        let preview = WallFill.fill(wallStart: wall.a, wallEnd: wall.b)
+        return VStack(alignment: .leading, spacing: 8) {
+            Divider().opacity(0.4)
+            HStack(spacing: 10) {
+                Image(systemName: "square.split.2x1")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Zabudowa ściany").font(.caption.weight(.semibold))
+                    Text(preview.note)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    onFillWall?(index)
+                } label: {
+                    Label("Wstaw szafki", systemImage: "plus.square.on.square")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(preview.cabinets.isEmpty)
             }
         }
     }

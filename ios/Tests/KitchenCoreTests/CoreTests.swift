@@ -636,4 +636,127 @@ final class GestureNavTests: XCTestCase {
         )
         XCTAssertFalse(lShape.isSimpleRectangle)
     }
+
+    // MARK: - rozstaw szafek na ścianie (zaślepki 18 mm, równe szerokości)
+
+    func testWallFillEqualWidths() {
+        let result = WallFill.fill(wallStart: SIMD2(0, 0), wallEnd: SIMD2(3600, 0), targetWidth: 600)
+        XCTAssertEqual(result.cabinets.count, 6)
+        XCTAssertEqual(result.panels.count, 2)
+        for cabinet in result.cabinets {
+            XCTAssertEqual(cabinet.width, 594, accuracy: 0.0001)
+            XCTAssertEqual(cabinet.type, .base)
+        }
+        XCTAssertEqual(result.panels[0].width, 18, accuracy: 0.0001)
+        XCTAssertEqual(result.panels[1].type, .panel)
+        // suma: 2 × 18 mm + 6 × 594 mm = 3600 mm
+        let sum = result.panels.reduce(0) { $0 + $1.width } + result.cabinets.reduce(0) { $0 + $1.width }
+        XCTAssertEqual(sum, 3600, accuracy: 0.0001)
+    }
+
+    func testWallFillSpreadsRemainderExactly() {
+        // 3000 mm, 5 szafek → 592,8 mm każda; suma musi się zgadzać co do 0,0001 mm
+        let result = WallFill.fill(wallStart: SIMD2(0, 0), wallEnd: SIMD2(3000, 0), targetWidth: 600)
+        XCTAssertEqual(result.cabinets.count, 5)
+        let sum = result.panels.reduce(0) { $0 + $1.width } + result.cabinets.reduce(0) { $0 + $1.width }
+        XCTAssertEqual(sum, 3000, accuracy: Units.precision)
+        let widths = Set(result.cabinets.map { ($0.width * 10).rounded() / 10 })
+        XCTAssertEqual(widths.count, 1, "wszystkie szafki mają równą szerokość")
+    }
+
+    func testWallFillPlacesRunAlongWall() {
+        // ściana wzdłuż X od (0,0) do (2400,0) → szafki stoją przy niej, front do wnętrza (+Z)
+        let result = WallFill.fill(wallStart: SIMD2(0, 0), wallEnd: SIMD2(2400, 0), targetWidth: 600)
+        XCTAssertEqual(result.cabinets.count, 4)   // (2400 - 36) / 600 ≈ 3,94 → 4
+        XCTAssertEqual(result.cabinets[0].x, 18 + result.cabinets[0].width / 2, accuracy: 0.01)
+        for cabinet in result.cabinets {
+            XCTAssertEqual(cabinet.z, Standards.baseDepth / 2, accuracy: 0.01)
+            XCTAssertEqual(cabinet.rotation, 0, accuracy: 0.01)   // front w +Z, czyli do wnętrza
+        }
+    }
+
+    func testWallFillRotatesWithWall() {
+        // ściana wzdłuż Z od (0,0) do (0,2400) → wnętrze jest po lewej stronie kierunku,
+        // czyli w −X; front szafki ma tam patrzeć (rotation 270°)
+        let result = WallFill.fill(wallStart: SIMD2(0, 0), wallEnd: SIMD2(0, 2400), targetWidth: 600)
+        XCTAssertFalse(result.cabinets.isEmpty)
+        XCTAssertEqual(result.cabinets[0].rotation, 270, accuracy: 0.01)
+        XCTAssertEqual(result.cabinets[0].x, -Standards.baseDepth / 2, accuracy: 0.01)
+    }
+
+    func testWallFillRejectsShortWall() {
+        let result = WallFill.fill(wallStart: SIMD2(0, 0), wallEnd: SIMD2(120, 0))
+        XCTAssertTrue(result.cabinets.isEmpty)
+        XCTAssertTrue(result.note.contains("za krótka"))
+    }
+
+    func testPanelCabinetBuildsSinglePlate() {
+        let panel = Cabinet(name: "Zaślepka", type: .panel, width: 18, height: 720, depth: 580, plinth: 0)
+        let boxes = Generator.build(panel)
+        XCTAssertEqual(boxes.count, 1)
+        XCTAssertEqual(boxes[0].size.x, 18, accuracy: 0.0001)
+        XCTAssertEqual(boxes[0].size.z, 580, accuracy: 0.0001)
+    }
+
+    // MARK: - jednostki
+
+    func testUnitsKeepPrecisionButDisplayWholeMillimetres() {
+        XCTAssertEqual(Units.mm(1234.5678), "1235")
+        XCTAssertEqual(Units.mm(600.0000), "600")
+        XCTAssertEqual(Units.quantize(1234.56784), 1234.5678, accuracy: 0.00001)
+    }
+
+    func testUnitsParseUserInput() {
+        XCTAssertEqual(Units.parseMM("1 200,5"), 1200.5)
+        XCTAssertEqual(Units.parseMM("3600"), 3600)
+        XCTAssertEqual(Units.parseMM("abc"), nil)
+    }
+
+    // MARK: - biblioteka tekstur
+
+    func testTextureStoreNamesFromFile() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let store = TextureStore(directory: folder.appendingPathComponent("tekstury"))
+        let source = folder.appendingPathComponent("dąb bielony 02.jpg")
+        try Data([0xFF, 0xD8, 0xFF, 0xD9]).write(to: source)
+
+        let texture = try store.importFile(at: source)
+        XCTAssertEqual(texture.name, "dąb bielony 02", "nazwa = nazwa pliku bez rozszerzenia")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: store.url(for: texture.name)?.path ?? ""))
+    }
+
+    func testTextureStoreSearchIgnoresCaseAndDiacritics() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let store = TextureStore(directory: folder.appendingPathComponent("tekstury"))
+        for name in ["dąb bielony", "Dąb naturalny", "orzech ciemny"] {
+            let url = folder.appendingPathComponent("\(name).jpg")
+            try Data([0xFF, 0xD8, 0xFF, 0xD9]).write(to: url)
+            _ = try store.importFile(at: url)
+        }
+
+        XCTAssertEqual(store.search("dab").count, 2, "szukanie bez ogonków i wielkości liter")
+        XCTAssertEqual(store.search("ORZECH").count, 1)
+        XCTAssertEqual(store.search("").count, 3, "pusty tekst = wszystkie")
+        XCTAssertEqual(store.search("nie ma takiej").count, 0)
+    }
+
+    func testTextureStoreAvoidsDuplicateNames() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        let store = TextureStore(directory: folder.appendingPathComponent("tekstury"))
+        let url = folder.appendingPathComponent("front.jpg")
+        try Data([0xFF, 0xD8, 0xFF, 0xD9]).write(to: url)
+        let first = try store.importFile(at: url)
+        let second = try store.importFile(at: url)
+        XCTAssertEqual(first.name, "front")
+        XCTAssertEqual(second.name, "front 2", "druga tekstura o tej samej nazwie dostaje numer")
+    }
 }

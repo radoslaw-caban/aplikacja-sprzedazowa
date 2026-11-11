@@ -32,10 +32,9 @@ struct SceneView: View {
     var locked: Bool = true
 
     /// Stan kamery niezależny od modelu: przesunięcie celu (m), obrót i zbliżenie.
-    @State private var pan = SIMD2<Float>.zero
-    @State private var yaw: Float = 0
-    @State private var pitch: Float = 0
-    @State private var distanceScale: Float = 1
+    // Kamera trzymana poza @State: modyfikowana co klatkę (płynność), bez
+    // wywoływania przebudowy SwiftUI 60 razy na sekundę.
+    @State private var lastDragStart = CGPoint.zero
     @State private var lastDrag: CGSize = .zero
 
     /// Cache sceny: przebudowujemy ją TYLKO gdy zmienią się dane.
@@ -43,6 +42,19 @@ struct SceneView: View {
     /// zmianie stanu (także przy każdym ruchu kamery) — stąd 1 klatka na sekundy.
     final class SceneCache {
         var signature: Int = .min
+        // kamera: wartości bieżące, cele (dokąd zmierza) i prędkości (bezwładność)
+        var pan = SIMD2<Float>.zero
+        var panTarget = SIMD2<Float>.zero
+        var panVelocity = SIMD2<Float>.zero
+        var yaw: Float = 0
+        var yawTarget: Float = 0
+        var yawVelocity: Float = 0
+        var pitch: Float = 0
+        var pitchTarget: Float = 0
+        var zoom: Float = 1
+        var zoomTarget: Float = 1
+        var lastFrame = Date()
+        var lastDragTranslation = CGSize.zero
         var camera: Entity?
         var environment: Entity?
         var fitted: PreviewCamera?
@@ -94,6 +106,10 @@ struct SceneView: View {
             var frames = 0
             var lastLog = Date()
             _ = content.subscribe(to: SceneEvents.Update.self) { _ in
+                stepCamera()
+                if let camera = cache.camera, let base = cache.fitted {
+                    applyCameraControl(camera, base: base)
+                }
                 if let environment = cache.environment, let camera = cache.camera {
                     DetailLOD.update(root: environment, cameraPosition: camera.position(relativeTo: nil))
                 }
@@ -186,13 +202,14 @@ struct SceneView: View {
                 if locked {
                     // przesunięcie w metrach, proporcjonalne do skali sceny
                     let speed: Float = interiorView ? 0.006 : 0.05
-                    pan.x -= dx * speed
-                    pan.y -= dy * speed
-                    pan.x = min(120, max(-120, pan.x))
-                    pan.y = min(120, max(-120, pan.y))
+                    cache.panTarget.x = min(120, max(-120, cache.panTarget.x - dx * speed))
+                    cache.panTarget.y = min(120, max(-120, cache.panTarget.y - dy * speed))
+                    // prędkość do „dogonienia" po puszczeniu palca
+                    cache.panVelocity = SIMD2(-dx * speed, -dy * speed) * 0.55
                 } else {
-                    yaw -= dx * 0.006
-                    pitch = min(1.15, max(-0.35, pitch + dy * 0.004))
+                    cache.yawTarget -= dx * 0.006
+                    cache.pitchTarget = min(1.15, max(-0.35, cache.pitchTarget + dy * 0.004))
+                    cache.yawVelocity = -dx * 0.006 * 0.5
                 }
             }
             .onEnded { _ in
@@ -205,8 +222,8 @@ struct SceneView: View {
     private var cameraZoom: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                let next = distanceScale / Float(value.magnification)
-                distanceScale = min(3.0, max(0.25, next))
+                let next = cache.zoomTarget / Float(value.magnification)
+                cache.zoomTarget = min(3.0, max(0.25, next))
             }
     }
     #endif
@@ -252,6 +269,38 @@ struct SceneView: View {
     /// Zablokowany: przesuwamy cel i kamerę o `pan` (rzut na płaszczyznę XZ).
     /// Odblokowany: obracamy kamerę wokół celu o `yaw`/`pitch`, z odległością
     /// pomnożoną przez `distanceScale` (pinch).
+    /// Krok kamery liczony co klatkę: bezwładność po puszczeniu palca
+    /// i wygładzanie (lerp) do celu. Bez tego ruch „skacze" na 120 Hz ekranie.
+    private func stepCamera() {
+        let now = Date()
+        let dt = Float(min(0.05, now.timeIntervalSince(cache.lastFrame)))
+        cache.lastFrame = now
+        guard dt > 0 else { return }
+
+        // bezwładność: puszczony palec jeszcze chwilę „wiezie" widok
+        if simd_length(cache.panVelocity) > 0.0004 {
+            cache.panTarget += cache.panVelocity
+            cache.panTarget.x = min(120, max(-120, cache.panTarget.x))
+            cache.panTarget.y = min(120, max(-120, cache.panTarget.y))
+            cache.panVelocity *= pow(0.06, dt)     // tłumienie ~6 % na sekundę
+        } else {
+            cache.panVelocity = .zero
+        }
+        if abs(cache.yawVelocity) > 0.0004 {
+            cache.yawTarget += cache.yawVelocity
+            cache.yawVelocity *= pow(0.06, dt)
+        } else {
+            cache.yawVelocity = 0
+        }
+
+        // wygładzanie: różnica domykana w ~0,15 s, niezależnie od liczby klatek
+        let k = 1 - pow(0.0001, dt)
+        cache.pan += (cache.panTarget - cache.pan) * k
+        cache.yaw += (cache.yawTarget - cache.yaw) * k
+        cache.pitch += (cache.pitchTarget - cache.pitch) * k
+        cache.zoom += (cache.zoomTarget - cache.zoom) * k
+    }
+
     /// Tania aktualizacja samej kamery (bez przebudowy sceny).
     private func applyCameraControl(_ camera: Entity, base: PreviewCamera) {
         let cam = controlled(base)
@@ -264,6 +313,10 @@ struct SceneView: View {
     }
 
     private func controlled(_ base: PreviewCamera) -> PreviewCamera {
+        let pan = cache.pan
+        let yaw = cache.yaw
+        let pitch = cache.pitch
+        let distanceScale = cache.zoom
         let target = base.target + SIMD3<Float>(pan.x, 0, pan.y)
         var position = base.position + SIMD3<Float>(pan.x, 0, pan.y)
 

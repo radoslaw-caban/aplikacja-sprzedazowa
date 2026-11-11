@@ -39,6 +39,8 @@ public enum SceneBuilder {
             // Generator zwraca układ lokalny (środek szafki = 0,0,0) —
             // dopiero tutaj trafia do pokoju, tak jak cabinetsOrigin w wersji web.
             for b in Generator.build(c) {
+                // tekstura z biblioteki trafia tylko na fronty — korpus zostaje płytą
+                let texture = (b.role == .front || b.role == .drawerFront) ? c.texture : nil
                 boxes.append(Box(
                     id: b.id,
                     role: b.role,
@@ -46,6 +48,7 @@ public enum SceneBuilder {
                     size: b.size,
                     position: SIMD3(b.position.x + c.x, b.position.y, b.position.z + c.z),
                     color: b.color,
+                    texture: texture,
                     rotationY: b.rotationY
                 ))
             }
@@ -104,7 +107,14 @@ public enum SceneBuilder {
             cornerRadius: 0.0015
         )
         var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: color(b.color))
+        // front może mieć teksturę z biblioteki (nazwa pliku w `Box.texture`)
+        if let textureName = b.texture,
+           let url = TextureStore.shared.url(for: textureName),
+           let texture = try? TextureResource.load(contentsOf: url) {
+            material.baseColor = .init(tint: .white, texture: .init(texture))
+        } else {
+            material.baseColor = .init(tint: color(b.color))
+        }
         material.roughness = .init(floatLiteral: b.role == .plinth ? 0.95 : 0.55)
         material.metallic = .init(floatLiteral: 0)
 
