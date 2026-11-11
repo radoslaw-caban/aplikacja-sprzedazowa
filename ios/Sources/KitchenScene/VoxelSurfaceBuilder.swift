@@ -15,10 +15,10 @@ public enum VoxelSurfaceBuilder {
 
     public struct Options {
         /// bok woksela w metrach
-        public var cell: Float = 0.025
+        public var cell: Float = 0.04
         /// ile bitów na kanał koloru (2 → 64 kubełki materiałów)
         public var colorBits: Int = 2
-        public var maxPoints: Int = 600_000
+        public var maxPoints: Int = 200_000
         public init() {}
     }
 
@@ -31,6 +31,7 @@ public enum VoxelSurfaceBuilder {
     public struct Geometry: Sendable {
         public var buckets: [Bucket]
         public var voxelCount: Int
+        public var pickCells: Set<SIMD3<Int32>>
         public var empty: Bool { buckets.isEmpty }
     }
 
@@ -65,7 +66,7 @@ public enum VoxelSurfaceBuilder {
         transform: ScanTransform = ScanTransform(),
         options: Options = Options()
     ) -> Geometry {
-        var result = Geometry(buckets: [], voxelCount: 0)
+        var result = Geometry(buckets: [], voxelCount: 0, pickCells: [])
         let source = cloud.decimated(maxPoints: options.maxPoints)
         guard !source.positions.isEmpty else { return result }
 
@@ -78,69 +79,104 @@ public enum VoxelSurfaceBuilder {
         sums.reserveCapacity(source.positions.count / 6)
         counts.reserveCapacity(source.positions.count / 6)
 
-        for (i, raw) in source.positions.enumerated() {
-            let p = transform.apply(raw * toMeters)
+        let positions = source.positions
+        let colors = source.colors
+        var pickCells = Set<SIMD3<Int32>>(minimumCapacity: positions.count / 4)
+
+        for i in 0..<positions.count {
+            let p = transform.apply(positions[i] * toMeters)
             let key = Cell(
-                x: Int32(floor(p.x / cellSize)),
-                y: Int32(floor(p.y / cellSize)),
-                z: Int32(floor(p.z / cellSize))
+                x: Int32((p.x / cellSize).rounded(.down)),
+                y: Int32((p.y / cellSize).rounded(.down)),
+                z: Int32((p.z / cellSize).rounded(.down))
             )
-            let c = source.colors.map { SIMD3(Float($0[i].x), Float($0[i].y), Float($0[i].z)) } ?? SIMD3(200, 200, 200)
-            sums[key, default: .zero] += c
-            counts[key, default: 0] += 1
+            var c = SIMD3<Float>(200, 200, 200)
+            if let colors {
+                let cc = colors[i]
+                c = SIMD3(Float(cc.x), Float(cc.y), Float(cc.z))
+            }
+            if var existing = sums[key] {
+                sums[key] = existing + c
+                counts[key] = (counts[key] ?? 0) + 1
+            } else {
+                sums[key] = c
+                counts[key] = 1
+                // siatka do klikania: komórki 5 cm
+                pickCells.insert(SIMD3(
+                    Int32((p.x / 0.05).rounded(.down)),
+                    Int32((p.y / 0.05).rounded(.down)),
+                    Int32((p.z / 0.05).rounded(.down))
+                ))
+            }
         }
+        _ = pickCells
         guard !sums.isEmpty else { return result }
 
-        // 2) widoczne ścianki: tylko tam, gdzie sąsiad jest pusty
-        let maxBucket = (1 << (options.colorBits * 3)) - 1
-        var buckets: [Int: (pos: [SIMD3<Float>], idx: [UInt32], sum: SIMD3<Float>, n: Float)] = [:]
+        // 2) widoczne ścianki: tylko tam, gdzie sąsiad jest pusty.
+        // Bufory per kubełek — bez alokacji tablicy na każdą ściankę i bez
+        // wielokrotnego zapisu do słownika (to było 2,5 s z 2,6 s całości).
+        let bucketCount = 1 << (options.colorBits * 3)
+        var bucketPos = [[SIMD3<Float>]](repeating: [], count: bucketCount)
+        var bucketIdx = [[UInt32]](repeating: [], count: bucketCount)
+        var bucketSum = [SIMD3<Float>](repeating: .zero, count: bucketCount)
+        var bucketN = [Float](repeating: 0, count: bucketCount)
 
-        // szablony ścianek: (normalna, 4 narożniki)
-        let faces: [(SIMD3<Float>, [SIMD3<Float>])] = [
-            (SIMD3(1, 0, 0), [SIMD3(1, 0, 0), SIMD3(1, 1, 0), SIMD3(1, 1, 1), SIMD3(1, 0, 1)]),
-            (SIMD3(-1, 0, 0), [SIMD3(0, 0, 0), SIMD3(0, 0, 1), SIMD3(0, 1, 1), SIMD3(0, 1, 0)]),
-            (SIMD3(0, 1, 0), [SIMD3(0, 1, 0), SIMD3(0, 1, 1), SIMD3(1, 1, 1), SIMD3(1, 1, 0)]),
-            (SIMD3(0, -1, 0), [SIMD3(0, 0, 0), SIMD3(1, 0, 0), SIMD3(1, 0, 1), SIMD3(0, 0, 1)]),
-            (SIMD3(0, 0, 1), [SIMD3(0, 0, 1), SIMD3(1, 0, 1), SIMD3(1, 1, 1), SIMD3(0, 1, 1)]),
-            (SIMD3(0, 0, -1), [SIMD3(0, 0, 0), SIMD3(0, 1, 0), SIMD3(1, 1, 0), SIMD3(1, 0, 0)]),
+        // szablony ścianek: 4 narożniki (w jednostkach woksela)
+        let faceOffsets: [[SIMD3<Float>]] = [
+            [SIMD3(1, 0, 0), SIMD3(1, 1, 0), SIMD3(1, 1, 1), SIMD3(1, 0, 1)],
+            [SIMD3(0, 0, 0), SIMD3(0, 0, 1), SIMD3(0, 1, 1), SIMD3(0, 1, 0)],
+            [SIMD3(0, 1, 0), SIMD3(0, 1, 1), SIMD3(1, 1, 1), SIMD3(1, 1, 0)],
+            [SIMD3(0, 0, 0), SIMD3(1, 0, 0), SIMD3(1, 0, 1), SIMD3(0, 0, 1)],
+            [SIMD3(0, 0, 1), SIMD3(1, 0, 1), SIMD3(1, 1, 1), SIMD3(0, 1, 1)],
+            [SIMD3(0, 0, 0), SIMD3(0, 1, 0), SIMD3(1, 1, 0), SIMD3(1, 0, 0)],
+        ]
+        let neighborOffsets: [SIMD3<Int32>] = [
+            SIMD3(1, 0, 0), SIMD3(-1, 0, 0), SIMD3(0, 1, 0),
+            SIMD3(0, -1, 0), SIMD3(0, 0, 1), SIMD3(0, 0, -1),
         ]
 
         for (cell, sum) in sums {
             let n = counts[cell] ?? 1
-            let color = sum / max(1, n)
-            let bucket = quantizedBucket(color, bits: options.colorBits, maxBucket: maxBucket)
-            var entry = buckets[bucket] ?? ([], [], .zero, 0)
+            let color = sum / Swift.max(1, n)
+            let bucket = quantizedBucket(color, bits: options.colorBits, maxBucket: bucketCount - 1)
+            var pos = bucketPos[bucket]
+            var idx = bucketIdx[bucket]
 
-            for (normal, corners) in faces {
-                let neighbor = Cell(x: cell.x + Int32(normal.x), y: cell.y + Int32(normal.y), z: cell.z + Int32(normal.z))
-                if sums[neighbor] != nil { continue } // sąsiad zajęty → ścianka niewidoczna
+            for f in 0..<6 {
+                let off = neighborOffsets[f]
+                let key = Cell(x: cell.x + off.x, y: cell.y + off.y, z: cell.z + off.z)
+                if sums[key] != nil { continue }
 
-                let base = UInt32(entry.pos.count)
-                for corner in corners {
-                    let v = SIMD3(
+                let base = UInt32(pos.count)
+                for corner in faceOffsets[f] {
+                    pos.append(SIMD3(
                         (Float(cell.x) + corner.x) * cellSize,
                         (Float(cell.y) + corner.y) * cellSize,
                         (Float(cell.z) + corner.z) * cellSize
-                    )
-                    entry.pos.append(v)
+                    ))
                 }
-                entry.idx.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
+                idx.append(base)
+                idx.append(base + 1)
+                idx.append(base + 2)
+                idx.append(base)
+                idx.append(base + 2)
+                idx.append(base + 3)
             }
 
-            if !entry.pos.isEmpty {
-                entry.sum += color * Float(entry.pos.count)
-                entry.n += Float(entry.pos.count)
-                buckets[bucket] = entry
-            }
+            bucketPos[bucket] = pos
+            bucketIdx[bucket] = idx
+            bucketSum[bucket] += color
+            bucketN[bucket] += 1
         }
 
         var out: [Bucket] = []
-        for (_, entry) in buckets where !entry.idx.isEmpty {
-            let avg = entry.sum / max(1, entry.n)
-            out.append(Bucket(color: avg, positions: entry.pos, indices: entry.idx))
+        for b in 0..<bucketCount where !bucketIdx[b].isEmpty {
+            let avg = bucketSum[b] / Swift.max(1, bucketN[b])
+            out.append(Bucket(color: avg, positions: bucketPos[b], indices: bucketIdx[b]))
         }
         result.buckets = out
         result.voxelCount = sums.count
+        result.pickCells = pickCells
         return result
     }
 

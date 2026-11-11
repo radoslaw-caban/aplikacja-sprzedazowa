@@ -60,6 +60,19 @@ public struct ScanTransform: Codable, Sendable, Equatable {
         return SIMD3(Float(rx + offset.x), Float(Double(p.y) * scale + offset.y), Float(rz + offset.z))
     }
 
+    /// Odwrotność `apply`: ze współrzędnych sceny do współrzędnych chmury.
+    public func inverseApply(_ p: SIMD3<Float>) -> SIMD3<Float> {
+        let a = rotationDeg * .pi / 180
+        let c = cos(a), s = sin(a)
+        let wx = Double(p.x) - offset.x
+        let wz = Double(p.z) - offset.z
+        // odwrotny obrót
+        let x = wx * c - wz * s
+        let z = wx * s + wz * c
+        let inv = scale == 0 ? 1 : 1 / scale
+        return SIMD3(Float(x * inv), Float((Double(p.y) - offset.y) * inv), Float(z * inv))
+    }
+
     /// Automatyczne dopasowanie: skala z obrytu, środek na środku pokoju, podłoga na y = 0.
     public static func autoFit(
         cloudMin: SIMD3<Float>,

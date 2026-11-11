@@ -151,6 +151,7 @@ func runChecks() {
     }
 
     // 3) realny plik ze skanu (jeśli jest w repo)
+    let realPath = "\(FileManager.default.currentDirectoryPath)/../app/public/dom-chmura.ply"
     let realPLY = URL(fileURLWithPath: "\(FileManager.default.currentDirectoryPath)/../app/public/dom-chmura.ply")
     if FileManager.default.fileExists(atPath: realPLY.path) {
         let started = Date()
@@ -196,6 +197,25 @@ func runChecks() {
         r.check("bok korpusu istnieje", false)
     }
     r.check("szerokość zabudowy 1,24 m (z nawisem blatu)", near(Double(built.widthMeters), 1.24, 0.02), "= \(built.widthMeters)")
+
+    print("\nWokselizacja skanu (wydajność)")
+    if FileManager.default.fileExists(atPath: realPath) {
+        if let cloud = try? PLYParser.parse(contentsOf: URL(fileURLWithPath: realPath)) {
+            let b = cloud.robustBounds()
+            let t = ScanTransform.autoFit(cloudMin: b.min * cloud.unitScaleToMeters,
+                                          cloudMax: b.max * cloud.unitScaleToMeters,
+                                          room: Room())
+            let started = Date()
+            let geo = VoxelSurfaceBuilder.geometry(cloud, transform: t)
+            let seconds = Date().timeIntervalSince(started)
+            print(String(format: "    woksele: %d, siatka: %d, trójkątów: %d, czas: %.2f s",
+                         geo.voxelCount, geo.pickCells.count,
+                         geo.buckets.reduce(0) { $0 + $1.indices.count / 3 }, seconds))
+            r.check("wokselizacja < 3 s", seconds < 3, String(format: "= %.2f s", seconds))
+        }
+    } else {
+        print("    (pominięto — brak pliku skanu)")
+    }
 
     let passed = r.checks - r.failures
     print("\n\(passed)/\(r.checks) warunków spełnionych")

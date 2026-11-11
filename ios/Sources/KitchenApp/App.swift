@@ -32,6 +32,10 @@ struct ContentView: View {
     @State private var scale: Double = 1
     @State private var surfaceEntity: ScanSurface?
     @State private var showPoints = false
+    @State private var grid: VoxelGrid?
+    @State private var pickedPoints: [SIMD3<Float>] = []
+    @State private var picking = false
+    @State private var realDistanceMM: String = ""
 
     var body: some View {
         NavigationSplitView {
@@ -65,6 +69,29 @@ struct ContentView: View {
                             Label("Auto-dopasuj do pokoju", systemImage: "square.dashed")
                         }
                         Toggle("Pokaż chmurę punktów", isOn: $showPoints)
+                        Button {
+                            picking.toggle()
+                            status = picking ? "dotknij 3 narożników w skanie" : nil
+                        } label: {
+                            Label(picking ? "Wskazywanie: WŁ" : "Wskaż punkty skanu",
+                                  systemImage: "hand.tap")
+                        }
+                        if !pickedPoints.isEmpty {
+                            ForEach(Array(pickedPoints.enumerated()), id: \.offset) { i, p in
+                                Text(String(format: "P%d: %.0f, %.0f, %.0f mm", i + 1, p.x * 1000, p.y * 1000, p.z * 1000))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if pickedPoints.count >= 2 {
+                                HStack {
+                                    Button("Ściana → X") { alignWall(axis: .x) }
+                                    Button("Ściana → Z") { alignWall(axis: .z) }
+                                }
+                                TextField("realna długość ściany [mm]", text: $realDistanceMM)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            Button("Wyczyść punkty") { pickedPoints.removeAll() }
+                        }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Obrót: \(Int(rotationDeg))°").font(.caption)
                             Slider(value: $rotationDeg, in: 0...360, step: 1) { _ in
@@ -99,7 +126,8 @@ struct ContentView: View {
             #endif
         } detail: {
             VStack(spacing: 0) {
-                SceneView(cabinets: cabinets, room: room, scan: showScan ? scan : nil, transform: transform, surfaceEntity: surfaceEntity, showPoints: showPoints)
+                SceneView(cabinets: cabinets, room: room, scan: showScan ? scan : nil, transform: transform, surfaceEntity: surfaceEntity, showPoints: showPoints, picking: picking,
+                           onPick: { point, size in handlePick(point, size) })
 
                 HStack(spacing: 12) {
                     Text("\(cabinets.count) szafek").font(.callout)
@@ -122,6 +150,21 @@ struct ContentView: View {
             // do automatycznych zrzutów: -showScan 1
             if UserDefaults.standard.bool(forKey: "showScan") {
                 await toggleScan()
+            }
+            // test zaczepiony o kamerę: 3 syntetyczne dotknięcia (środek, lewo, prawo)
+            if UserDefaults.standard.bool(forKey: "pickTest") {
+                try? await Task.sleep(nanoseconds: 9_000_000_000)
+                let size = CGSize(width: 1000, height: 700)
+                for p in [CGPoint(x: 0.5, y: 0.45), CGPoint(x: 0.3, y: 0.55), CGPoint(x: 0.7, y: 0.55)] {
+                    handlePick(p, size)
+                    print("[pick] \(status ?? "-")")
+                }
+                if UserDefaults.standard.bool(forKey: "alignTest") {
+                    alignWall(axis: .x)
+                    print("[pick] po wyrównaniu: \(status ?? "-")")
+                    let a = transform.apply(transform.inverseApply(pickedPoints[0]))
+                    print(String(format: "[pick] kontrola punktu 1: %.3f %.3f %.3f", a.x, a.y, a.z))
+                }
             }
         }
     }
@@ -207,11 +250,59 @@ struct ContentView: View {
     private func rebuildSurface() async {
         guard let scan else { surfaceEntity = nil; return }
         let t = transform
+        let t0 = Date()
+        print("[surface] start liczenia")
         let geo = await Task.detached(priority: .userInitiated) {
-            VoxelSurfaceBuilder.geometry(scan, transform: t)
+            var opts = VoxelSurfaceBuilder.Options()
+            opts.maxPoints = 120_000
+            return VoxelSurfaceBuilder.geometry(scan, transform: t, options: opts)
         }.value
+        grid = VoxelGrid(cellSize: 0.05, cells: geo.pickCells)
+        print(String(format: "[surface] gotowe w %.1f s: woksele %d, siatka %d", Date().timeIntervalSince(t0), geo.voxelCount, geo.pickCells.count))
         surfaceEntity = VoxelSurfaceBuilder.makeEntity(geo)
         status = "powierzchnia: \(geo.voxelCount) wokseli"
+    }
+
+    /// Dotknięcie w scenie → promień z kamery → pierwszy woksel skanu.
+    private func handlePick(_ point: CGPoint, _ size: CGSize) {
+        guard size.width > 0, size.height > 0 else { return }
+        guard let grid else {
+            status = "siatka skanu jeszcze się liczy…"
+            return
+        }
+        let aspect = Float(size.width / size.height)
+        let bounds = surfaceBounds
+        let cam = PreviewCamera.make(room: room, scanBounds: bounds)
+        let ray = cam.ray(normalizedPoint: point, aspect: aspect)
+        guard let hit = grid.firstHit(origin: ray.origin, direction: ray.direction) else {
+            status = "nie trafiłem w skan — dotknij ściany"
+            return
+        }
+        if pickedPoints.count >= 3 { pickedPoints.removeAll() }
+        pickedPoints.append(hit)
+        status = String(format: "punkt %d: %.0f, %.0f, %.0f mm", pickedPoints.count, hit.x * 1000, hit.y * 1000, hit.z * 1000)
+    }
+
+    /// Wyrównanie ściany: dwa wskazane punkty + opcjonalna realna długość.
+    private func alignWall(axis: ScanTransform.Axis) {
+        guard pickedPoints.count >= 2 else { return }
+        // punkty są we współrzędnych sceny — wracamy do układu chmury
+        let p1 = transform.inverseApply(pickedPoints[0])
+        let p2 = transform.inverseApply(pickedPoints[1])
+        let real = Double(realDistanceMM).map { $0 / 1000 }
+        transform = transform.aligningWall(from: p1, to: p2, axis: axis, realDistanceMeters: real)
+        rotationDeg = transform.rotationDeg.truncatingRemainder(dividingBy: 360)
+        scale = 1
+        status = String(format: "ściana wyrównana (obrót %.0f°, skala %.2f)", transform.rotationDeg, transform.scale)
+        Task { await rebuildSurface() }
+    }
+
+    /// Obrys skanu po transformacji — musi być ten sam, co w scenie.
+    private var surfaceBounds: (min: SIMD3<Float>, max: SIMD3<Float>)? {
+        guard let scan else { return nil }
+        let k = scan.unitScaleToMeters
+        let b = scan.robustBounds()
+        return transform.transformedBounds(min: b.min * k, max: b.max * k)
     }
 
     /// W aplikacji: z bundle. W `swift run` na Macu: z repo.

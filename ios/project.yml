@@ -11,6 +11,12 @@ packages:
     path: .
 
 settings:
+  configs:
+    Debug:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      SWIFT_COMPILATION_MODE: wholemodule
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
   base:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"

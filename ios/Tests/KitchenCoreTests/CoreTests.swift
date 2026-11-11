@@ -148,3 +148,119 @@ final class AlignmentTests: XCTestCase {
         XCTAssertEqual(Room(width: 6000, depth: 4500).area, 27, accuracy: 0.001)
     }
 }
+
+
+final class VoxelGridTests: XCTestCase {
+
+    /// Ściana w płaszczyźnie x = 0: siatka punktów na tej płaszczyźnie.
+    private func wallGrid() -> VoxelGrid {
+        var points: [SIMD3<Float>] = []
+        for y in stride(from: Float(0), to: 2.5, by: 0.025) {
+            for z in stride(from: Float(-2), to: 2, by: 0.025) {
+                points.append(SIMD3(0, y, z))
+            }
+        }
+        return VoxelGrid(points: points, cellSize: 0.05)
+    }
+
+    func testRayHitsWall() {
+        let grid = wallGrid()
+        XCTAssertFalse(grid.isEmpty)
+        let hit = grid.firstHit(origin: SIMD3(2, 1, 0.3), direction: SIMD3(-1, 0, 0))
+        XCTAssertNotNil(hit)
+        if let hit {
+            XCTAssertEqual(Double(hit.x), 0, accuracy: 0.06)   // trafienie w płaszczyznę ściany
+            XCTAssertEqual(Double(hit.y), 1, accuracy: 0.1)
+        }
+    }
+
+    func testRayMisses() {
+        let grid = wallGrid()
+        // promień w bok, poza ścianę (z = 10)
+        let hit = grid.firstHit(origin: SIMD3(2, 1, 10), direction: SIMD3(-1, 0, 0))
+        XCTAssertNil(hit)
+    }
+
+    func testEmptyGrid() {
+        let grid = VoxelGrid(cellSize: 0.05, cells: [])
+        XCTAssertNil(grid.firstHit(origin: .zero, direction: SIMD3(0, 0, -1)))
+    }
+
+    func testRayFromScreenCenterPointsForward() {
+        let ray = VoxelGrid.ray(
+            cameraPosition: SIMD3(0, 0, 5),
+            lookAt: SIMD3(0, 0, 0),
+            verticalFOVDegrees: 55,
+            aspect: 1.5,
+            normalizedPoint: CGPoint(x: 0.5, y: 0.5)
+        )
+        // środek ekranu = patrzymy w przód (−Z)
+        XCTAssertEqual(Double(ray.direction.x), 0, accuracy: 0.001)
+        XCTAssertEqual(Double(ray.direction.y), 0, accuracy: 0.001)
+        XCTAssertEqual(Double(ray.direction.z), -1, accuracy: 0.001)
+    }
+
+    func testRayOffCenterIsAngled() {
+        let ray = VoxelGrid.ray(
+            cameraPosition: SIMD3(0, 0, 5),
+            lookAt: SIMD3(0, 0, 0),
+            verticalFOVDegrees: 55,
+            aspect: 1.5,
+            normalizedPoint: CGPoint(x: 1.0, y: 0.5)
+        )
+        XCTAssertGreaterThan(ray.direction.x, 0.3)   // prawa krawędź ekranu
+        XCTAssertLessThan(ray.direction.z, 0)
+    }
+}
+
+
+final class RegistrationTests: XCTestCase {
+
+    func testAlignWallToXAxis() {
+        // ściana w chmurze biegnie pod kątem 45° w rzucie
+        let t = ScanTransform(scale: 1, rotationDeg: 0, offset: .zero)
+        let p1 = SIMD3<Float>(0, 0, 0)
+        let p2 = SIMD3<Float>(1, 0, 1)
+        let aligned = t.aligningWall(from: p1, to: p2, axis: .x)
+
+        // po wyrównaniu wektor p1→p2 jest równoległy do X (Z ≈ 0)
+        let a = aligned.apply(p1)
+        let b = aligned.apply(p2)
+        XCTAssertEqual(Double(b.z - a.z), 0, accuracy: 0.01)
+        XCTAssertGreaterThan(abs(Double(b.x - a.x)), 1.3)
+
+        // punkt zaczepienia zostaje w miejscu
+        XCTAssertEqual(Double(a.x), Double(t.apply(p1).x), accuracy: 0.001)
+        XCTAssertEqual(Double(a.z), Double(t.apply(p1).z), accuracy: 0.001)
+    }
+
+    func testScaleFromRealDistance() {
+        let t = ScanTransform(scale: 1, rotationDeg: 0, offset: .zero)
+        let p1 = SIMD3<Float>(0, 0, 0)
+        let p2 = SIMD3<Float>(2, 0, 0)
+        // zmierzone 2 m, realnie 4 m → skala 2×
+        let aligned = t.aligningWall(from: p1, to: p2, axis: .x, realDistanceMeters: 4)
+        XCTAssertEqual(aligned.scale, 2, accuracy: 0.001)
+        XCTAssertEqual(aligned.distance(p1, p2), 4, accuracy: 0.01)
+    }
+
+    func testInverseApply() {
+        let t = ScanTransform(scale: 1.7, rotationDeg: 37, offset: SIMD3(1.2, -0.4, 2.5))
+        let p = SIMD3<Float>(0.7, 1.1, -3.2)
+        let back = t.inverseApply(t.apply(p))
+        XCTAssertEqual(Double(back.x), Double(p.x), accuracy: 0.0001)
+        XCTAssertEqual(Double(back.y), Double(p.y), accuracy: 0.0001)
+        XCTAssertEqual(Double(back.z), Double(p.z), accuracy: 0.0001)
+    }
+
+    func testRotationNormalisedTo180() {
+        let t = ScanTransform(scale: 1, rotationDeg: 350, offset: .zero)
+        let p1 = SIMD3<Float>(0, 0, 0)
+        let p2 = SIMD3<Float>(1, 0, 0.2)
+        let aligned = t.aligningWall(from: p1, to: p2, axis: .x)
+        XCTAssertTrue(aligned.rotationDeg >= -360 && aligned.rotationDeg <= 720)
+        // kierunek nadal równoległy do X, mimo kumulacji obrotu
+        let a = aligned.apply(p1), b = aligned.apply(p2)
+        XCTAssertEqual(Double(b.z - a.z), 0, accuracy: 0.01)
+    }
+}
