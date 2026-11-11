@@ -15,7 +15,7 @@ public enum EnvironmentBuilder {
         public var radius: Float = 210          // promień terenu z teksturą (m)
         public var forestTrees: Int = 900       // gęsty las wokół posesji
         public var forestBackdrop: Bool = true  // uproszczone tło lasu (pierścień)
-        public var grassTufts: Int = 2600       // kępy trawy przy domu
+        public var grassTufts: Int = 3200       // kępy trawy przy domu
         public var fogBanks: Int = 40           // mgła w dolinach
         public var mountains: Int = 26
         public var birds: Int = 6
@@ -355,17 +355,12 @@ public enum EnvironmentBuilder {
     static func grassTufts(options: Options, rng: inout RNG, room: Room) -> Entity {
         let root = Entity()
         root.name = "grass-tufts"
-        guard let texture = EnvironmentArt.grassBlades() else { return root }
 
-        var material = PhysicallyBasedMaterial()
-        material.baseColor = .init(tint: .white, texture: .init(texture))
-        material.roughness = .init(floatLiteral: 1.0)
-        material.metallic = .init(floatLiteral: 0)
-        material.blending = .transparent(opacity: .init(floatLiteral: 1.0))
-        material.opacityThreshold = 0.45
-        material.faceCulling = .none
+        // Gotowe siatki kęp (5 kart w wachlarzu) — jedna encja na kępę.
+        // Ostatni wariant to kępa z kwiatami (biel/żółć/fiolet).
+        let patches = GrassFactory.patches()
+        guard !patches.isEmpty else { return root }
 
-        let plane = MeshResource.generatePlane(width: 1, height: 1)
         let houseHalfX = Float(room.width / 2000) + 1.5
         let houseHalfZ = Float(room.depth / 2000) + 1.5
 
@@ -374,30 +369,27 @@ public enum EnvironmentBuilder {
         while placed < options.grassTufts && guardCount < options.grassTufts * 5 {
             guardCount += 1
             let angle = rng.range(0, .pi * 2)
-            let distance = rng.range(6, 45)
+            let distance = rng.range(4.5, 42)
             let x = cos(angle) * distance
             let z = sin(angle) * distance
 
             // nie na domu, nie na podjeździe, nie na drodze
             if abs(x) < houseHalfX && abs(z) < houseHalfZ { continue }
-            if abs(x) < 6.5 && z > 0 { continue }
+            if z > 0 && abs(x) < 6.0 { continue }
             if z > 30 { continue }
 
-            let tuft = Entity()
-            // 4 skrzyżowane płaszczyzny: z każdej strony widać źdźbła,
-            // a nie „kartkę" obracającą się z kamerą
-            let baseHeight = rng.range(0.35, 0.80)
-            for turn in 0..<4 {
-                let blade = ModelEntity(mesh: plane, materials: [material])
-                let h = baseHeight * rng.range(0.75, 1.25)
-                blade.scale = [h * rng.range(0.9, 1.5), h, 1]
-                blade.position = [rng.range(-0.18, 0.18), h / 2, rng.range(-0.18, 0.18)]
-                blade.orientation = simd_quatf(angle: Float(turn) * .pi / 4 + rng.range(0, 0.5), axis: [0, 1, 0])
-                tuft.addChild(blade)
-            }
-            tuft.position = [x, 0, z]
-            tuft.name = "grass-\(placed)"
-            root.addChild(tuft)
+            // ~18% kęp z kwiatami, reszta sama trawa
+            let flowers = patches.count > 1 && rng.next() < 0.18
+            let plainCount = max(1, patches.count - 1)
+            let index = flowers ? patches.count - 1 : Int(rng.next() * Float(plainCount))
+            let patch = patches[min(index, patches.count - 1)]
+
+            let entity = ModelEntity(mesh: patch.mesh, materials: [patch.material])
+            entity.scale = .one * rng.range(0.85, 1.45)
+            entity.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
+            entity.position = [x, 0, z]
+            entity.name = "grass-\(placed)"
+            root.addChild(entity)
             placed += 1
         }
         return root
@@ -407,29 +399,10 @@ public enum EnvironmentBuilder {
         let root = Entity()
         root.name = "forest"
 
-        var trunkMaterial = PhysicallyBasedMaterial()
-        if let bark = EnvironmentArt.bark() {
-            trunkMaterial.baseColor = .init(tint: .white, texture: .init(bark))
-        } else {
-            trunkMaterial.baseColor = .init(tint: PlatformColor(red: 0.24, green: 0.17, blue: 0.11, alpha: 1))
-        }
-        trunkMaterial.roughness = .init(floatLiteral: 0.95)
-
-        // trzy odcienie igliwia + dwa liści — las przestaje być jednolitą masą
-        let needle: [PhysicallyBasedMaterial] = (0..<3).map { i in
-            var m = PhysicallyBasedMaterial()
-            m.baseColor = .init(tint: PlatformColor(red: 0.07, green: CGFloat(0.20 + Double(i) * 0.05), blue: 0.10, alpha: 1))
-            m.roughness = .init(floatLiteral: 1.0)
-            return m
-        }
-        let leaf: [PhysicallyBasedMaterial] = (0..<2).map { i in
-            var m = PhysicallyBasedMaterial()
-            m.baseColor = .init(tint: PlatformColor(red: CGFloat(0.22 + Double(i) * 0.06),
-                                                    green: CGFloat(0.36 + Double(i) * 0.06),
-                                                    blue: 0.13, alpha: 1))
-            m.roughness = .init(floatLiteral: 1.0)
-            return m
-        }
+        // Drzewa jako gotowe siatki: pień z gałęziami + karty liści.
+        // Jedna encja na drzewo (scalona siatka), materiały wspólne.
+        let variants = TreeFactory.variants()
+        guard !variants.isEmpty else { return root }
 
         let houseRadius = max(Float(room.width), Float(room.depth)) / 2000 + 12
         var placed = 0
@@ -441,34 +414,12 @@ public enum EnvironmentBuilder {
             let distance = rng.range(houseRadius * 0.72, options.radius * 0.82)
             let x = cos(angle) * distance
             let z = sin(angle) * distance
-            // nie sadzimy na podjeździe (pas szerokości 6 m wzdłuż +Z)
-            // i nie w korytarzu kamery zewnętrznej (inaczej drzewo zasłania cały dom)
-            if z > 0 && abs(x) < 26 { continue }   // podjazd, trawnik i kadr z zewnątrz
+            // nie sadzimy na podjeździe i w korytarzu kamery zewnętrznej
+            if z > 0 && abs(x) < 26 { continue }
 
-            // co któryś model z paczki (współdzielona siatka, ale każda instancja
-            // to osobny węzeł — dlatego rzadko, przy 900 drzewach)
-            if placed % 12 == 0,
-               let model = ModelLibrary.entity(named: "IslandTree", targetSize: rng.range(8, 13)) {
-                model.position = [x, 0, z]
-                model.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
-                model.name = "tree-model-\(placed)"
-                root.addChild(model)
-                placed += 1
-                continue
-            }
-
-            // gatunki: 45% świerk, 22% sosna, 20% brzoza, 13% dąb
-            let roll = rng.next()
-            let species: TreeSpecies = roll < 0.45 ? .spruce : (roll < 0.67 ? .pine : (roll < 0.87 ? .birch : .oak))
-            let height = rng.range(8.0, 24.0)
-            let tree = treeEntity(
-                species: species,
-                height: height,
-                trunk: trunkMaterial,
-                needle: needle,
-                leaf: leaf,
-                rng: &rng
-            )
+            let variant = variants[Int(rng.next() * Float(variants.count)) % variants.count]
+            let height = rng.range(9.0, 26.0)
+            let tree = TreeFactory.instance(variant, height: height, rotation: rng.range(0, .pi * 2))
             tree.position = [x, 0, z]
             tree.name = "tree-\(placed)"
             root.addChild(tree)
@@ -477,100 +428,6 @@ public enum EnvironmentBuilder {
         return root
     }
 
-    enum TreeSpecies { case spruce, pine, birch, oak }
-
-    /// Jedno drzewo z brył — świadomie proceduralne: 420 drzew z plików
-    /// zajęłoby gigabajty, a las ma być tłem, nie bohaterem.
-    static func treeEntity(
-        species: TreeSpecies,
-        height: Float,
-        trunk: PhysicallyBasedMaterial,
-        needle: [PhysicallyBasedMaterial],
-        leaf: [PhysicallyBasedMaterial],
-        rng: inout RNG
-    ) -> Entity {
-        let tree = Entity()
-        let tint = rng.range(0.88, 1.10)
-        let lean = simd_quatf(angle: rng.range(-0.05, 0.05), axis: normalize(SIMD3<Float>(rng.range(-1, 1), 0, rng.range(-1, 1))))
-
-        switch species {
-        case .spruce:
-            // stożki warstwami, im wyżej tym mniejsze
-            let trunkHeight = height * 0.30
-            let t = ModelEntity(mesh: .generateCylinder(height: trunkHeight, radius: height * 0.022), materials: [trunk])
-            t.position = [0, trunkHeight / 2, 0]
-            tree.addChild(t)
-            for tier in 0..<6 {
-                let tierHeight = height * (0.30 - Float(tier) * 0.035)
-                let radius = height * (0.17 - Float(tier) * 0.023)
-                let cone = ModelEntity(
-                    mesh: .generateCone(height: tierHeight, radius: max(0.30, radius)),
-                    materials: [needle[tier % needle.count]]
-                )
-                cone.position = [0, height * (0.22 + Float(tier) * 0.135), 0]
-                tree.addChild(cone)
-            }
-
-        case .pine:
-            // wysoki, odsłonięty pień; korona jak parasol z boku
-            let trunkHeight = height * 0.62
-            let t = ModelEntity(mesh: .generateCylinder(height: trunkHeight, radius: height * 0.020), materials: [trunk])
-            t.position = [0, trunkHeight / 2, 0]
-            tree.addChild(t)
-            for i in 0..<2 {
-                let crown = ModelEntity(
-                    mesh: .generateSphere(radius: height * (0.19 - Float(i) * 0.03)),
-                    materials: [needle[2]]
-                )
-                crown.scale = [1.15, 0.55, 1.15]
-                crown.position = [0, height * (0.74 + Float(i) * 0.12), 0]
-                tree.addChild(crown)
-            }
-
-        case .birch:
-            // biały, cienki pień (jaśniejszy materiał) + lekkie, jasne liście
-            var white = PhysicallyBasedMaterial()
-            white.baseColor = .init(tint: PlatformColor(red: 0.86, green: 0.85, blue: 0.80, alpha: 1))
-            white.roughness = .init(floatLiteral: 0.85)
-            let trunkHeight = height * 0.55
-            let t = ModelEntity(mesh: .generateCylinder(height: trunkHeight, radius: height * 0.013), materials: [white])
-            t.position = [0, trunkHeight / 2, 0]
-            tree.addChild(t)
-            for i in 0..<3 {
-                let crown = ModelEntity(
-                    mesh: .generateSphere(radius: height * (0.13 - Float(i) * 0.02)),
-                    materials: [leaf[1]]
-                )
-                crown.scale = [1.0, 1.35, 1.0]
-                crown.position = [rng.range(-0.5, 0.5), height * (0.62 + Float(i) * 0.14), rng.range(-0.5, 0.5)]
-                tree.addChild(crown)
-            }
-
-        case .oak:
-            // gruby, krótki pień i szeroka, ciemna korona
-            let trunkHeight = height * 0.36
-            let t = ModelEntity(mesh: .generateCylinder(height: trunkHeight, radius: height * 0.038), materials: [trunk])
-            t.position = [0, trunkHeight / 2, 0]
-            tree.addChild(t)
-            let crown = ModelEntity(mesh: .generateSphere(radius: height * 0.26), materials: [leaf[0]])
-            crown.scale = [1.25, 0.85, 1.25]
-            crown.position = [0, height * 0.60, 0]
-            tree.addChild(crown)
-            for i in 0..<3 {
-                let lobe = ModelEntity(mesh: .generateSphere(radius: height * 0.15), materials: [leaf[0]])
-                lobe.position = [cos(Float(i) * 2.1) * height * 0.16, height * (0.66 + Float(i) * 0.05),
-                                 sin(Float(i) * 2.1) * height * 0.16]
-                tree.addChild(lobe)
-            }
-        }
-
-        tree.orientation = lean
-        tree.scale = .one * tint
-        return tree
-    }
-
-    /// Droga gminna przed posesją — asfalt z linią i krawężnikami.
-    /// Bez niej podjazd kończył się w trawie i dom wyglądał na odludziu.
     static func road(room: Room) -> Entity {
         let root = Entity()
         root.name = "road"

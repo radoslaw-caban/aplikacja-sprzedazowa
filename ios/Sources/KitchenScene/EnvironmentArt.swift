@@ -239,6 +239,87 @@ public enum EnvironmentArt {
         return try? TextureResource.generate(from: image, options: .init(semantic: .color))
     }
 
+    /// Kępa liści: kilkadziesiąt drobnych listków na przezroczystym tle.
+    /// Taka karta na końcu gałęzi czyta się jak korona — z bliska widać liście,
+    /// z daleka masę zieleni z prześwitami.
+    public static func leafCluster() -> TextureResource? {
+        let size = 256
+        guard let image = makeImage(width: size, height: size, draw: { ctx in
+            ctx.clear(CGRect(x: 0, y: 0, width: size, height: size))
+            for _ in 0..<90 {
+                let cx = CGFloat.random(in: CGFloat(size) * 0.15...CGFloat(size) * 0.85)
+                let cy = CGFloat.random(in: CGFloat(size) * 0.15...CGFloat(size) * 0.85)
+                let w = CGFloat.random(in: 10...26)
+                let h = w * CGFloat.random(in: 0.55...0.95)
+                let g = CGFloat.random(in: 0.45...0.85)
+                ctx.setFillColor(CGColor(red: 0.20 + g * 0.16, green: 0.34 + g * 0.34, blue: 0.12 + g * 0.14, alpha: 1))
+                ctx.saveGState()
+                ctx.translateBy(x: cx, y: cy)
+                ctx.rotate(by: CGFloat.random(in: 0...6.28))
+                ctx.fillEllipse(in: CGRect(x: -w / 2, y: -h / 2, width: w, height: h))
+                ctx.restoreGState()
+            }
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
+    /// Kępa igliwia: cienkie, ciemne igły rozchodzące się z punktu.
+    public static func needleCluster() -> TextureResource? {
+        let size = 256
+        guard let image = makeImage(width: size, height: size, draw: { ctx in
+            ctx.clear(CGRect(x: 0, y: 0, width: size, height: size))
+            let cx = CGFloat(size) / 2
+            let cy = CGFloat(size) / 2
+            for _ in 0..<220 {
+                let angle = CGFloat.random(in: 0...6.28)
+                let len = CGFloat.random(in: CGFloat(size) * 0.18...CGFloat(size) * 0.48)
+                let g = CGFloat.random(in: 0.55...1.0)
+                ctx.setStrokeColor(CGColor(red: 0.12 * g, green: 0.30 * g, blue: 0.16 * g, alpha: 1))
+                ctx.setLineWidth(CGFloat.random(in: 1.2...2.4))
+                ctx.move(to: CGPoint(x: cx + cos(angle) * 6, y: cy + sin(angle) * 6))
+                ctx.addLine(to: CGPoint(x: cx + cos(angle) * len, y: cy + sin(angle) * len))
+                ctx.strokePath()
+            }
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
+    /// Kępa z kwiatami: źdźbła + kolorowe główki (biało-żółte, jak na połoninie).
+    public static func flowerCluster() -> TextureResource? {
+        let size = 256
+        guard let image = makeImage(width: size, height: size, draw: { ctx in
+            ctx.clear(CGRect(x: 0, y: 0, width: size, height: size))
+            // źdźbła
+            for _ in 0..<50 {
+                let x = CGFloat.random(in: 8...CGFloat(size) - 8)
+                let h = CGFloat.random(in: CGFloat(size) * 0.5...CGFloat(size) * 0.95)
+                ctx.setStrokeColor(CGColor(red: 0.42, green: 0.60, blue: 0.22, alpha: 1))
+                ctx.setLineWidth(CGFloat.random(in: 1.4...2.6))
+                ctx.move(to: CGPoint(x: x, y: 0))
+                ctx.addLine(to: CGPoint(x: x + CGFloat.random(in: -10...10), y: h))
+                ctx.strokePath()
+            }
+            // główki kwiatów
+            for _ in 0..<40 {
+                let x = CGFloat.random(in: 10...CGFloat(size) - 10)
+                let y = CGFloat.random(in: CGFloat(size) * 0.45...CGFloat(size) * 0.95)
+                let r = CGFloat.random(in: 2.5...5.5)
+                let roll = CGFloat.random(in: 0...1)
+                let color: CGColor
+                if roll < 0.55 {
+                    color = CGColor(red: 0.98, green: 0.96, blue: 0.86, alpha: 1)      // biel
+                } else if roll < 0.85 {
+                    color = CGColor(red: 0.98, green: 0.85, blue: 0.30, alpha: 1)      // żółć
+                } else {
+                    color = CGColor(red: 0.74, green: 0.40, blue: 0.72, alpha: 1)      // fiolet
+                }
+                ctx.setFillColor(color)
+                ctx.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+            }
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
     /// Mgła: poziomy gradient bieli — kładziony na pasmach i w dolinach.
     public static func hazeGradient() -> TextureResource? {
         let height = 128
