@@ -264,6 +264,23 @@ struct SceneView: View {
             return PreviewCamera.fit(center: built.center, extents: built.extents)
         }
         if !built.extents.x.isZero {
+            // Kadr wewnętrzny: kamera między zabudową a przeciwległą ścianą,
+            // zawsze w świetle pomieszczenia (bez patrzenia przez elewację).
+            if interiorView {
+                let c = built.center
+                let e = built.extents
+                let halfW = Float(room.width / 1000) / 2 - 0.45
+                let halfD = Float(room.depth / 1000) / 2 - 0.45
+                let radius = max(0.001, sqrt(c.x * c.x + c.z * c.z))
+                let dir = SIMD2<Float>(-c.x / radius, -c.z / radius)
+                let dist = min(4.6, max(2.2, max(e.x, e.z) * 1.1 + 1.3))
+                let px = min(halfW, max(-halfW, c.x + dir.x * dist))
+                let pz = min(halfD, max(-halfD, c.z + dir.y * dist))
+                let eyeY = min(Float(room.height / 1000) - 0.25,
+                               max(1.5, c.y + e.y * 0.75))
+                return PreviewCamera(position: [px, eyeY, pz],
+                                     target: [c.x, max(0.6, c.y), c.z])
+            }
             return PreviewCamera.fit(center: built.center, extents: built.extents)
         }
         return PreviewCamera.make(room: room, scanBounds: nil)

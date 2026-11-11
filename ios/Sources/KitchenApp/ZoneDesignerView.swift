@@ -35,6 +35,7 @@ struct ZoneDesignerView: View {
                     }
                 }
                 .padding(16)
+                .padding(.bottom, 90)
             }
             .background(.regularMaterial)
             .navigationTitle("Strefy zabudowy")
@@ -193,7 +194,9 @@ struct ZoneDesignerView: View {
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(spec.icon).font(.title2)
+                    Image(systemName: spec.icon)
+                        .font(.title2)
+                        .foregroundStyle(.orange)
                     Text(zone.name).font(.headline)
                     Text("ściana \(zone.wallIndex + 1) · \(Int(zplan.start))–\(Int(zplan.start + zplan.width)) mm")
                         .font(.caption2).foregroundStyle(.secondary)

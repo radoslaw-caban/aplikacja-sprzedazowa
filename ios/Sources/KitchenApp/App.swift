@@ -162,6 +162,13 @@ struct ContentView: View {
                     showPlan = true
                 }
             }
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "demoZoneInsert") {
+                // weryfikacja 3D: jedna strefa gotowania, bez otwierania kreatora
+                for z in model.currentZones { model.deleteZone(z.id) }
+                _ = model.addZone(kind: .kitchenCook, wallIndex: 3)
+                print("[ui] strefa wstawiona: \(model.current.cabinets.count) szafek, stref \(model.currentZones.count)")
+            }
             if UserDefaults.standard.bool(forKey: "demoZones") {
                 locked = false
                 zoneWall = 0
@@ -169,6 +176,7 @@ struct ContentView: View {
                 showZones = true
                 print("[ui] strefy otwarte: ściana 1, stref \(model.currentZones.count)")
             }
+            #endif
             if UserDefaults.standard.bool(forKey: "demoPlan") {
                 // weryfikacja widoku mapy bez dotykania ekranu
                 planDraft = model.currentPlan

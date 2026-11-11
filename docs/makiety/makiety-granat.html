@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Makiety — Karpatia (granat)</title>
+<style>
+  @page { size: 1180px 820px; margin: 0; }
+  :root{
+    --bg:#0e141f;          /* tło aplikacji — ciemny, zdesaturowany granat */
+    --rail:#121a26;
+    --card:#161f2e;
+    --card2:#1b2537;
+    --line:#243146;
+    --ink:#e7ebf2;
+    --muted:#8d99ad;
+    --accent:#5b8def;      /* domyślny akcent (granatowy błękit) */
+    --accent-soft:#1b2b45;
+    --ok:#3fb37f;
+    --warn:#d9a13b;
+    --danger:#d9534f;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  html,body{margin:0;background:#070b12}
+  body{font-family:-apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif;font-size:14px;color:var(--ink)}
+  .page{
+    width:1180px;height:820px;background:var(--bg);display:flex;overflow:hidden;
+    page-break-after:always;break-after:page;position:relative;
+  }
+  .page:last-child{page-break-after:auto}
+
+  /* ── szyna ─────────────────────────────────────── */
+  .rail{width:250px;background:var(--rail);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:12px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;font-size:15px}
+  .brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);color:#0b1220;display:grid;place-items:center;font-size:13px;font-weight:800}
+  .rail h4{margin:6px 0 0;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:650}
+  .proj{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:10px}
+  .proj.active{background:var(--accent-soft);box-shadow:inset 0 0 0 1px #23395c}
+  .proj .swatch{width:8px;height:8px;border-radius:50%}
+  .swatch.ok{background:var(--ok)} .swatch.warn{background:var(--warn)} .swatch.danger{background:var(--danger)}
+  .proj .txt b{display:block;font-size:13px;font-weight:600}
+  .proj .txt span{font-size:11px;color:var(--muted)}
+  .rail .spacer{flex:1}
+  .rail .bottom{display:flex;flex-direction:column;gap:9px;font-size:12.5px;color:var(--muted)}
+  .rail .bottom div{display:flex;align-items:center;gap:8px}
+  .nav{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:10px;color:#aeb9c9;font-size:13px}
+  .nav.active{background:var(--accent-soft);color:#cfe0ff;font-weight:600}
+
+  /* ── treść ─────────────────────────────────────── */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{display:flex;align-items:center;gap:16px;padding:16px 22px;background:var(--rail);border-bottom:1px solid var(--line)}
+  .who{display:flex;align-items:center;gap:12px}
+  .avatar{width:46px;height:46px;border-radius:14px;background:#22304a;color:#bcd3f5;display:grid;place-items:center;font-weight:700;font-size:16px}
+  .who b{font-size:17px;font-weight:650}
+  .who span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+  .badges{display:flex;gap:8px;margin-left:auto}
+  .badge{display:flex;flex-direction:column;gap:2px;padding:7px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);min-width:108px}
+  .badge span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .badge b{font-size:14px;font-weight:650}
+  .badge.alert{border-color:#4a3a1c;background:#1d1a12}
+
+  .grid{flex:1;display:grid;grid-template-columns:1.35fr 1fr;gap:16px;padding:18px 22px;overflow:hidden}
+  .col{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:0 1px 0 rgba(255,255,255,.02)}
+  .card h3{margin:0 0 10px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:650;display:flex}
+  .card h3 span{margin-left:auto;font-size:10.5px;letter-spacing:0;text-transform:none;color:var(--accent);font-weight:600}
+  .row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed #26334a}
+  .row:last-child{border-bottom:0}
+  .row .k{color:var(--muted);font-size:12.5px}
+  .row .v{font-weight:600;font-size:13.5px;text-align:right}
+
+  .mount{display:flex;align-items:center;gap:16px}
+  .mount .date{font-size:29px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .mount .sub{font-size:12px;color:var(--muted);margin-top:5px}
+  .mount .left{margin-left:auto;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .chip{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600}
+  .chip.soft{background:var(--accent-soft);color:#bcd3f5}
+  .btns{display:flex;gap:8px}
+  .btn{padding:7px 12px;border-radius:9px;font-size:12.5px;font-weight:600;border:1px solid var(--line);background:var(--card2);color:var(--ink)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#08111f}
+  .btn.ghost{background:transparent}
+
+  .map{height:146px;border-radius:12px;overflow:hidden;position:relative;border:1px solid var(--line);
+       background:linear-gradient(0deg,#111a27,#152031)}
+  .map .road{position:absolute;background:#22314a}
+  .map .r1{left:-10%;top:58%;width:120%;height:9px;transform:rotate(-6deg)}
+  .map .r2{left:38%;top:-10%;width:8px;height:130%;transform:rotate(4deg)}
+  
+  
+  .map .label{position:absolute;left:12px;bottom:12px;padding:6px 10px;border-radius:8px;background:rgba(12,18,28,.86);font-size:11.5px;font-weight:600;border:1px solid var(--line)}
+
+  .mailbox{border:1.5px dashed #2b3a52;border-radius:14px;padding:16px;background:#131b28}
+  .bubble{max-width:78%;padding:9px 12px;border-radius:16px;font-size:12.5px;line-height:1.35}
+  .bubble.them{background:#1d2837;border-bottom-left-radius:5px}
+  .bubble.me{background:var(--accent);color:#08111f;margin-left:auto;border-bottom-right-radius:5px;font-weight:500}
+  .thumbs{display:flex;gap:6px;margin-top:8px}
+  .thumb{width:46px;height:46px;border-radius:8px;background:#233149;display:grid;place-items:center;font-size:10px;color:#93a3ba}
+  .thumb.pdf{background:#31202a;color:#e79aa0}
+  .mailnote{margin-top:10px;font-size:11.5px;color:var(--muted)}
+
+  .doc{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1f2b3d}
+  .doc:last-child{border-bottom:0}
+  .doc .ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:10px;font-weight:800}
+  .ico.pdf{background:#31202a;color:#e79aa0}
+  .ico.img{background:#1c2b42;color:#9dc0ee}
+  .ico.xls{background:#16301f;color:#8fd7a8}
+  .ico.mail{background:#212c3d;color:#9aa8bd}
+  .doc .nm{font-size:12.5px;font-weight:600}
+  .doc .sz{font-size:11px;color:var(--muted)}
+  .doc .date{margin-left:auto;font-size:11px;color:var(--muted)}
+
+  .money{display:flex;align-items:baseline;gap:8px}
+  .money .big{font-size:22px;font-weight:700;letter-spacing:-.02em}
+  .money .cur{font-size:12px;color:var(--muted)}
+  .bar{height:6px;border-radius:3px;background:#1e2a3d;margin-top:8px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--ok);width:30%}
+
+  .footer{display:flex;align-items:center;gap:10px;padding:12px 22px 16px;border-top:1px solid var(--line);background:var(--rail)}
+  .footer .note{color:var(--muted);font-size:12px}
+  .footer .right{margin-left:auto;display:flex;gap:8px}
+
+  /* ── pulpit ─────────────────────────────────────── */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:16px 22px 0}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  .kpi span{display:block;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:650}
+  .kpi b{display:block;font-size:25px;font-weight:700;letter-spacing:-.02em;margin-top:6px}
+  .kpi i{font-style:normal;font-size:11.5px;color:var(--muted)}
+  .kpi.alert{border-color:#4a3a1c;background:#1d1a12}
+
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:650;padding:4px 6px}
+  td{padding:9px 6px;border-top:1px solid #1f2b3d;font-size:12.5px}
+  td.name{font-weight:600}
+  .right{text-align:right}
+  .pill{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.d3{background:#331d20;color:#f0a1a3}
+  .pill.d7{background:#33280f;color:#e8c07a}
+  .pill.ok{background:#16301f;color:#8fd7a8}
+
+  .week{display:flex;gap:6px;margin-top:4px}
+  .day{flex:1;border-radius:10px;background:#141d2b;padding:7px 6px;text-align:center;border:1px solid transparent}
+  .day.today{border-color:var(--accent);background:#16233a}
+  .day b{display:block;font-size:12px}
+  .day span{font-size:10px;color:var(--muted)}
+  .ev{font-size:9.5px;padding:2px 4px;border-radius:4px;margin-top:4px;text-align:left;line-height:1.2}
+  .ev.a{background:#1b2b45;color:#9dc0ee}
+  .ev.b{background:#16301f;color:#8fd7a8}
+  .ev.c{background:#33280f;color:#e8c07a}
+
+  .bars{display:flex;align-items:flex-end;gap:10px;height:96px;margin-top:6px}
+  .bars .b{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;font-size:10px;color:var(--muted)}
+  .bars .b i{display:block;width:100%;min-height:8px;border-radius:6px 6px 3px 3px;background:#26374f}
+  .bars .b.peak i{background:var(--accent)}
+
+  .list{display:flex;flex-direction:column;gap:8px}
+  .item{display:flex;align-items:center;gap:9px;font-size:12.5px}
+  .item .meta{color:var(--muted);font-size:11px;margin-left:auto;white-space:nowrap}
+  .empty{border:1.5px dashed #2b3a52;border-radius:12px;padding:14px;color:var(--muted);font-size:12px;text-align:center;background:#131b28}
+
+  /* ── ustawienia / paleta ─────────────────────────── */
+  .settings{flex:1;padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:18px;overflow:hidden}
+  .swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;row-gap:30px;margin-top:8px}
+  .sw{height:44px;border-radius:12px;border:2px solid transparent;position:relative}
+  .sw.sel{border-color:#ffffff;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+  .sw span{position:absolute;bottom:-17px;left:0;right:0;text-align:center;font-size:9.5px;color:var(--muted);white-space:nowrap}
+  .preview{margin-top:24px;border-radius:14px;border:1px solid var(--line);overflow:hidden}
+  .preview .ph{height:26px;display:flex;align-items:center;gap:6px;padding:0 10px;font-size:10px;color:#08111f;font-weight:700}
+  .preview .pb{padding:12px;background:var(--card);display:flex;flex-direction:column;gap:8px}
+  .preview .pl{height:9px;border-radius:5px;background:#22304a}
+  .preview .pl.s{width:62%}
+  .preview .pbtn{align-self:flex-start;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;color:#08111f}
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:10px}
+  .legend{font-size:11.5px;color:var(--muted);line-height:1.6}
+  .legend b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- ══════════ 1. KARTOTEKA ══════════ -->
+<div class="page" id="p1">
+  <aside class="rail">
+    <div class="brand"><span class="dot">K</span> Karpatia</div>
+    <h4>Zlecenia</h4>
+    <div class="proj active"><span class="swatch warn"></span><div class="txt"><b>Kowalski Jan</b><span>Kuchnia · montaż 18.11</span></div></div>
+    <div class="proj"><span class="swatch danger"></span><div class="txt"><b>Nowak Anna</b><span>Szafa · montaż 14.11</span></div></div>
+    <div class="proj"><span class="swatch ok"></span><div class="txt"><b>Wiśniewscy</b><span>Salon · montaż 26.11</span></div></div>
+    <div class="proj"><span class="swatch ok"></span><div class="txt"><b>Zieliński Marek</b><span>Garderoba · termin otwarty</span></div></div>
+    <div class="spacer"></div>
+    <div class="bottom">
+      <div>▦ Pulpit zarządzania</div>
+      <div>◫ Biblioteka tekstur</div>
+      <div>⚙ Ustawienia</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="who">
+        <div class="avatar">JK</div>
+        <div>
+          <b>Kowalski Jan</b>
+          <span>ul. Ogrodowa 14/3, 34-400 Nowy Targ · tel. 602 118 447 · j.kowalski@mail.pl</span>
+        </div>
+      </div>
+      <div class="badges">
+        <div class="badge alert"><span>Montaż</span><b>18.11 · 08:00</b></div>
+        <div class="badge"><span>Oferta</span><b>24 800 zł</b></div>
+        <div class="badge"><span>Zaliczka</span><b>7 440 zł</b></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <div class="card">
+          <h3>Montaż</h3>
+          <div class="mount">
+            <div>
+              <div class="date">18 listopada</div>
+              <div class="sub">poniedziałek · 08:00–16:00 · ekipa: R. Caban, T. Sowa</div>
+            </div>
+            <div class="left">
+              <span class="chip soft">za 7 dni</span>
+              <div class="btns"><button class="btn">Zmień termin</button><button class="btn ghost">Przypomnij</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Adres montażu</h3>
+          <div class="map"><div class="road r1"></div><div class="road r2"></div><svg class="pin" width="26" height="26" viewBox="0 0 26 26" style="position:absolute;left:46%;top:40%">
+                <circle cx="13" cy="13" r="11" fill="none" stroke="#d9534f" stroke-width="2" opacity="0.55"/>
+                <circle cx="13" cy="13" r="7" fill="#d9534f"/>
+                <circle cx="13" cy="13" r="3" fill="#0e141f"/>
+              </svg><div class="label">Ogrodowa 14 · Nowy Targ</div></div>
+          <div class="row" style="margin-top:10px"><span class="k">Wjazd / uwagi</span><span class="v">brama od podwórza, kod 2244</span></div>
+        </div>
+
+        <div class="card">
+          <h3>Maile — miejsce zarezerwowane</h3>
+          <div class="mailbox">
+            <div class="bubble them">Dzień dobry, przesyłam wymiary kuchni i zdjęcia ścian.
+              <div class="thumbs"><div class="thumb">IMG</div><div class="thumb pdf">PDF</div><div class="thumb">IMG</div></div>
+            </div>
+            <div class="bubble me" style="margin-top:8px">Dziękuję, w poniedziałek potwierdzę montaż.</div>
+            <div class="mailnote">Podgląd poglądowy — docelowo wątki ze skrzynki. Tu tylko miejsce, podłączymy później.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3>Zamówienie</h3>
+          <div class="money"><span class="big">24 800</span><span class="cur">zł</span></div>
+          <div class="bar"><i></i></div>
+          <div class="row" style="margin-top:10px"><span class="k">Zaliczka wpłacona</span><span class="v">7 440 zł (30%)</span></div>
+          <div class="row"><span class="k">Pozostało</span><span class="v">17 360 zł</span></div>
+          <div class="row"><span class="k">Zakres</span><span class="v">5 szafek · blat · cokół</span></div>
+          <div class="row"><span class="k">Zmiany klienta</span><span class="v">front z dębu → lakier mat</span></div>
+        </div>
+
+        <div class="card">
+          <h3>Dokumenty</h3>
+          <div class="doc"><div class="ico pdf">PDF</div><div><div class="nm">Umowa – Kowalski</div><div class="sz">412 kB</div></div><div class="date">04.11</div></div>
+          <div class="doc"><div class="ico img">IMG</div><div><div class="nm">Skan pomieszczenia</div><div class="sz">18 MB</div></div><div class="date">02.11</div></div>
+          <div class="doc"><div class="ico xls">XLS</div><div><div class="nm">Wycena v3</div><div class="sz">96 kB</div></div><div class="date">29.10</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Notatki</h3>
+          <div style="font-size:12.5px;color:#b9c3d2;line-height:1.45">
+            Klient chce fronty bez uchwytów (push-to-open). Zmywarka przesunięta o 200 mm w prawo.
+            Blat kamień — zamówić po zatwierdzeniu kolorystyki.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="note">Ostatnia zmiana: dziś 14:32 · projekt odblokowany</span>
+      <div class="right">
+        <button class="btn">Edytuj plan</button>
+        <button class="btn">Dodaj dokument</button>
+        <button class="btn primary">Zablokuj projekt</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ══════════ 2. PULPIT ══════════ -->
+<div class="page" id="p2">
+  <aside class="rail">
+    <div class="brand"><span class="dot">K</span> Karpatia</div>
+    <div class="nav active">▦ Pulpit</div>
+    <div class="nav">▤ Zlecenia</div>
+    <div class="nav">◫ Biblioteka tekstur</div>
+    <div class="nav">✉ Maile</div>
+    <div class="nav">⚙ Ustawienia</div>
+    <div class="spacer"></div>
+    <div style="padding:10px;border-radius:12px;background:#151e2c;border:1px solid var(--line);font-size:12px">
+      <b style="display:block;font-size:13px">Radosław Caban</b>właściciel · 4 ekipy
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700;letter-spacing:-.01em">Pulpit</div>
+        <div style="color:var(--muted);font-size:12.5px">wtorek, 11 listopada 2026</div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;width:290px;color:var(--muted);font-size:12.5px">⌕ Szukaj klienta, adresu, zlecenia…</div>
+      <button class="btn primary">+ Nowe zlecenie</button>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><span>Zlecenia w toku</span><b>12</b><i>3 nowe w tym tygodniu</i></div>
+      <div class="kpi"><span>Montaże w tym tygodniu</span><b>4</b><i>najbliższy: czw 14.11</i></div>
+      <div class="kpi"><span>Wartość w pipeline</span><b>186 400 zł</b><i>oferty oczekujące</i></div>
+      <div class="kpi alert"><span>Zaległe zaliczki</span><b>3</b><i>12 400 zł do wpłaty</i></div>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <div class="card">
+          <h3>Najpilniejsze zlecenia <span>sortuj: termin montażu</span></h3>
+          <table>
+            <thead><tr><th>Klient</th><th>Zakres</th><th>Montaż</th><th>Status</th><th class="right">Wartość</th></tr></thead>
+            <tbody>
+              <tr><td class="name">Nowak Anna</td><td>Szafa wnękowa</td><td>14.11 · 07:30</td><td><span class="pill d3">za 3 dni</span></td><td class="right">9 200 zł</td></tr>
+              <tr><td class="name">Kowalski Jan</td><td>Kuchnia 5 szafek</td><td>18.11 · 08:00</td><td><span class="pill d7">za 7 dni</span></td><td class="right">24 800 zł</td></tr>
+              <tr><td class="name">Wiśniewscy</td><td>Salon + RTV</td><td>26.11 · 09:00</td><td><span class="pill ok">potwierdzony</span></td><td class="right">31 500 zł</td></tr>
+              <tr><td class="name">Zieliński Marek</td><td>Garderoba</td><td>termin otwarty</td><td><span class="pill ok">oferta</span></td><td class="right">7 800 zł</td></tr>
+              <tr><td class="name">Lewandowscy</td><td>Zabudowa pod schody</td><td>02.12 · 08:00</td><td><span class="pill ok">umówiony</span></td><td class="right">12 400 zł</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card" style="flex:1">
+          <h3>Ostatnia aktywność</h3>
+          <div class="list">
+            <div class="item"><div class="ico mail">✉</div><div>Kowalski Jan — „Re: wymiary kuchni"</div><div class="meta">14:32</div></div>
+            <div class="item"><div class="ico pdf">PDF</div><div>Umowa — Nowak Anna</div><div class="meta">12:10</div></div>
+            <div class="item"><div class="ico img">IMG</div><div>Skan pomieszczenia — Wiśniewscy</div><div class="meta">wczoraj</div></div>
+            <div class="item"><div class="ico mail">✉</div><div>Zieliński Marek — „termin montażu"</div><div class="meta">wczoraj</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3>Tydzień</h3>
+          <div class="week">
+            <div class="day"><b>10</b><span>pon</span></div>
+            <div class="day today"><b>11</b><span>wt</span><div class="ev a">Pomiar 14:00</div></div>
+            <div class="day"><b>12</b><span>śr</span><div class="ev b">Wycena</div></div>
+            <div class="day"><b>13</b><span>czw</span></div>
+            <div class="day"><b>14</b><span>pt</span><div class="ev c">Montaż 07:30</div></div>
+            <div class="day"><b>15</b><span>sob</span></div>
+            <div class="day"><b>16</b><span>niedz</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Oferty — ostatnie 6 miesięcy</h3>
+          <div class="bars">
+            <div class="b"><i style="height:38%"></i>VI</div>
+            <div class="b"><i style="height:55%"></i>VII</div>
+            <div class="b"><i style="height:44%"></i>VIII</div>
+            <div class="b"><i style="height:70%"></i>IX</div>
+            <div class="b peak"><i style="height:86%"></i>X</div>
+            <div class="b"><i style="height:62%"></i>XI</div>
+          </div>
+        </div>
+
+        <div class="card" style="flex:1">
+          <h3>Maile — miejsce zarezerwowane</h3>
+          <div class="empty">Tu pojawi się skrzynka powiązana z klientami.<br>Podłączymy później.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ══════════ 3. USTAWIENIA: KOLORYSTYKA ══════════ -->
+<div class="page" id="p3">
+  <aside class="rail">
+    <div class="brand"><span class="dot">K</span> Karpatia</div>
+    <div class="nav">▦ Pulpit</div>
+    <div class="nav">▤ Zlecenia</div>
+    <div class="nav">◫ Biblioteka tekstur</div>
+    <div class="nav">✉ Maile</div>
+    <div class="nav active">⚙ Ustawienia</div>
+    <div class="spacer"></div>
+    <div class="bottom"><div>Wersja 1.4 (112)</div><div>iPadOS 18.2</div></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700;letter-spacing:-.01em">Ustawienia</div>
+        <div style="color:var(--muted);font-size:12.5px">Wygląd · kamera · zestawienie · dane</div>
+      </div>
+      <div class="badges"><button class="btn">Anuluj</button><button class="btn primary">Zapisz</button></div>
+    </div>
+
+    <div class="settings">
+      <div class="col">
+        <div class="card">
+          <h3>Kolorystyka</h3>
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:4px">
+            Akcent z palety systemowej iOS. Tło aplikacji zostaje granatowe — zmienia się kolor akcentu, plakietek i podświetleń.
+          </div>
+
+          <div class="swatches">
+            <div class="sw sel" style="background:#5b8def"><span>Granat</span></div>
+            <div class="sw" style="background:#0a84ff"><span>Blue</span></div>
+            <div class="sw" style="background:#5e5ce6"><span>Indigo</span></div>
+            <div class="sw" style="background:#bf5af2"><span>Purple</span></div>
+            <div class="sw" style="background:#ff375f"><span>Pink</span></div>
+            <div class="sw" style="background:#ff453a"><span>Red</span></div>
+            <div class="sw" style="background:#ff9f0a"><span>Orange</span></div>
+            <div class="sw" style="background:#ffd60a"><span>Yellow</span></div>
+            <div class="sw" style="background:#32d74b"><span>Green</span></div>
+            <div class="sw" style="background:#63e6e2"><span>Mint</span></div>
+            <div class="sw" style="background:#64d2ff"><span>Teal</span></div>
+            <div class="sw" style="background:#ac8e68"><span>Brown</span></div>
+          </div>
+
+          <div class="preview">
+            <div class="ph" style="background:#5b8def">Karpatia · podgląd akcentu</div>
+            <div class="pb">
+              <div class="pl"></div><div class="pl s"></div>
+              <div class="pbtn" style="background:#5b8def">Zablokuj projekt</div>
+            </div>
+          </div>
+          <div class="hint">Dodatkowo: „Systemowa" (podąża za ustawieniem iOS) i „Grafitowa" (bez akcentu, wszystko w szarościach).</div>
+        </div>
+
+        <div class="card">
+          <h3>Wygląd</h3>
+          <div class="row"><span class="k">Motyw</span><span class="v">Ciemny granat ▾</span></div>
+          <div class="row"><span class="k">Gęstość list</span><span class="v">Standardowa ▾</span></div>
+          <div class="row"><span class="k">Zaokrąglenia</span><span class="v">16 pt ▾</span></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3>Jak to działa</h3>
+          <div class="legend">
+            <b>1. Jeden akcent w całym UI.</b> Przyciski, plakietki, aktywne pozycje listy, obramowania pól — wszystko bierze kolor z palety.<br><br>
+            <b>2. Tło się nie zmienia.</b> Granat (zdesaturowany) jest stały, bo pracujesz przy nim godzinami; zmiana akcentu nie „oślepia" po zmianie.<br><br>
+            <b>3. Kontrast.</b> Na akcencie tekst jest ciemny (granatowy) albo biały — wybierany automatycznie wg jasności koloru.<br><br>
+            <b>4. Zapamiętane per urządzenie.</b> iPad i Mac mogą mieć inny akcent; ustawienie jest w UserDefaults, nie w projekcie klienta.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Paleta iOS — pełna lista</h3>
+          <div class="legend">
+            systemBlue · systemIndigo · systemPurple · systemPink · systemRed ·
+            systemOrange · systemYellow · systemGreen · systemMint · systemTeal ·
+            systemCyan · systemBrown · systemGray · systemGray2…6<br><br>
+            <b>Uwaga:</b> kolory systemowe zmieniają odcień w trybie jasnym/ciemnym — u nas tryb jest zawsze ciemny, więc bierzemy wariant „dark".
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>
