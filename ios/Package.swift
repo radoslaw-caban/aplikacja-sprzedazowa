@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "KitchenScene", targets: ["KitchenScene"]),
         .executable(name: "KitchenApp", targets: ["KitchenApp"]),
         .executable(name: "KitchenChecks", targets: ["KitchenChecks"]),
+        .executable(name: "FitDebug", targets: ["FitDebug"]),
     ],
     targets: [
         .target(name: "KitchenCore"),
@@ -23,6 +24,10 @@ let package = Package(
         .executableTarget(
             name: "KitchenChecks",
             dependencies: ["KitchenCore", "KitchenScene"]
+        ),
+        .executableTarget(
+            name: "FitDebug",
+            dependencies: ["KitchenCore"]
         ),
         .testTarget(
             name: "KitchenCoreTests",

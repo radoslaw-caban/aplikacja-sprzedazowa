@@ -68,6 +68,11 @@ struct ContentView: View {
                         } label: {
                             Label("Auto-dopasuj do pokoju", systemImage: "square.dashed")
                         }
+                        Button {
+                            Task { await alignFloor() }
+                        } label: {
+                            Label("Ustaw podłogę na 0", systemImage: "square.bottomhalf.filled")
+                        }
                         Toggle("Pokaż chmurę punktów", isOn: $showPoints)
                         Button {
                             picking.toggle()
@@ -268,6 +273,24 @@ struct ContentView: View {
         status = String(format: "powierzchnia: %d wokseli, %d trójkątów (%.1f s)",
                         geo.voxelCount, geo.buckets.reduce(0) { $0 + $1.indices.count / 3 },
                         Date().timeIntervalSince(t0))
+    }
+
+    /// Dopasowanie po wykrytej podłodze: podłoga skanu na y = 0, reszta bez zmian.
+    private func alignFloor() async {
+        guard let scan else { return }
+        let k = scan.unitScaleToMeters
+        let source = scan.decimated(maxPoints: 120_000)
+        let points = source.positions.map { $0 * k }
+        let fit = await Task.detached(priority: .userInitiated) {
+            ScanFit.detect(points: points)
+        }.value
+        guard fit.isValid else {
+            status = "nie znalazłem podłogi w skanie"
+            return
+        }
+        transform = ScanFit.alignFloorOnly(points: points, result: fit, room: room, currentScale: transform.scale)
+        status = String(format: "podłoga na 0 (wykryta na %.2f m, pokrycie %.0f%%)", fit.floorY, fit.floorCoverage * 100)
+        Task { await rebuildSurface(cloud: scan) }
     }
 
     /// Dotknięcie w scenie → promień z kamery → pierwszy woksel skanu.

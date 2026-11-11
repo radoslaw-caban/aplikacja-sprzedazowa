@@ -77,7 +77,10 @@ TestFlight: po wgraniu build pojawia się w App Store Connect → TestFlight.
 - [x] Powierzchnia skanu: wokselizacja 2,5 cm z kolorami (64 kubełki), liczenie w tle
 - [x] Wskazywanie punktów skanu (tap → promień → woksel, DDA)
 - [x] Rejestracja ściany: 2 punkty + realna długość → obrót i skala, punkt zaczepienia stały
-- [ ] Wygładzanie powierzchni (normalne, decymacja) i dziury po niezeskanowanych ścianach
+- [x] Detekcja podłogi w skanie (histogram warstw) + „Ustaw podłogę na 0”
+- [x] Surface nets z normalnymi i spójną orientacją (test: sfera, objętość z dywergencji)
+- [ ] Auto-obrót po ścianach (detekcja kąta) — WIP, na razie narzędzie dwupunktowe
+- [ ] Kadr kamery przy skanie większym od pokoju (kamera wpada do środka chmury)
 - [ ] Wokselizacja w release: 1,75 s dla 200 tys. pkt; w debug ~4–9 s (pakiet kompiluje się bez -O)
 - [ ] Panele: edycja wnętrza, wycena, oferta PDF, warianty
 - [ ] Oświetlenie: HDRI w bundle + `EnvironmentResource` dla IBL

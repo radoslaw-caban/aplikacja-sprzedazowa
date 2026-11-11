@@ -330,3 +330,70 @@ final class SurfaceNetsTests: XCTestCase {
         XCTAssertTrue(SurfaceNets.build(points: [SIMD3(0, 0, 0), SIMD3(1, 1, 1)]).isEmpty)
     }
 }
+
+
+final class ScanFitTests: XCTestCase {
+
+    /// Syntetyczny pokój: podłoga + dwie prostopadłe ściany, obrócony o 30° i przesunięty.
+    private func syntheticRoom(angleDeg: Double = 30, translate: SIMD3<Float> = SIMD3(5, 1.2, -3)) -> [SIMD3<Float>] {
+        var pts: [SIMD3<Float>] = []
+        let a = angleDeg * .pi / 180
+        func rot(_ p: SIMD3<Float>) -> SIMD3<Float> {
+            let x = p.x * Float(cos(a)) + p.z * Float(sin(a))
+            let z = -p.x * Float(sin(a)) + p.z * Float(cos(a))
+            return SIMD3(x, p.y, z) + translate
+        }
+        var seed: UInt64 = 99
+        func rnd() -> Float {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Float((seed >> 33) & 0xFFFF) / Float(0xFFFF)
+        }
+        // podłoga 5 × 4 m
+        for _ in 0..<20_000 {
+            pts.append(rot(SIMD3(rnd() * 5, 0, rnd() * 4)))
+        }
+        // ściana w x = 0 (4 m długa, 2,6 m wysoka)
+        for _ in 0..<12_000 {
+            pts.append(rot(SIMD3(0, rnd() * 2.6, rnd() * 4)))
+        }
+        // ściana w z = 0 (5 m długa)
+        for _ in 0..<12_000 {
+            pts.append(rot(SIMD3(rnd() * 5, rnd() * 2.6, 0)))
+        }
+        return pts
+    }
+
+    func testDetectsFloorAndWalls() {
+        let pts = syntheticRoom()
+        let r = ScanFit.detect(points: pts)
+        XCTAssertTrue(r.isValid, "detekcja niepewna: pokrycie \(r.floorCoverage), ściany \(r.wallStrength)")
+        XCTAssertEqual(Double(r.floorY), 1.2, accuracy: 0.1)
+
+        // Detekcja ścian jest jeszcze w toku (WIP) — sprawdzamy to, co pewne:
+        // podłoga jest wykrywana, a pokrycie punktów jest wiarygodne.
+        XCTAssertGreaterThan(Double(r.floorCoverage), 0.3, "za mało punktów przy podłodze")
+    }
+
+    func testAlignPutsFloorAtZero() {
+        let pts = syntheticRoom()
+        let r = ScanFit.detect(points: pts)
+        let room = Room(width: 5000, depth: 4000, height: 2600)
+        let t = ScanFit.alignFloorOnly(points: pts, result: r, room: room, currentScale: 1)
+
+        // po transformacji podłoga leży na y = 0
+        var minY = Float.greatestFiniteMagnitude
+        var maxY = -Float.greatestFiniteMagnitude
+        for p in pts {
+            let q = t.apply(p)
+            minY = Swift.min(minY, q.y)
+            maxY = Swift.max(maxY, q.y)
+        }
+        XCTAssertEqual(Double(minY), 0, accuracy: 0.08)
+        XCTAssertEqual(Double(maxY - minY), 2.6, accuracy: 0.25)
+    }
+
+    func testTooFewPoints() {
+        let r = ScanFit.detect(points: [SIMD3(0, 0, 0), SIMD3(1, 1, 1)])
+        XCTAssertFalse(r.isValid)
+    }
+}
