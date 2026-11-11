@@ -1,4 +1,5 @@
 import XCTest
+import simd
 @testable import KitchenCore
 
 final class GeneratorTests: XCTestCase {
@@ -262,5 +263,59 @@ final class RegistrationTests: XCTestCase {
         // kierunek nadal równoległy do X, mimo kumulacji obrotu
         let a = aligned.apply(p1), b = aligned.apply(p2)
         XCTAssertEqual(Double(b.z - a.z), 0, accuracy: 0.01)
+    }
+}
+
+
+final class SurfaceNetsTests: XCTestCase {
+
+    /// Sfera z punktów — izopowierzchnia powinna ją odtworzyć.
+    private func spherePoints(radius: Float = 0.5, count: Int = 20_000) -> [SIMD3<Float>] {
+        var out: [SIMD3<Float>] = []
+        out.reserveCapacity(count)
+        var seed: UInt64 = 12345
+        func rnd() -> Float {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Float((seed >> 33) & 0xFFFFFF) / Float(0xFFFFFF)
+        }
+        for _ in 0..<count {
+            let u = rnd() * 2 - 1
+            let phi = rnd() * .pi * 2
+            let r = (1 - u * u).squareRoot()
+            out.append(SIMD3(r * cos(phi), u, r * sin(phi)) * radius)
+        }
+        return out
+    }
+
+    func testSphereSurface() {
+        let mesh = SurfaceNets.build(points: spherePoints(), options: {
+            var o = SurfaceNets.Options()
+            o.cell = 0.05
+            o.isoLevel = 0.3
+            return o
+        }())
+        XCTAssertFalse(mesh.isEmpty, "siatka nie powstała")
+        XCTAssertGreaterThan(mesh.positions.count, 200)
+        XCTAssertEqual(mesh.positions.count, mesh.normals.count)
+
+        // obrys zbliżony do średnicy sfery (1 m)
+        let w = mesh.bounds.max.x - mesh.bounds.min.x
+        XCTAssertEqual(Double(w), 1.0, accuracy: 0.2)
+
+        // normalne są jednostkowe i skierowane na zewnątrz (średnio)
+        var outward: Float = 0
+        for (p, n) in zip(mesh.positions, mesh.normals) {
+            XCTAssertEqual(Double(length(n)), 1.0, accuracy: 0.01)
+            outward += dot(normalize(p), n)
+        }
+        XCTAssertGreaterThan(outward / Float(mesh.positions.count), 0.5, "normalne powinny wskazywać na zewnątrz")
+    }
+
+    func testEmptyInput() {
+        XCTAssertTrue(SurfaceNets.build(points: []).isEmpty)
+    }
+
+    func testTooFewPoints() {
+        XCTAssertTrue(SurfaceNets.build(points: [SIMD3(0, 0, 0), SIMD3(1, 1, 1)]).isEmpty)
     }
 }

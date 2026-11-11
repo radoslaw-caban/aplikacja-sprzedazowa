@@ -20,8 +20,6 @@ public struct PreviewCamera: Sendable {
         room: Room,
         scanBounds: (min: SIMD3<Float>, max: SIMD3<Float>)? = nil
     ) -> PreviewCamera {
-        let roomHalfX = Float(room.width / 2000) - 0.45
-        let roomHalfZ = Float(room.depth / 2000) - 0.45
         let roomHeight = Float(room.height / 1000)
 
         guard let b = scanBounds else {
@@ -37,8 +35,11 @@ public struct PreviewCamera: Sendable {
         let spanZ = b.max.z - b.min.z
         let eyeY = min(roomHeight - 0.3, max(1.6, b.min.y + (b.max.y - b.min.y) * 0.55))
 
-        let px = max(-roomHalfX, min(roomHalfX, cx + spanX * 0.30))
-        let pz = max(-roomHalfZ, min(roomHalfZ, cz + spanZ * 0.55))
+        // kamerę stawiamy na zewnątrz obrytu skanu, żeby widzieć całość,
+        // ale nie dalej niż 2× jego najdłuższy bok
+        let span = max(spanX, spanZ)
+        let px = cx + spanX * 0.25
+        let pz = cz + span * 0.95
         let target = SIMD3<Float>(cx, max(b.min.y + 0.9, b.min.y), cz)
         return PreviewCamera(position: [px, eyeY, pz], target: target)
     }

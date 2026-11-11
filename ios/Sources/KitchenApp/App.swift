@@ -206,15 +206,15 @@ struct ContentView: View {
             scan = loaded.0
             status = loaded.1
             showScan = true
-            autoAlign()
+            autoAlign(cloud: loaded.0)
             return
         }
         showScan = true
     }
 
     /// Auto-dopasowanie: skala z obrytu, środek na środku pokoju, podłoga na 0.
-    private func autoAlign() {
-        guard let scan else { return }
+    private func autoAlign(cloud: PointCloud? = nil) {
+        guard let scan = cloud ?? self.scan else { return }
         let b = scan.robustBounds()
         let k = scan.unitScaleToMeters
         let fitted = ScanTransform.autoFit(
@@ -226,7 +226,7 @@ struct ContentView: View {
         transform = fitted
         scale = fitted.scale
         status = String(format: "skan dopasowany (skala %.2f)", fitted.scale)
-        Task { await rebuildSurface() }
+        Task { await rebuildSurface(cloud: scan) }
     }
 
     /// Suwaki obrotu i skali przeliczają transformację od nowa (z zachowaniem auto-dopasowania).
@@ -246,21 +246,28 @@ struct ContentView: View {
         Task { await rebuildSurface() }
     }
 
-    /// Wokselizacja w tle (czysta funkcja), encja budowana raz na wątku głównym.
-    private func rebuildSurface() async {
-        guard let scan else { surfaceEntity = nil; return }
+    /// Powierzchnia w tle (surface nets), encja budowana raz na wątku głównym.
+    private func rebuildSurface(cloud: PointCloud? = nil) async {
+        guard let scan = cloud ?? self.scan else { surfaceEntity = nil; return }
         let t = transform
         let t0 = Date()
-        print("[surface] start liczenia")
-        let geo = await Task.detached(priority: .userInitiated) {
+        status = "liczę powierzchnię skanu…"
+        let built = await Task.detached(priority: .userInitiated) { () -> (VoxelSurfaceBuilder.Geometry, VoxelGrid) in
             var opts = VoxelSurfaceBuilder.Options()
-            opts.maxPoints = 120_000
-            return VoxelSurfaceBuilder.geometry(scan, transform: t, options: opts)
+            opts.maxPoints = 150_000
+            opts.cell = 0.03
+            let geo = VoxelSurfaceBuilder.geometry(scan, transform: t, options: opts)
+            let k = scan.unitScaleToMeters
+            let dec = scan.decimated(maxPoints: 150_000)
+            let pts = dec.positions.map { t.apply($0 * k) }
+            return (geo, VoxelGrid(points: pts, cellSize: 0.05))
         }.value
-        grid = VoxelGrid(cellSize: 0.05, cells: geo.pickCells)
-        print(String(format: "[surface] gotowe w %.1f s: woksele %d, siatka %d", Date().timeIntervalSince(t0), geo.voxelCount, geo.pickCells.count))
+        let geo = built.0
+        grid = built.1
         surfaceEntity = VoxelSurfaceBuilder.makeEntity(geo)
-        status = "powierzchnia: \(geo.voxelCount) wokseli"
+        status = String(format: "powierzchnia: %d wokseli, %d trójkątów (%.1f s)",
+                        geo.voxelCount, geo.buckets.reduce(0) { $0 + $1.indices.count / 3 },
+                        Date().timeIntervalSince(t0))
     }
 
     /// Dotknięcie w scenie → promień z kamery → pierwszy woksel skanu.

@@ -217,6 +217,35 @@ func runChecks() {
         print("    (pominięto — brak pliku skanu)")
     }
 
+    print("\nSurface nets na realnym skanie")
+    if FileManager.default.fileExists(atPath: realPath) {
+        if let cloud = try? PLYParser.parse(contentsOf: URL(fileURLWithPath: realPath)) {
+            let k = cloud.unitScaleToMeters
+            let dec = cloud.decimated(maxPoints: 200_000)
+            let points = dec.positions.map { $0 * k }
+            var opts = SurfaceNets.Options()
+            opts.cell = 0.032
+            opts.isoLevel = 0.45
+            let rb = cloud.robustBounds()
+            opts.bounds = (rb.min * k, rb.max * k)
+            var lo = points[0], hi = points[0]
+            for q in points {
+                lo = SIMD3(Swift.min(lo.x, q.x), Swift.min(lo.y, q.y), Swift.min(lo.z, q.z))
+                hi = SIMD3(Swift.max(hi.x, q.x), Swift.max(hi.y, q.y), Swift.max(hi.z, q.z))
+            }
+            print(String(format: "    debug: %d pkt, obrys %.1f × %.1f × %.1f, k = %.3f",
+                         points.count, hi.x - lo.x, hi.y - lo.y, hi.z - lo.z, k))
+            let started = Date()
+            let mesh = SurfaceNets.build(points: points, colors: dec.colors, options: opts)
+            let seconds = Date().timeIntervalSince(started)
+            print(String(format: "    wierzchołki: %d, trójkąty: %d, czas: %.2f s",
+                         mesh.positions.count, mesh.indices.count / 3, seconds))
+            r.check("siatka surface nets powstała", !mesh.isEmpty)
+            r.check("kolory wierzchołków policzone", mesh.colors.count == mesh.positions.count)
+            r.check("surface nets < 4 s", seconds < 4, String(format: "= %.2f s", seconds))
+        }
+    }
+
     let passed = r.checks - r.failures
     print("\n\(passed)/\(r.checks) warunków spełnionych")
     if r.failures > 0 {
