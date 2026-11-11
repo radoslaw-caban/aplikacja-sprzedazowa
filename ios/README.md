@@ -74,7 +74,8 @@ TestFlight: po wgraniu build pojawia się w App Store Connect → TestFlight.
 - [x] Render chmury w RealityKit (LowLevelMesh, kubełki RGB, 0,49 mln pkt na iPadzie)
 - [x] Wyrównanie skanu: auto-dopasowanie (skala/środek/podłoga) + ręczne odsunięcia i obrót
 - [x] Model pomieszczenia (podłoga, ściany, listwy) jako punkt odniesienia
-- [ ] Większe punkty (geometra Modifier w Metal) — teraz 1 px
+- [x] Powierzchnia skanu: wokselizacja 2,5 cm z kolorami (64 kubełki), liczenie w tle
+- [ ] Wygładzanie powierzchni (normalne, decymacja) i dziury po niezeskanowanych ścianach
 - [ ] Panele: edycja wnętrza, wycena, oferta PDF, warianty
 - [ ] Oświetlenie: HDRI w bundle + `EnvironmentResource` dla IBL
 - [ ] Zapis projektów i plików: SwiftData

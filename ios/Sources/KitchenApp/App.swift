@@ -9,7 +9,7 @@ struct KitchenApp: App {
         Library.make(Library.base[1], at: -600, z: -2200),
     ]
 
-    var body: some Scene {
+    var body: some SwiftUI.Scene {
         WindowGroup {
             ContentView(cabinets: $cabinets)
                 #if os(macOS)
@@ -30,6 +30,8 @@ struct ContentView: View {
     @State private var transform = ScanTransform()
     @State private var rotationDeg: Double = 0
     @State private var scale: Double = 1
+    @State private var surfaceEntity: ScanSurface?
+    @State private var showPoints = false
 
     var body: some View {
         NavigationSplitView {
@@ -62,6 +64,7 @@ struct ContentView: View {
                         } label: {
                             Label("Auto-dopasuj do pokoju", systemImage: "square.dashed")
                         }
+                        Toggle("Pokaż chmurę punktów", isOn: $showPoints)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Obrót: \(Int(rotationDeg))°").font(.caption)
                             Slider(value: $rotationDeg, in: 0...360, step: 1) { _ in
@@ -96,7 +99,7 @@ struct ContentView: View {
             #endif
         } detail: {
             VStack(spacing: 0) {
-                SceneView(cabinets: cabinets, room: room, scan: showScan ? scan : nil, transform: transform)
+                SceneView(cabinets: cabinets, room: room, scan: showScan ? scan : nil, transform: transform, surfaceEntity: surfaceEntity, showPoints: showPoints)
 
                 HStack(spacing: 12) {
                     Text("\(cabinets.count) szafek").font(.callout)
@@ -180,6 +183,7 @@ struct ContentView: View {
         transform = fitted
         scale = fitted.scale
         status = String(format: "skan dopasowany (skala %.2f)", fitted.scale)
+        Task { await rebuildSurface() }
     }
 
     /// Suwaki obrotu i skali przeliczają transformację od nowa (z zachowaniem auto-dopasowania).
@@ -196,6 +200,18 @@ struct ContentView: View {
         fitted.scale *= scale
         fitted.offset.y *= scale
         transform = fitted
+        Task { await rebuildSurface() }
+    }
+
+    /// Wokselizacja w tle (czysta funkcja), encja budowana raz na wątku głównym.
+    private func rebuildSurface() async {
+        guard let scan else { surfaceEntity = nil; return }
+        let t = transform
+        let geo = await Task.detached(priority: .userInitiated) {
+            VoxelSurfaceBuilder.geometry(scan, transform: t)
+        }.value
+        surfaceEntity = VoxelSurfaceBuilder.makeEntity(geo)
+        status = "powierzchnia: \(geo.voxelCount) wokseli"
     }
 
     /// W aplikacji: z bundle. W `swift run` na Macu: z repo.

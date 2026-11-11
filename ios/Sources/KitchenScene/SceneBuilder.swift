@@ -102,7 +102,7 @@ public enum SceneBuilder {
 
     /// Pomieszczenie: podłoga, cztery ściany i listwy przypodłogowe.
     @MainActor
-    public static func buildRoom(_ room: Room) -> Entity {
+    public static func buildRoom(_ room: Room, walls: Bool = true) -> Entity {
         let root = Entity()
         root.name = "room"
 
@@ -114,7 +114,7 @@ public enum SceneBuilder {
         root.addChild(floor)
 
         let wallMaterial = SimpleMaterial(color: color("#e8e0d5"), isMetallic: false)
-        for i in 0..<4 {
+        for i in 0..<(walls ? 4 : 0) {
             let size = room.wallSize(i)
             let pos = room.wallPosition(i)
             let wall = ModelEntity(
