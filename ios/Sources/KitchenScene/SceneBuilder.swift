@@ -122,9 +122,17 @@ public enum SceneBuilder {
     /// Wnętrze (podłoga, ściany, listwy) jest potrzebne do widoku kuchni;
     /// elewacja, dachy, przeszklenia, taras i basen powstają w `VillaBuilder`.
     @MainActor
-    public static func buildRoom(_ room: Room, walls: Bool = true) -> Entity {
+    public static func buildRoom(_ room: Room, walls: Bool = true, scanPlan: ScanPlan? = nil) -> Entity {
         let root = Entity()
         root.name = "room"
+
+        // Dom ZE SKANU: cała bryła (podłoga, strop, ściany zewnętrzne z oknami,
+        // ścianki działowe) powstaje z planu zmierzonego w chmurze punktów.
+        // Wtedy nie rysujemy ścian z `Room`, bo zdublowałyby zmierzone.
+        if let scanPlan {
+            root.addChild(ScanHouseBuilder.entity(plan: scanPlan))
+            return root
+        }
 
         let houseW = meters(room.width)
         let houseD = meters(room.depth)

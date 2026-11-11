@@ -18,6 +18,9 @@ struct SceneView: View {
     var showEnvironment = true
     /// false = widok z zewnątrz (dom w otoczeniu)
     var interiorView = true
+    /// plan domu wyprowadzony ze skanu (chmura X9) — jeśli jest, bryła domu
+    /// powstaje z pomiaru, a nie z generatora willi
+    var scanPlan: ScanPlan?
     /// tryb wskazywania punktów skanu
     var picking = false
     /// znormalizowany punkt ekranu (0…1) po dotknięciu
@@ -58,7 +61,7 @@ struct SceneView: View {
             content.renderingEffects.motionBlur = .enabled
             #endif
             content.add(SceneBuilder.sunlight())
-            content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
+            content.add(SceneBuilder.buildRoom(room, walls: scan == nil, scanPlan: scanPlan))
             if showEnvironment, scan == nil {
                 let environment = EnvironmentBuilder.makeEntity(room: room)
                 cache.environment = environment
@@ -102,7 +105,7 @@ struct SceneView: View {
                 cache.signature = signature
                 content.entities.removeAll()
                 content.add(SceneBuilder.sunlight())
-                content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
+                content.add(SceneBuilder.buildRoom(room, walls: scan == nil, scanPlan: scanPlan))
                 if showEnvironment, scan == nil {
                     let environment = EnvironmentBuilder.makeEntity(room: room)
                     cache.environment = environment

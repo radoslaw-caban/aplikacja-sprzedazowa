@@ -75,7 +75,6 @@ public enum EnvironmentBuilder {
                                    heightRange: 60...150,
                                    tint: (0.50, 0.58, 0.64)))
         root.addChild(mountainRange(options: options, rng: &rng))
-        root.addChild(fogRings(radius: options.radius * 2.8, count: 22, height: 22, opacity: 0.18))
         root.addChild(clouds(options: options, rng: &rng))
         root.addChild(forest(options: options, rng: &rng, room: room))
         root.addChild(rocks(options: options, rng: &rng, room: room))
@@ -523,8 +522,8 @@ public enum EnvironmentBuilder {
         guard !patches.isEmpty else { return root }
 
         // Te same wymiary co ogrodzenie — pas roślin rośnie dokładnie wzdłuż płotu.
-        let halfW = Float(room.width / 2000) + 12
-        let halfD = Float(room.depth / 2000) + 14
+        let halfW = Float(room.width / 2000) + 7
+        let halfD = Float(room.depth / 2000) + 9
         let houseHalfX = Float(room.width / 2000) + 1.5
         let houseHalfZ = Float(room.depth / 2000) + 1.5
 
@@ -759,7 +758,7 @@ public enum EnvironmentBuilder {
         for i in 0..<10 {
             let side = i % 2 == 0 ? Float(1) : Float(-1)
             let x = side * rng.range(4, 18)
-            let z = Float(room.depth / 2000) + 14 + rng.range(1.5, 3.2)
+            let z = Float(room.depth / 2000) + 9 + rng.range(1.2, 2.6)
             guard let stone = ModelLibrary.entity(named: "stone_01", targetSize: rng.range(0.25, 0.6)) else { continue }
             stone.position = [x, terrainHeight(x, z), z]
             stone.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
@@ -805,8 +804,8 @@ public enum EnvironmentBuilder {
         let root = Entity()
         root.name = "fence"
 
-        let halfW = Float(room.width / 2000) + 12
-        let halfD = Float(room.depth / 2000) + 14
+        let halfW = Float(room.width / 2000) + 7
+        let halfD = Float(room.depth / 2000) + 9
         let pillarHeight: Float = 1.85
         let railHeight: Float = 1.45
         let spacing: Float = 3.2
@@ -935,8 +934,8 @@ public enum EnvironmentBuilder {
     static func sidewalk(room: Room) -> Entity {
         let root = Entity()
         root.name = "sidewalk"
-        let halfD = Float(room.depth / 2000) + 14
-        let z = halfD + 7.2
+        let halfD = Float(room.depth / 2000) + 9
+        let z = halfD + 6.2
 
         var material = PhysicallyBasedMaterial()
         if let texture = EnvironmentArt.photoTexture("paving_diff") {
@@ -966,8 +965,8 @@ public enum EnvironmentBuilder {
     static func ditch(room: Room) -> Entity {
         let root = Entity()
         root.name = "ditch"
-        let halfD = Float(room.depth / 2000) + 14
-        let z = halfD + 4.6
+        let halfD = Float(room.depth / 2000) + 9
+        let z = halfD + 3.8
 
         var soil = PhysicallyBasedMaterial()
         soil.baseColor = .init(tint: PlatformColor(red: 0.30, green: 0.27, blue: 0.20, alpha: 1))

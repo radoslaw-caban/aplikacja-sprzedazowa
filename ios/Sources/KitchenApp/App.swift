@@ -27,6 +27,8 @@ struct ContentView: View {
 
     @State private var showDocuments = false
     @State private var interiorView = false   // start: willa w otoczeniu (klient najpierw widzi dom)
+    /// bryła domu z chmury punktów (skan X9) zamiast willi proceduralnej
+    @State private var useScanHouse = true
     @State private var showScan = false
     @State private var showPlan = false
     @State private var planDraft = FloorPlan.rectangle()
@@ -40,7 +42,9 @@ struct ContentView: View {
             // Pole robocze: zablokowany = tylko 3D + kłódka,
             // odblokowany = pełny interfejs (zakładki, formularze, paski).
             if locked {
-                LockedWorkspace(model: model, interiorView: interiorView, locked: $locked)
+                LockedWorkspace(model: model, interiorView: interiorView,
+                                scanPlan: useScanHouse ? ScanPlan.bundled() : nil,
+                                locked: $locked)
                     .ignoresSafeArea(edges: .bottom)
             } else {
                 detail
@@ -227,6 +231,7 @@ struct ContentView: View {
                 // start na „Szczegółach zamówienia".
                 OrderFlowView(
                     model: model,
+                    scanPlan: useScanHouse ? ScanPlan.bundled() : nil,
                     interiorView: $interiorView,
                     locked: $locked,
                     openPlan: {
@@ -329,6 +334,13 @@ struct ContentView: View {
                 Label(interiorView ? "Wnętrze" : "Otoczenie",
                       systemImage: interiorView ? "house" : "tree")
             }
+            Button {
+                useScanHouse.toggle()
+            } label: {
+                Label(useScanHouse ? "Dom ze skanu" : "Willa",
+                      systemImage: useScanHouse ? "cube.transparent" : "building.2")
+            }
+            .help("Bryła domu z chmury punktów X9 (ScanPlan) albo willa proceduralna")
             Button { showScan = true } label: {
                 Label("Skanuj", systemImage: "sensor.tag.radiowaves.forward")
             }

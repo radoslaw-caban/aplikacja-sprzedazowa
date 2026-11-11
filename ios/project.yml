@@ -37,6 +37,9 @@ targets:
       - path: Resources/Textures
         type: folder
         buildPhase: resources
+      - path: Resources/Scans
+        type: folder
+        buildPhase: resources
       - path: ../app/public/dom-chmura.ply
         buildPhase: resources
     dependencies:
@@ -73,6 +76,9 @@ targets:
         type: folder
         buildPhase: resources
       - path: Resources/Textures
+        type: folder
+        buildPhase: resources
+      - path: Resources/Scans
         type: folder
         buildPhase: resources
       - path: ../app/public/dom-chmura.ply

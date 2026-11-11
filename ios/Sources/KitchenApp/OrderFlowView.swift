@@ -9,6 +9,8 @@ import KitchenCore
 /// kolejne widoki projektu 3D (główny, kuchnia, następne pomieszczenia).
 struct OrderFlowView: View {
     @Bindable var model: AppModel
+    /// plan domu ze skanu (chmura X9); nil = willa proceduralna
+    var scanPlan: ScanPlan?
     @Binding var interiorView: Bool
     @Binding var locked: Bool
     var openPlan: () -> Void
@@ -39,10 +41,10 @@ struct OrderFlowView: View {
                     .tag(1)
                 OrderDetailsPage(model: model)
                     .tag(2)
-                ProjectScenePage(model: model, interior: false, locked: locked,
+                ProjectScenePage(model: model, interior: false, scanPlan: scanPlan, locked: locked,
                                  note: "Dom w otoczeniu — widok dla klienta")
                     .tag(3)
-                ProjectScenePage(model: model, interior: true, locked: locked,
+                ProjectScenePage(model: model, interior: true, scanPlan: scanPlan, locked: locked,
                                  note: "Kuchnia — zabudowa w skali 1:1")
                     .tag(4)
                 NextRoomPage(model: model)
@@ -369,16 +371,24 @@ struct OrderDetailsPage: View {
 struct LockedWorkspace: View {
     @Bindable var model: AppModel
     var interiorView: Bool
+    /// plan domu ze skanu (chmura X9); nil = willa proceduralna
+    var scanPlan: ScanPlan?
     @Binding var locked: Bool
 
     var body: some View {
         ZStack {
             SceneView(
                 cabinets: model.current.cabinets,
-                room: model.current.room,
+
+                room: scanPlan.map { plan in
+                    Room(width: Double(plan.width) * 1000,
+                         depth: Double(plan.depth) * 1000,
+                         height: Double(plan.height) * 1000)
+                } ?? model.current.room,
                 scan: model.scan,
                 transform: model.scanTransform,
                 interiorView: interiorView,
+                scanPlan: scanPlan,
                 locked: true
             )
 
@@ -414,6 +424,8 @@ struct LockedWorkspace: View {
 struct ProjectScenePage: View {
     @Bindable var model: AppModel
     var interior: Bool
+    /// plan domu ze skanu (nil = willa proceduralna)
+    var scanPlan: ScanPlan?
     /// false = odblokowany: przeciąganie obraca projektem
     var locked: Bool
     var note: String
@@ -426,6 +438,7 @@ struct ProjectScenePage: View {
                 scan: model.scan,
                 transform: model.scanTransform,
                 interiorView: interior,
+                scanPlan: scanPlan,
                 locked: locked
             )
             Text(note)
