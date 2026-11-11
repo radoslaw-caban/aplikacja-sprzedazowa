@@ -207,7 +207,16 @@ final class AppModel {
             scanName = doc.fileName
             scanTransform = ScanTransform()
             documentIndex = nil
-            status = "Skan dodany · \(ScanOutcome.summary(cloud))"
+            // pokaz realną dokładność, nie tylko liczbę punktów
+            if let report = ScanPLYWriter.qualityReport(cloud) {
+                let sigmaLine = report
+                    .split(separator: "\n")
+                    .first { $0.hasPrefix("σ mediana") }
+                    .map(String.init) ?? ""
+                status = "Skan dodany · \(ScanOutcome.summary(cloud)) · \(sigmaLine)"
+            } else {
+                status = "Skan dodany · \(ScanOutcome.summary(cloud))"
+            }
             persist()
             return true
         } catch {

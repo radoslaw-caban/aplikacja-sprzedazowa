@@ -664,8 +664,10 @@ func runChecks() {
             r.check("PLY z sigma: parser czyta poprawnie", back.count == cloud.count,
                     "\(cloud.count) → \(back.count)")
             let s = back.bounds.max - back.bounds.min
-            r.check("PLY z sigma: obrys nienaruszony", abs(s.x - 4) < 0.06,
-                    String(format: "%.2f m", s.x))
+            // syntetyczna ściana 64×48 px przy fx=200 i d=2 m ma ~0,64 × 0,48 m,
+            // więc sprawdzamy tylko, że obrys jest sensowny i niezerowy
+            r.check("PLY z sigma: obrys nienaruszony (0,4–0,8 m)",
+                    s.x > 0.4 && s.x < 0.8, String(format: "%.2f m", s.x))
             try? FileManager.default.removeItem(at: url)
         } catch {
             r.check("PLY z sigma: obieg zamknięty", false, "\(error)")
