@@ -243,8 +243,12 @@ func runRoomModelChecks(_ r: Reporter) {
         if let line = RoomModel.fitLine(pts) {
             r.check("fitLine: kierunek poziomy", abs(line.direction.y) < 0.05,
                     String(format: "dy = %.3f", line.direction.y))
-            r.check("fitLine: zakres ~0…2 m",
-                    abs(line.tMin) < 0.05 && abs(line.tMax - 2) < 0.05,
+            // zakres jest mierzony OD CENTROIDU, więc dla punktów 0…2 m
+            // (środek w 1 m) wychodzi −1…1, a długość 2 m
+            r.check("fitLine: długość ~2 m", abs(line.length - 2) < 0.05,
+                    String(format: "%.3f m", line.length))
+            r.check("fitLine: zakres symetryczny wokół centroidu",
+                    abs(line.tMin + line.tMax) < 0.05,
                     String(format: "%.2f…%.2f", line.tMin, line.tMax))
         } else {
             r.check("fitLine: zwraca linię", false, "nil")
