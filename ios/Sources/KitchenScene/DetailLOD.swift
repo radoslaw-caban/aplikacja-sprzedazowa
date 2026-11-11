@@ -11,9 +11,20 @@ import simd
 public enum DetailLOD {
 
     /// Dystans [m], do którego drzewo pokazuje pełny model.
-    public static var fullDetailDistance: Float = 42
+    public static var fullDetailDistance: Float = 62
     /// Dystans [m], po którym drzewo jest całkiem ukryte.
-    public static var hideDistance: Float = 320
+    public static var hideDistance: Float = 420
+
+    public enum Level: Int, Sendable {
+        case full, proxy, hidden
+    }
+
+    /// Który poziom szczegółów dla danej odległości [m].
+    public static func level(distance: Float) -> Level {
+        if distance < fullDetailDistance { return .full }
+        if distance < hideDistance { return .proxy }
+        return .hidden
+    }
 
     /// Przełącza poziomy szczegółów. Tanio: tylko porównania odległości
     /// i `isEnabled`, bez przebudowy sceny.
@@ -25,13 +36,14 @@ public enum DetailLOD {
             let full = tree.children.first { $0.name == "lod0" }
             let proxy = tree.children.first { $0.name == "lod1" }
 
-            if distance < fullDetailDistance {
+            switch level(distance: distance) {
+            case .full:
                 full?.isEnabled = true
                 proxy?.isEnabled = false
-            } else if distance < hideDistance {
+            case .proxy:
                 full?.isEnabled = false
                 proxy?.isEnabled = true
-            } else {
+            case .hidden:
                 full?.isEnabled = false
                 proxy?.isEnabled = false
             }

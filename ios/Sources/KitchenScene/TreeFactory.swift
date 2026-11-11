@@ -415,7 +415,7 @@ enum TreeFactory {
         let scale = height / variant.baseHeight
 
         let trunk = ModelEntity(
-            mesh: .generateCylinder(height: height * 0.62, radius: max(0.06, height * 0.018)),
+            mesh: .generateCylinder(height: height * 0.66, radius: max(0.10, height * 0.026)),
             materials: [variant.trunkMaterial]
         )
         trunk.position = [0, height * 0.31, 0]
@@ -428,19 +428,19 @@ enum TreeFactory {
 
             if conifer {
                 // iglaste: stożki z igliwia — z 60 m czytają się jak świerk
-                for tier in 0..<4 {
-                    let t = Float(tier) / 4
+                for tier in 0..<5 {
+                    let t = Float(tier) / 5
                     let segHeight = height * (0.34 - t * 0.05)
                     let segRadius = height * (0.20 - t * 0.04)
-                    let y = height * (0.34 + t * 0.19)
+                    let y = height * (0.28 + t * 0.17)
                     builder.addCone(center: [0, y, 0], height: segHeight, radius: segRadius, sides: 7)
                 }
             } else {
                 // liściaste: kula z 5 kart — pełna sylwetka, 10 trójkątów
                 let canopyY = height * 0.66
                 let radius = height * 0.30
-                for i in 0..<5 {
-                    let angle = Float(i) / 5 * .pi
+                for i in 0..<7 {
+                    let angle = Float(i) / 7 * .pi
                     let right = SIMD3<Float>(cos(angle), 0, sin(angle)) * (radius * 2)
                     let up = SIMD3<Float>(0, radius * 1.5, 0)
                     builder.addQuad(center: [0, canopyY, 0], right: right, up: up, twoSided: false)

@@ -260,7 +260,7 @@ public enum GLBLoader {
             | UInt32(data[offset + 2]) << 16 | UInt32(data[offset + 3]) << 24
     }
 
-    static func accessorInfo(_ index: Int, accessors: [[String: Any]], views: [[String: Any]]) -> (offset: Int, count: Int, stride: Int, componentType: Int, type: String)? {
+    static func accessorInfo(_ index: Int, accessors: [[String: Any]], views: [[String: Any]]) -> (offset: Int, count: Int, stride: Int, componentType: Int, type: String, normalized: Bool)? {
         guard accessors.indices.contains(index) else { return nil }
         let a = accessors[index]
         guard let count = a["count"] as? Int,
@@ -273,22 +273,61 @@ public enum GLBLoader {
         let componentType = (a["componentType"] as? Int) ?? 5126
         let type = (a["type"] as? String) ?? "VEC3"
         let components = type == "VEC3" ? 3 : (type == "VEC2" ? 2 : 1)
-        let componentSize = componentType == 5126 ? 4 : (componentType == 5125 ? 4 : (componentType == 5123 ? 2 : 1))
-        let stride = (view["byteStride"] as? Int) ?? (components * componentSize)
-        return (viewOffset + accessorOffset, count, stride, componentType, type)
+        let stride = (view["byteStride"] as? Int) ?? (components * componentSize(componentType))
+        let normalized = (a["normalized"] as? Bool) ?? false
+        return (viewOffset + accessorOffset, count, stride, componentType, type, normalized)
     }
 
     static func readVec3(accessor: Int, accessors: [[String: Any]], views: [[String: Any]], bin: Data) -> [SIMD3<Float>]? {
-        guard let info = accessorInfo(accessor, accessors: accessors, views: views), info.componentType == 5126 else { return nil }
+        guard let info = accessorInfo(accessor, accessors: accessors, views: views) else { return nil }
+        let bytes = componentSize(info.componentType)
         var out: [SIMD3<Float>] = []
         out.reserveCapacity(info.count)
         for i in 0..<info.count {
             let base = info.offset + i * info.stride
-            guard base + 12 <= bin.count else { break }
-            let x = readFloat(bin, base), y = readFloat(bin, base + 4), z = readFloat(bin, base + 8)
+            guard base + bytes * 3 <= bin.count else { break }
+            // KHR_mesh_quantization: pozycje/normalne bywają w short/int8 (normalized)
+            let x = readComponent(bin, base, info.componentType, info.normalized)
+            let y = readComponent(bin, base + bytes, info.componentType, info.normalized)
+            let z = readComponent(bin, base + bytes * 2, info.componentType, info.normalized)
             out.append(SIMD3(x, y, z))
         }
         return out.isEmpty ? nil : out
+    }
+
+    static func componentSize(_ type: Int) -> Int {
+        switch type {
+        case 5120, 5121: return 1
+        case 5122, 5123: return 2
+        default: return 4
+        }
+    }
+
+    /// Odczyt pojedynczej składowej w formacie glTF (z obsługą `normalized`).
+    static func readComponent(_ data: Data, _ offset: Int, _ type: Int, _ normalized: Bool) -> Float {
+        switch type {
+        case 5126:
+            return readFloat(data, offset)
+        case 5125:
+            var v: UInt32 = 0
+            withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 4)) }
+            return normalized ? Float(v) / Float(UInt32.max) : Float(v)
+        case 5123:
+            var v: UInt16 = 0
+            withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 2)) }
+            return normalized ? Float(v) / 65535.0 : Float(v)
+        case 5122:
+            var v: Int16 = 0
+            withUnsafeMutableBytes(of: &v) { data.copyBytes(to: $0, from: offset..<(offset + 2)) }
+            return normalized ? max(Float(v) / 32767.0, -1) : Float(v)
+        case 5121:
+            return normalized ? Float(data[offset]) / 255.0 : Float(data[offset])
+        case 5120:
+            let raw = Int8(bitPattern: data[offset])
+            return normalized ? max(Float(raw) / 127.0, -1) : Float(raw)
+        default:
+            return readFloat(data, offset)
+        }
     }
 
     static func readVec2(accessor: Int, accessors: [[String: Any]], views: [[String: Any]], bin: Data) -> [SIMD2<Float>]? {

@@ -616,6 +616,19 @@ func runChecks() {
                 String(format: "%.1f vs %.1f mm", high * 1000, medium * 1000))
     }
 
+    print("\nLOD (poziom szczegółów)")
+    do {
+        let near = DetailLOD.level(distance: 10)
+        let mid = DetailLOD.level(distance: 100)
+        let far = DetailLOD.level(distance: 900)
+        print("    10 m → \(near), 100 m → \(mid), 900 m → \(far)  (progi \(DetailLOD.fullDetailDistance)/\(DetailLOD.hideDistance) m)")
+        r.check("LOD: z bliska pełny model", near == .full)
+        r.check("LOD: w średniej odległości proxy", mid == .proxy)
+        r.check("LOD: daleko ukryte", far == .hidden)
+        r.check("LOD: próg pełnego detalu > 30 m", DetailLOD.fullDetailDistance > 30)
+        r.check("LOD: proxy tańsze niż pełny model", DetailLOD.fullDetailDistance < DetailLOD.hideDistance)
+    }
+
     let passed = r.checks - r.failures
     print("\n\(passed)/\(r.checks) warunków spełnionych")
     if r.failures > 0 {
