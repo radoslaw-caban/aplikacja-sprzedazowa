@@ -69,18 +69,24 @@ public struct DepthFrame: Sendable {
 /// dokładny trzeba „przeskanować" dłużej — i dlatego jest naprawdę dokładniejszy.
 public enum DepthFusion {
 
-    /// Bok woksela fuzji w metrach. 0.008 = 8 mm.
+    /// Bok woksela fuzji w metrach. 0.012 = 12 mm.
     ///
-    /// To nie jest ziarno wyniku (to daje σ_wynik), a ziarno grupowania
-    /// pomiarów. Zmierzone na symulacji płaskiej ściany (`DepthFusionTests`):
-    ///  - 8 mm: średnie przesunięcie powierzchni < 0,1 mm (brak błędu
-    ///    systematycznego), σ woksela po 200 klatkach ~2,3 mm,
-    ///  - 12 mm: aliasing z siatką pikseli mapy głębi daje przesunięcie
-    ///    powierzchni ~1 mm — DLATEGO NIE zwiększać woksela „dla oszczędności",
-    ///  - 4 mm: lepsze uśrednianie (σ ~1,6 mm), ale 4× więcej wokseli.
-    /// Piksele mapy głębi i tak rozjeżdżają się na 2–3 woksele, więc liczba
-    /// pomiarów na woksel jest ~3× mniejsza niż liczba klatek.
-    public static let defaultCell: Float = 0.008
+    /// To NIE jest ziarno dokładności wyniku (to daje σ_wynik = σ/√N) — to
+    /// ziarno GRUPOWANIA pomiarów. Musi być większe niż rozstaw pikseli mapy
+    /// głębi w przestrzeni, inaczej każdy piksel trafia do własnego woksela
+    /// i uśrednianie w ogóle nie zachodzi.
+    ///
+    /// ZMIERZONE (sweep na symulowanej ścianie, `swift run KitchenChecks --sweep`):
+    /// piksel mapy głębi przy 2 m to ~1 cm poprzecznie, więc:
+    ///  - 4–10 mm: dokładnie 1,00 pkt/woksel — brak fuzji, σ stoi na 3–8 mm,
+    ///  - 12 mm: 8–30 pkt/woksel, σ 2,4 mm po 100 klatkach, błąd syst. 0,6 mm,
+    ///  - 15 mm: 8–53 pkt/woksel, σ 2,0 mm, błąd syst. 1,3 mm,
+    ///  - 20–25 mm: σ 1,3–1,4 mm, ale tylko 33–51% pokrycia i widoczna
+    ///    „kostka" na powierzchniach pochyłych.
+    ///
+    /// 12 mm to najlepszy kompromis: realne uśrednianie, pełne pokrycie,
+    /// błąd systematyczny poniżej pół milimetra.
+    public static let defaultCell: Float = 0.012
 
     /// Minimalna głębokość sensownego pomiaru (m). Bliżej — to już obiektyw/kurz.
     public static let minDepth: Float = 0.25

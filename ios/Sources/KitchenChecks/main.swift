@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 // bez buforowania: przy crashu widzimy, gdzie stanęło
 setvbuf(stdout, nil, _IONBF, 0)
@@ -428,6 +429,193 @@ func runChecks() {
         }
     }
 
+    // ---- Dokładność: fuzja map głębi ----
+    // To jest sedno „skanuj dokładniej": N niezależnych pomiarów tego samego
+    // fragmentu uśredniamy z wagami 1/σ², więc błąd spada jak σ/√N.
+    // Poniżej sprawdzamy to liczbowo, na syntetycznej ścianie z szumem.
+    print("\nDokładność — fuzja głębi LiDAR")
+
+    /// Syntetyczna klatka: płaska ściana w z=2.0 m, z szumem Gaussa.
+    func wallFrame(
+        noise: Float, seed: UInt64, width: Int = 64, height: Int = 48,
+        confidence: UInt8 = 2, wallZ: Float = -2.0
+    ) -> DepthFrame {
+        var state = seed
+        func rand() -> Float {
+            // xorshift + Box–Muller: powtarzalny szum o rozkładzie normalnym
+            state ^= state << 13; state ^= state >> 7; state ^= state << 17
+            let u1 = Float(state & 0xFFFFFF) / Float(0x1000000) + 1e-7
+            state ^= state << 13; state ^= state >> 7; state ^= state << 17
+            let u2 = Float(state & 0xFFFFFF) / Float(0x1000000)
+            return (-2 * log(u1)).squareRoot() * cos(2 * .pi * u2)
+        }
+        var depths = [Float](repeating: 0, count: width * height)
+        var conf = [UInt8](repeating: confidence, count: width * height)
+        let fx: Float = 200, fy: Float = 200
+        let cx = Float(width) / 2, cy = Float(height) / 2
+        // ARKit: „distance from the plane of the camera" = odległość wzdłuż Z,
+        // więc płaska ściana prostopadła do osi ma wszędzie tę samą głębokość.
+        for y in 0..<height {
+            for x in 0..<width {
+                depths[y * width + x] = (-wallZ) + rand() * noise
+            }
+        }
+        // kamera w początku układu, patrzy w -Z
+        return DepthFrame(
+            depths: depths, confidence: conf, width: width, height: height,
+            cameraTransform: simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1)),
+            fx: fx, fy: fy, cx: cx, cy: cy, colors: nil
+        )
+    }
+
+    // 1) pojedyncza klatka: błąd ≈ założone σ
+    do {
+        var st = DepthFusionState()
+        let f = wallFrame(noise: 0.010, seed: 12345)
+        let n = DepthFusion.add(frame: f, into: &st, minConfidence: 1)
+        r.check("fuzja: jedna klatka przyjmuje punkty", n > 1000, "= \(n)")
+        let fused = DepthFusion.fused(from: st, minSamples: 1)
+        r.check("fuzja: jest wynik", fused != nil, "")
+        if let fused {
+            r.check("fuzja: σ pojedynczej klatki > 3 mm", fused.medianSigma * 1000 > 3,
+                    String(format: "%.2f mm", fused.medianSigma * 1000))
+        }
+    }
+
+    // 2) KLUCZOWY TEST: 40 klatek → błąd spada wyraźnie (jak 1/√N)
+    do {
+        var st = DepthFusionState()
+        for i in 0..<40 {
+            let f = wallFrame(noise: 0.010, seed: UInt64(1000 + i * 7919))
+            DepthFusion.add(frame: f, into: &st, minConfidence: 1)
+        }
+        let fused = DepthFusion.fused(from: st, minSamples: 2)
+        r.check("fuzja 40 klatek: jest wynik", fused != nil, "")
+        if let fused {
+            let mm = fused.medianSigma * 1000
+            // zmierzone: 3,4 mm po 40 klatkach (woksel 12 mm, szum 10 mm)
+            r.check("fuzja 40 klatek: σ < 4 mm (błąd spada z liczbą klatek)", mm < 4.0,
+                    String(format: "%.2f mm", mm))
+            r.check("fuzja: uśrednianie faktycznie zachodzi (σ < szum pojedynczej klatki)",
+                    mm < 10.0, String(format: "%.2f mm vs szum 10 mm", mm))
+            r.check("fuzja: próbki > 40 tys.", fused.samples > 40_000, "= \(fused.samples)")
+            r.check("fuzja: jakość opisana w mm", fused.qualityText.contains("mm"), fused.qualityText)
+            // sanity: chmura w metrach wokół z = -2
+            let zs = fused.positions.map { $0.z }
+            let meanZ = zs.reduce(0, +) / Float(zs.count)
+            r.check("fuzja: ściana tam, gdzie była (z ≈ -2 m)", abs(meanZ + 2.0) < 0.05,
+                    String(format: "%.3f m", meanZ))
+        }
+    }
+
+    // 2b) REGRESJA: więcej klatek MUSI dawać mniejsze σ.
+    // Ten test złapał realny błąd: przy wokslu mniejszym od rozstawu pikseli
+    // każdy piksel trafiał do własnego woksela (1,00 pkt/woksel) i σ nie malało.
+    do {
+        func sigmaAfter(_ frames: Int) -> Float? {
+            var st = DepthFusionState()
+            for i in 0..<frames {
+                DepthFusion.add(frame: wallFrame(noise: 0.010, seed: UInt64(300 + i * 4099)),
+                                into: &st, minConfidence: 1)
+            }
+            return DepthFusion.fused(from: st, minSamples: 2)?.medianSigma
+        }
+        let s10 = sigmaAfter(10)
+        let s100 = sigmaAfter(100)
+        r.check("regresja: σ po 100 klatkach < σ po 10 klatkach",
+                (s10 != nil && s100 != nil) ? s100! < s10! : false,
+                String(format: "%.2f → %.2f mm",
+                       (s10 ?? 0) * 1000, (s100 ?? 0) * 1000))
+        r.check("regresja: σ po 100 klatkach < 3 mm",
+                (s100 ?? 99) < 0.003, String(format: "%.2f mm", (s100 ?? 0) * 1000))
+    }
+
+    // 3) odsiew: niska ufność i dystans poza zakresem nie wchodzą do fuzji
+    do {
+        var st = DepthFusionState()
+        let lowConf = wallFrame(noise: 0.010, seed: 777, confidence: 0)
+        let n = DepthFusion.add(frame: lowConf, into: &st, minConfidence: 1)
+        r.check("odsiew: niska ufność odrzucona", n == 0, "= \(n)")
+        r.check("odsiew: licznik odrzuceń rośnie", st.rejected > 0, "= \(st.rejected)")
+
+        var st2 = DepthFusionState()
+        let farWall = wallFrame(noise: 0.001, seed: 99, wallZ: -9.0)  // 9 m > maxDepth
+        let n2 = DepthFusion.add(frame: farWall, into: &st2, minConfidence: 1)
+        r.check("odsiew: dystans > 5 m odrzucony", n2 == 0, "= \(n2)")
+    }
+
+    // 4) determinizm fuzji
+    do {
+        var a = DepthFusionState()
+        var b = DepthFusionState()
+        for i in 0..<10 {
+            let f = wallFrame(noise: 0.008, seed: UInt64(500 + i * 131))
+            DepthFusion.add(frame: f, into: &a, minConfidence: 1)
+            DepthFusion.add(frame: f, into: &b, minConfidence: 1)
+        }
+        let fa = DepthFusion.fused(from: a, minSamples: 1)
+        let fb = DepthFusion.fused(from: b, minSamples: 1)
+        r.check("fuzja: deterministyczna",
+                fa?.count == fb?.count && fa?.medianSigma == fb?.medianSigma,
+                "\(fa?.count ?? -1) vs \(fb?.count ?? -1)")
+    }
+
+    // 5) geometria rzutowania: oś optyczna trafia dokładnie w -Z
+    do {
+        let p = DepthFusion.worldPoint(
+            x: 32, y: 24, depth: 2.0, fx: 200, fy: 200, cx: 32, cy: 24,
+            transform: simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+        )
+        r.check("rzutowanie: środek obrazu → (0, 0, -2)",
+                abs(p.x) < 1e-4 && abs(p.y) < 1e-4 && abs(p.z + 2.0) < 1e-4,
+                String(format: "%.3f, %.3f, %.3f", p.x, p.y, p.z))
+
+        let right = DepthFusion.worldPoint(
+            x: 232, y: 24, depth: 2.0, fx: 200, fy: 200, cx: 32, cy: 24,
+            transform: simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+        )
+        r.check("rzutowanie: piksel w prawo → +X", right.x > 1.9, String(format: "%.2f", right.x))
+
+        // wiersz 0 to GÓRA obrazu → w świecie +Y (kamera patrzy w -Z, +Y w górę)
+        let up = DepthFusion.worldPoint(
+            x: 32, y: 0, depth: 2.0, fx: 200, fy: 200, cx: 32, cy: 24,
+            transform: simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+        )
+        r.check("rzutowanie: góra obrazu → +Y świata", up.y > 0,
+                String(format: "%.2f", up.y))
+
+        // dolny wiersz → -Y
+        let down = DepthFusion.worldPoint(
+            x: 32, y: 47, depth: 2.0, fx: 200, fy: 200, cx: 32, cy: 24,
+            transform: simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+        )
+        r.check("rzutowanie: dół obrazu → -Y świata", down.y < 0,
+                String(format: "%.2f", down.y))
+    }
+
+    // 6) skalowanie intrinsics obraz → mapa głębi
+    do {
+        let s = DepthFusion.scaledIntrinsics(
+            1500, 1500, 960, 720, from: 1920, to: 256, imageHeight: 1440, depthHeight: 192
+        )
+        r.check("intrinsics: fx skaluje się proporcjonalnie", abs(s.fx - 200) < 0.01,
+                String(format: "%.1f", s.fx))
+        r.check("intrinsics: punkt główny w środku mapy głębi", abs(s.cx - 128) < 0.01,
+                String(format: "%.1f", s.cx))
+    }
+
+    // 7) niepewność rośnie z odległością (fizyka, nie zgadywanie)
+    do {
+        let near = DepthFusion.pointSigma(confidence: 2, depth: 1.0, fx: 200)
+        let far = DepthFusion.pointSigma(confidence: 2, depth: 4.0, fx: 200)
+        r.check("niepewność rośnie z odległością", far > near,
+                String(format: "%.1f vs %.1f mm", near * 1000, far * 1000))
+        let high = DepthFusion.pointSigma(confidence: 2, depth: 2.0, fx: 200)
+        let medium = DepthFusion.pointSigma(confidence: 1, depth: 2.0, fx: 200)
+        r.check("wysoka ufność dokładniejsza niż średnia", high < medium,
+                String(format: "%.1f vs %.1f mm", high * 1000, medium * 1000))
+    }
+
     let passed = r.checks - r.failures
     print("\n\(passed)/\(r.checks) warunków spełnionych")
     if r.failures > 0 {
@@ -437,4 +625,8 @@ func runChecks() {
     print("OK")
 }
 
-runChecks()
+if CommandLine.arguments.contains("--sweep") {
+    runSweep()
+} else {
+    runChecks()
+}

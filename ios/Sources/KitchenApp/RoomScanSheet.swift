@@ -190,13 +190,3 @@ struct RoomScanSheet: View {
 }
 
 #endif
-
-/// Krótki opis tego, co użytkownik zobaczy po zakończeniu — używane w statusie.
-public enum ScanOutcome {
-    public static func summary(_ cloud: PointCloud) -> String {
-        let b = cloud.bounds
-        let s = b.max - b.min
-        let mm = { (v: Float) in Int((v * 1000).rounded()) }
-        return "\(cloud.count.formatted()) pkt · \(mm(s.x))×\(mm(s.y))×\(mm(s.z)) mm"
-    }
-}
