@@ -47,9 +47,11 @@ public struct PreviewCamera: Sendable {
     /// Kadr z rzeczywistego obrysu geometrii: kamera na zewnątrz bryły,
     /// na wysokości oczu, patrzy w środek.
     public static func fit(center: SIMD3<Float>, extents: SIMD3<Float>) -> PreviewCamera {
+        // kadr bezpieczny także dla pionowego ekranu iPada: horyzontalne FOV
+        // jest węższe niż pionowe, więc odsuwamy się bardziej i patrzymy z góry
         let radius = max(extents.x, max(extents.y, extents.z)) / 2
-        let distance = radius * 2.2 + 0.6
-        let eyeY = center.y + radius * 0.35
+        let distance = radius * 3.1 + 1.0
+        let eyeY = center.y + max(0.5, extents.y * 0.35)
         return PreviewCamera(
             position: [center.x, eyeY, center.z + distance],
             target: center

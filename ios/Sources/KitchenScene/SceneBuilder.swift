@@ -22,6 +22,10 @@ public enum SceneBuilder {
         public let bodyCount: Int
         public let totalBoxes: Int
         public let widthMeters: Float
+        /// obrys zabudowy w metrach — liczony z danych, nie z RealityKit
+        /// (encje nie mają jeszcze geometrii w chwili tworzenia widoku)
+        public let center: SIMD3<Float>
+        public let extents: SIMD3<Float>
     }
 
     /// Składa całą scenę: szafki, blaty, cokoły, podłogę, światło.
@@ -69,11 +73,24 @@ public enum SceneBuilder {
         let minX = boxes.map { meters($0.position.x) - meters($0.size.x) / 2 }.min() ?? 0
         let maxX = boxes.map { meters($0.position.x) + meters($0.size.x) / 2 }.max() ?? 0
 
+        var lo = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
+        var hi = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
+        for b in boxes {
+            let half = SIMD3(meters(b.size.x) / 2, meters(b.size.y) / 2, meters(b.size.z) / 2)
+            let p = SIMD3(meters(b.position.x), meters(b.position.y), meters(b.position.z))
+            lo = SIMD3(Swift.min(lo.x, p.x - half.x), Swift.min(lo.y, p.y - half.y), Swift.min(lo.z, p.z - half.z))
+            hi = SIMD3(Swift.max(hi.x, p.x + half.x), Swift.max(hi.y, p.y + half.y), Swift.max(hi.z, p.z + half.z))
+        }
+        let center = boxes.isEmpty ? SIMD3<Float>.zero : (lo + hi) / 2
+        let extents = boxes.isEmpty ? SIMD3<Float>.zero : (hi - lo)
+
         return Built(
             root: root,
             bodyCount: cabinets.count,
             totalBoxes: boxes.count,
-            widthMeters: maxX - minX
+            widthMeters: maxX - minX,
+            center: center,
+            extents: extents
         )
     }
 

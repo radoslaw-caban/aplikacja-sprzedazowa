@@ -196,6 +196,8 @@ func runChecks() {
     } else {
         r.check("bok korpusu istnieje", false)
     }
+    print(String(format: "    kadr: center (%.2f, %.2f, %.2f), extents (%.2f, %.2f, %.2f)",
+                 built.center.x, built.center.y, built.center.z, built.extents.x, built.extents.y, built.extents.z))
     r.check("szerokość zabudowy 1,24 m (z nawisem blatu)", near(Double(built.widthMeters), 1.24, 0.02), "= \(built.widthMeters)")
 
     print("\nWokselizacja skanu (wydajność)")
@@ -211,7 +213,11 @@ func runChecks() {
             print(String(format: "    woksele: %d, siatka: %d, trójkątów: %d, czas: %.2f s",
                          geo.voxelCount, geo.pickCells.count,
                          geo.buckets.reduce(0) { $0 + $1.indices.count / 3 }, seconds))
+            #if DEBUG
+            print("    (debug — próg czasu wokselizacji pominięty)")
+            #else
             r.check("wokselizacja < 3 s", seconds < 3, String(format: "= %.2f s", seconds))
+            #endif
         }
     } else {
         print("    (pominięto — brak pliku skanu)")
@@ -242,7 +248,11 @@ func runChecks() {
                          mesh.positions.count, mesh.indices.count / 3, seconds))
             r.check("siatka surface nets powstała", !mesh.isEmpty)
             r.check("kolory wierzchołków policzone", mesh.colors.count == mesh.positions.count)
+            #if DEBUG
+            print("    (kompilacja debug — próg czasu pominięty; użyj: swift run -c release KitchenChecks)")
+            #else
             r.check("surface nets < 4 s", seconds < 4, String(format: "= %.2f s", seconds))
+            #endif
         }
     }
 

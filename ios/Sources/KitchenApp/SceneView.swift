@@ -23,24 +23,29 @@ struct SceneView: View {
         RealityView { content in
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
-            content.add(SceneBuilder.build(cabinets: cabinets, includeFloor: false).root)
+            let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
+            let cabinetRoot = built.root
+            content.add(cabinetRoot)
             let scanEntity = scanEntityToAdd()
             if let scanEntity { content.add(scanEntity) }
-            let cam = makeCamera(bounds: scanEntity?.visualBounds(relativeTo: nil))
+            // kadr: skan, a bez skanu — zabudowa (nie cały pokój)
+            let cam = makeCamera(scanEntity: scanEntity, built: built)
             content.add(cam)
             content.camera = .virtual
         } update: { content in
             content.entities.removeAll()
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))
-            content.add(SceneBuilder.build(cabinets: cabinets, includeFloor: false).root)
+            let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
+            let cabinetRoot = built.root
+            content.add(cabinetRoot)
             let scanEntity = scanEntityToAdd()
             if let scanEntity { content.add(scanEntity) }
-            let cam = makeCamera(bounds: scanEntity?.visualBounds(relativeTo: nil))
+            // kadr: skan, a bez skanu — zabudowa (nie cały pokój)
+            let cam = makeCamera(scanEntity: scanEntity, built: built)
             content.add(cam)
             content.camera = .virtual
         }
-        .realityViewCameraControls(.orbit)
         .overlay {
             #if os(iOS)
             if picking {
@@ -59,10 +64,12 @@ struct SceneView: View {
         return nil
     }
 
-    private func makeCamera(bounds: BoundingBox?) -> Entity {
+    private func makeCamera(scanEntity: Entity?, built: KitchenScene.SceneBuilder.Built) -> Entity {
         let cam: PreviewCamera
-        if let b = bounds, b.extents.x > 0.01 {
-            cam = PreviewCamera.fit(center: b.center, extents: b.extents)
+        if let scanEntity, scanEntity.children.count > 0 {
+            cam = PreviewCamera.fit(center: built.center, extents: built.extents)
+        } else if !built.extents.x.isZero {
+            cam = PreviewCamera.fit(center: built.center, extents: built.extents)
         } else {
             cam = PreviewCamera.make(room: room, scanBounds: nil)
         }

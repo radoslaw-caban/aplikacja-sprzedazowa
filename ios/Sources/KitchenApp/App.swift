@@ -2,179 +2,125 @@ import SwiftUI
 import KitchenCore
 import KitchenScene
 
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
 @main
 struct KitchenApp: App {
-    @State private var cabinets: [Cabinet] = [
-        Library.make(Library.base[0], at: -1200, z: -2200),
-        Library.make(Library.base[1], at: -600, z: -2200),
-    ]
+    @State private var model = AppModel()
 
     var body: some SwiftUI.Scene {
         WindowGroup {
-            ContentView(cabinets: $cabinets)
+            ContentView(model: model)
                 #if os(macOS)
-                .frame(minWidth: 900, minHeight: 600)
+                .frame(minWidth: 980, minHeight: 640)
                 #endif
         }
     }
 }
 
 struct ContentView: View {
-    @Binding var cabinets: [Cabinet]
+    @Bindable var model: AppModel
 
-    @State private var scan: PointCloud?
-    @State private var showScan = false
-    @State private var loadingScan = false
-    @State private var status: String?
-    @State private var room = Room(width: 5000, depth: 5000, height: 2600)
-    @State private var transform = ScanTransform()
-    @State private var rotationDeg: Double = 0
-    @State private var scale: Double = 1
-    @State private var surfaceEntity: ScanSurface?
-    @State private var showPoints = false
-    @State private var grid: VoxelGrid?
-    @State private var pickedPoints: [SIMD3<Float>] = []
-    @State private var picking = false
-    @State private var realDistanceMM: String = ""
+    @State private var showDocuments = false
 
     var body: some View {
         NavigationSplitView {
-            List {
-                Section("Szafki podblatowe") {
-                    ForEach(Library.base) { t in
-                        Button { add(t) } label: { row(t) }
-                    }
-                }
-                Section("Wiszące") {
-                    ForEach(Library.wall) { t in
-                        Button { add(t) } label: { row(t) }
-                    }
-                }
-                Section("Stojące") {
-                    ForEach(Library.tall) { t in
-                        Button { add(t) } label: { row(t) }
-                    }
-                }
-
-                Section("Skan i pomieszczenie") {
-                    Button {
-                        Task { await toggleScan() }
-                    } label: {
-                        Label(showScan ? "Skan: włączony" : "Skan: wyłączony", systemImage: "cube.transparent")
-                    }
-                    if showScan {
-                        Button {
-                            autoAlign()
-                        } label: {
-                            Label("Auto-dopasuj do pokoju", systemImage: "square.dashed")
-                        }
-                        Button {
-                            Task { await alignFloor() }
-                        } label: {
-                            Label("Ustaw podłogę na 0", systemImage: "square.bottomhalf.filled")
-                        }
-                        Toggle("Pokaż chmurę punktów", isOn: $showPoints)
-                        Button {
-                            picking.toggle()
-                            status = picking ? "dotknij 3 narożników w skanie" : nil
-                        } label: {
-                            Label(picking ? "Wskazywanie: WŁ" : "Wskaż punkty skanu",
-                                  systemImage: "hand.tap")
-                        }
-                        if !pickedPoints.isEmpty {
-                            ForEach(Array(pickedPoints.enumerated()), id: \.offset) { i, p in
-                                Text(String(format: "P%d: %.0f, %.0f, %.0f mm", i + 1, p.x * 1000, p.y * 1000, p.z * 1000))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if pickedPoints.count >= 2 {
-                                HStack {
-                                    Button("Ściana → X") { alignWall(axis: .x) }
-                                    Button("Ściana → Z") { alignWall(axis: .z) }
-                                }
-                                TextField("realna długość ściany [mm]", text: $realDistanceMM)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-                            Button("Wyczyść punkty") { pickedPoints.removeAll() }
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Obrót: \(Int(rotationDeg))°").font(.caption)
-                            Slider(value: $rotationDeg, in: 0...360, step: 1) { _ in
-                                applyTransform()
-                            }
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(String(format: "Skala: %.2f", scale)).font(.caption)
-                            Slider(value: $scale, in: 0.3...2.0, step: 0.01) { _ in
-                                applyTransform()
-                            }
-                        }
-                        Stepper("Odsunięcie X: \(Int(transform.offset.x * 1000)) mm") {
-                            transform.offset.x += 0.1
-                        } onDecrement: {
-                            transform.offset.x -= 0.1
-                        }
-                        Stepper("Odsunięcie Z: \(Int(transform.offset.z * 1000)) mm") {
-                            transform.offset.z += 0.1
-                        } onDecrement: {
-                            transform.offset.z -= 0.1
-                        }
-                    }
-                    Text("\(room.name): \(Int(room.width)) × \(Int(room.depth)) × \(Int(room.height)) mm · \(String(format: "%.1f", room.area)) m²")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Biblioteka")
-            #if os(macOS)
-            .frame(minWidth: 250)
-            #endif
+            sidebar
         } detail: {
-            VStack(spacing: 0) {
-                SceneView(cabinets: cabinets, room: room, scan: showScan ? scan : nil, transform: transform, surfaceEntity: surfaceEntity, showPoints: showPoints, picking: picking,
-                           onPick: { point, size in handlePick(point, size) })
-
-                HStack(spacing: 12) {
-                    Text("\(cabinets.count) szafek").font(.callout)
-                    if let status {
-                        Text("· \(status)").font(.callout).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button {
-                        Task { await toggleScan() }
-                    } label: {
-                        Label(showScan ? "Skan WŁ" : "Skan WYŁ", systemImage: "cube.transparent")
-                    }
-                    .disabled(loadingScan)
-                    Button("Wyczyść") { cabinets.removeAll() }
-                }
-                .padding(12)
-            }
+            detail
+        }
+        .sheet(isPresented: $showDocuments) {
+            DocumentsSheet(model: model)
         }
         .task {
-            // do automatycznych zrzutów: -showScan 1
-            if UserDefaults.standard.bool(forKey: "showScan") {
-                await toggleScan()
+            if UserDefaults.standard.bool(forKey: "showDocuments") { showDocuments = true }
+            #if os(iOS)
+            if UserDefaults.standard.bool(forKey: "demoDocuments") {
+                // tworzy prawdziwy PDF i przeprowadza go przez import dokumentów
+                let pdfURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Umowa Kowalski.pdf")
+                try? UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 595, height: 842)).writePDF(to: pdfURL) { ctx in
+                    ctx.beginPage()
+                    let attrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 28)]
+                    "Umowa 2026/11".draw(at: CGPoint(x: 60, y: 80), withAttributes: attrs)
+                    "Kuchnia Kowalski — wartość 24 800 zł".draw(at: CGPoint(x: 60, y: 140), withAttributes: attrs)
+                }
+                let added = model.importDocuments(from: [pdfURL])
+                print("[ui] dokumenty dodane: \(added), razem \(model.documents.count)")
             }
-            // test zaczepiony o kamerę: 3 syntetyczne dotknięcia (środek, lewo, prawo)
-            if UserDefaults.standard.bool(forKey: "pickTest") {
-                try? await Task.sleep(nanoseconds: 9_000_000_000)
-                let size = CGSize(width: 1000, height: 700)
-                for p in [CGPoint(x: 0.5, y: 0.45), CGPoint(x: 0.3, y: 0.55), CGPoint(x: 0.7, y: 0.55)] {
-                    handlePick(p, size)
-                    print("[pick] \(status ?? "-")")
-                }
-                if UserDefaults.standard.bool(forKey: "alignTest") {
-                    alignWall(axis: .x)
-                    print("[pick] po wyrównaniu: \(status ?? "-")")
-                    let a = transform.apply(transform.inverseApply(pickedPoints[0]))
-                    print(String(format: "[pick] kontrola punktu 1: %.3f %.3f %.3f", a.x, a.y, a.z))
-                }
+            #endif
+            if UserDefaults.standard.bool(forKey: "demoSwipe") {
+                // weryfikacja gestów bez dotykania ekranu
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                model.addProject(name: "Projekt 2")
+                model.switchProject(step: -1)
+                print("[ui] projekt: \(model.current.name)")
+                model.switchDocument(step: 1)
+                print("[ui] dokument: \(model.status ?? "-")")
             }
         }
     }
 
-    private func row(_ t: Library.Template) -> some View {
+    // MARK: - panel boczny
+
+    private var sidebar: some View {
+        List {
+            Section("Projekty") {
+                ForEach(Array(model.projects.enumerated()), id: \.element.id) { index, project in
+                    Button {
+                        model.selectProject(index)
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(project.name).font(.callout)
+                                Text("\(project.cabinets.count) szafek · \(project.documents.count) dok.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if index == model.currentIndex {
+                                Image(systemName: "checkmark").foregroundStyle(.tint)
+                            }
+                        }
+                    }
+                }
+                Button { model.addProject() } label: {
+                    Label("Nowy projekt", systemImage: "plus")
+                }
+            }
+
+            Section("Biblioteka · podblatowe") {
+                ForEach(Library.base) { t in Button { add(t) } label: { templateRow(t) } }
+            }
+            Section("Biblioteka · wiszące") {
+                ForEach(Library.wall) { t in Button { add(t) } label: { templateRow(t) } }
+            }
+            Section("Biblioteka · stojące") {
+                ForEach(Library.tall) { t in Button { add(t) } label: { templateRow(t) } }
+            }
+            Section("Dokumenty klienta") {
+                ForEach(Array(model.documents.enumerated()), id: \.element.id) { index, doc in
+                    Button { model.openDocument(index) } label: {
+                        Label(doc.name, systemImage: doc.kind.icon)
+                            .font(.callout)
+                            .lineLimit(1)
+                    }
+                }
+                Button { showDocuments = true } label: {
+                    Label("Dodaj dokument…", systemImage: "doc.badge.plus")
+                }
+            }
+        }
+        .navigationTitle("Konfigurator")
+        #if os(macOS)
+        .frame(minWidth: 260)
+        #endif
+    }
+
+    private func templateRow(_ t: Library.Template) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(t.name).font(.callout)
             Text(t.summary).font(.caption).foregroundStyle(.secondary)
@@ -182,186 +128,119 @@ struct ContentView: View {
     }
 
     private func add(_ t: Library.Template) {
+        var cabinets = model.current.cabinets
         let new = Library.make(t)
         if let placed = Generator.placeNext(to: cabinets, new: new) {
             cabinets.append(placed)
         } else {
             cabinets.append(new)
         }
+        model.updateCabinets(cabinets)
+        model.persist()
     }
 
-    /// Skan (PLY) wczytujemy raz, w tle; potem tylko przełączamy widoczność.
-    private func toggleScan() async {
-        if showScan { showScan = false; return }
-        if scan == nil {
-            loadingScan = true
-            status = "wczytuję skan…"
-            let loaded = await Task.detached(priority: .userInitiated) { () -> (PointCloud, String)? in
-                guard let url = Self.scanURL() else { return nil }
-                let started = Date()
-                guard let cloud = try? PLYParser.parse(contentsOf: url) else { return nil }
-                let seconds = Date().timeIntervalSince(started)
-                return (cloud, String(format: "%.2f mln pkt w %.1f s", Double(cloud.count) / 1e6, seconds))
-            }.value
-            loadingScan = false
-            guard let loaded else {
-                status = "brak pliku skanu"
-                return
-            }
-            scan = loaded.0
-            status = loaded.1
-            showScan = true
-            autoAlign(cloud: loaded.0)
-            return
-        }
-        showScan = true
-    }
+    // MARK: - pole robocze
 
-    /// Auto-dopasowanie: skala z obrytu, środek na środku pokoju, podłoga na 0.
-    private func autoAlign(cloud: PointCloud? = nil) {
-        guard let scan = cloud ?? self.scan else { return }
-        let b = scan.robustBounds()
-        let k = scan.unitScaleToMeters
-        let fitted = ScanTransform.autoFit(
-            cloudMin: b.min * k,
-            cloudMax: b.max * k,
-            room: room,
-            rotationDeg: rotationDeg
-        )
-        transform = fitted
-        scale = fitted.scale
-        // poprawka: podłoga skanu na 0 (obrys nie mówi, gdzie jest podłoga)
-        let unitK = scan.unitScaleToMeters
-        let pts = scan.decimated(maxPoints: 80_000).positions.map { $0 * unitK }
-        Task {
-            let fit = await Task.detached(priority: .userInitiated) { ScanFit.detect(points: pts) }.value
-            if fit.hasFloor {
-                let roomCopy = room
-                let scaleCopy = fitted.scale
-                let aligned = await Task.detached(priority: .userInitiated) {
-                    ScanFit.alignFloorOnly(points: pts, result: fit, room: roomCopy, currentScale: scaleCopy)
-                }.value
-                transform = aligned
-                rotationDeg = aligned.rotationDeg.truncatingRemainder(dividingBy: 360)
-                status = String(format: "podłoga %.2f m, obrót %.0f°", fit.floorY, aligned.rotationDeg)
-                await rebuildSurface(cloud: scan, transform: aligned)
+    private var detail: some View {
+        VStack(spacing: 0) {
+            if let doc = model.currentDocument {
+                documentViewer(doc)
             } else {
-                await rebuildSurface(cloud: scan, transform: fitted)
+                ZStack(alignment: .topLeading) {
+                    SceneView(cabinets: model.current.cabinets, room: model.current.room)
+                    swipeHint
+                }
+                .contentShape(Rectangle())
+                .gesture(swipe)
+            }
+            bottomBar
+        }
+    }
+
+    /// Gesty: pion = projekt, poziom = dokument (logika w GestureNav + testy).
+    private var swipe: some Gesture {
+        DragGesture(minimumDistance: 40)
+            .onEnded { value in
+                let axis = GestureNav.axis(dx: value.translation.width, dy: value.translation.height)
+                let step = GestureNav.step(for: axis, dx: value.translation.width, dy: value.translation.height)
+                guard step != 0 else { return }
+                switch axis {
+                case .vertical: model.switchProject(step: step)
+                case .horizontal: model.switchDocument(step: step)
+                case .none: break
+                }
+            }
+    }
+
+    private var swipeHint: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.up.arrow.down")
+            Text("projekty")
+            Text("·")
+            Image(systemName: "arrow.left.arrow.right")
+            Text("dokumenty")
+        }
+        .font(.caption2)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: Capsule())
+        .padding(12)
+    }
+
+    private func documentViewer(_ doc: ClientDocument) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: doc.kind.icon).foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(doc.name).font(.callout).lineLimit(1)
+                    Text("\(doc.kind.label) · \(doc.sizeLabel)").font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let i = model.documentIndex {
+                    Text("\(i + 1)/\(model.documents.count)").font(.caption).foregroundStyle(.secondary)
+                }
+                Button { model.switchDocument(step: -1) } label: { Image(systemName: "chevron.left") }
+                Button { model.switchDocument(step: 1) } label: { Image(systemName: "chevron.right") }
+                Button { model.closeDocument() } label: { Image(systemName: "xmark") }
+            }
+            .padding(12)
+
+            #if os(iOS)
+            QuickLookView(url: model.fileURL(for: doc)) { model.closeDocument() }
+            #else
+            VStack(spacing: 12) {
+                Image(systemName: doc.kind.icon).font(.system(size: 48)).foregroundStyle(.secondary)
+                Text(doc.name).font(.title3)
+                Text(model.fileURL(for: doc).path).font(.caption).foregroundStyle(.secondary)
+                Button("Otwórz w systemie") {
+                    NSWorkspace.shared.open(model.fileURL(for: doc))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #endif
+        }
+    }
+
+    private var bottomBar: some View {
+        HStack(spacing: 12) {
+            Text(model.current.name).font(.callout)
+            Text("\(model.current.cabinets.count) szafek").font(.callout).foregroundStyle(.secondary)
+            if let status = model.status {
+                Text("· \(status)").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            Button { showDocuments = true } label: {
+                Label("Dokumenty", systemImage: "folder")
+            }
+            Button { model.addProject() } label: {
+                Label("Nowy projekt", systemImage: "plus.rectangle.on.folder")
+            }
+            Button("Wyczyść szafki") {
+                model.updateCabinets([])
+                model.persist()
             }
         }
-    }
-
-    /// Suwaki obrotu i skali przeliczają transformację od nowa (z zachowaniem auto-dopasowania).
-    private func applyTransform() {
-        guard let scan else { return }
-        let b = scan.robustBounds()
-        let k = scan.unitScaleToMeters
-        var fitted = ScanTransform.autoFit(
-            cloudMin: b.min * k,
-            cloudMax: b.max * k,
-            room: room,
-            rotationDeg: rotationDeg
-        )
-        fitted.scale *= scale
-        fitted.offset.y *= scale
-        transform = fitted
-        Task { await rebuildSurface() }
-    }
-
-    /// Powierzchnia w tle (surface nets), encja budowana raz na wątku głównym.
-    private func rebuildSurface(cloud: PointCloud? = nil, transform explicit: ScanTransform? = nil) async {
-        guard let scan = cloud ?? self.scan else { surfaceEntity = nil; return }
-        let t = explicit ?? transform
-        let t0 = Date()
-        status = "liczę powierzchnię skanu…"
-        let built = await Task.detached(priority: .userInitiated) { () -> (VoxelSurfaceBuilder.Geometry, VoxelGrid) in
-            var opts = VoxelSurfaceBuilder.Options()
-            opts.maxPoints = 150_000
-            opts.cell = 0.03
-            let geo = VoxelSurfaceBuilder.geometry(scan, transform: t, options: opts)
-            let k = scan.unitScaleToMeters
-            let dec = scan.decimated(maxPoints: 150_000)
-            let pts = dec.positions.map { t.apply($0 * k) }
-            return (geo, VoxelGrid(points: pts, cellSize: 0.05))
-        }.value
-        let geo = built.0
-        grid = built.1
-        surfaceEntity = VoxelSurfaceBuilder.makeEntity(geo)
-        status = String(format: "powierzchnia: %d wokseli, %d trójkątów (%.1f s)",
-                        geo.voxelCount, geo.buckets.reduce(0) { $0 + $1.indices.count / 3 },
-                        Date().timeIntervalSince(t0))
-    }
-
-    /// Dopasowanie po wykrytej podłodze: podłoga skanu na y = 0, reszta bez zmian.
-    private func alignFloor() async {
-        guard let scan else { return }
-        let k = scan.unitScaleToMeters
-        let source = scan.decimated(maxPoints: 120_000)
-        let points = source.positions.map { $0 * k }
-        let fit = await Task.detached(priority: .userInitiated) {
-            ScanFit.detect(points: points)
-        }.value
-        guard fit.hasFloor else {
-            status = String(format: "słaba podłoga: pokrycie %.1f%%", fit.floorCoverage * 100)
-            return
-        }
-        transform = ScanFit.alignFloorOnly(points: points, result: fit, room: room, currentScale: transform.scale)
-        status = String(format: "podłoga na 0 (wykryta na %.2f m, pokrycie %.0f%%)", fit.floorY, fit.floorCoverage * 100)
-        Task { await rebuildSurface(cloud: scan) }
-    }
-
-    /// Dotknięcie w scenie → promień z kamery → pierwszy woksel skanu.
-    private func handlePick(_ point: CGPoint, _ size: CGSize) {
-        guard size.width > 0, size.height > 0 else { return }
-        guard let grid else {
-            status = "siatka skanu jeszcze się liczy…"
-            return
-        }
-        let aspect = Float(size.width / size.height)
-        let bounds = surfaceBounds
-        let cam = PreviewCamera.make(room: room, scanBounds: bounds)
-        let ray = cam.ray(normalizedPoint: point, aspect: aspect)
-        guard let hit = grid.firstHit(origin: ray.origin, direction: ray.direction) else {
-            status = "nie trafiłem w skan — dotknij ściany"
-            return
-        }
-        if pickedPoints.count >= 3 { pickedPoints.removeAll() }
-        pickedPoints.append(hit)
-        status = String(format: "punkt %d: %.0f, %.0f, %.0f mm", pickedPoints.count, hit.x * 1000, hit.y * 1000, hit.z * 1000)
-    }
-
-    /// Wyrównanie ściany: dwa wskazane punkty + opcjonalna realna długość.
-    private func alignWall(axis: ScanTransform.Axis) {
-        guard pickedPoints.count >= 2 else { return }
-        // punkty są we współrzędnych sceny — wracamy do układu chmury
-        let p1 = transform.inverseApply(pickedPoints[0])
-        let p2 = transform.inverseApply(pickedPoints[1])
-        let real = Double(realDistanceMM).map { $0 / 1000 }
-        transform = transform.aligningWall(from: p1, to: p2, axis: axis, realDistanceMeters: real)
-        rotationDeg = transform.rotationDeg.truncatingRemainder(dividingBy: 360)
-        scale = 1
-        status = String(format: "ściana wyrównana (obrót %.0f°, skala %.2f)", transform.rotationDeg, transform.scale)
-        Task { await rebuildSurface() }
-    }
-
-    /// Obrys skanu po transformacji — musi być ten sam, co w scenie.
-    private var surfaceBounds: (min: SIMD3<Float>, max: SIMD3<Float>)? {
-        guard let scan else { return nil }
-        let k = scan.unitScaleToMeters
-        let b = scan.robustBounds()
-        return transform.transformedBounds(min: b.min * k, max: b.max * k)
-    }
-
-    /// W aplikacji: z bundle. W `swift run` na Macu: z repo.
-    nonisolated static func scanURL() -> URL? {
-        if let bundled = Bundle.main.url(forResource: "dom-chmura", withExtension: "ply") {
-            return bundled
-        }
-        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        for candidate in ["../app/public/dom-chmura.ply", "app/public/dom-chmura.ply"] {
-            let url = cwd.appendingPathComponent(candidate)
-            if FileManager.default.fileExists(atPath: url.path) { return url }
-        }
-        return nil
+        .padding(12)
+        .background(.bar)
     }
 }

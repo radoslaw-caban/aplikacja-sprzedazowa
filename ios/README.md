@@ -82,6 +82,9 @@ TestFlight: po wgraniu build pojawia się w App Store Connect → TestFlight.
 - [ ] Auto-obrót po ścianach (detekcja kąta) — WIP, na razie narzędzie dwupunktowe
 - [ ] Kadr kamery przy skanie większym od pokoju (kamera wpada do środka chmury)
 - [ ] Wokselizacja w release: 1,75 s dla 200 tys. pkt; w debug ~4–9 s (pakiet kompiluje się bez -O)
+- [x] Interfejs: projekty w panelu, dokumenty klienta (import z plików, QuickLook, usuwanie)
+- [x] Gesty: pion = projekt, poziom = dokument (logika w GestureNav, 8 testów)
+- [x] Zapis projektów na dysk (Documents/Projekty + pliki w katalogu projektu)
 - [ ] Panele: edycja wnętrza, wycena, oferta PDF, warianty
 - [ ] Oświetlenie: HDRI w bundle + `EnvironmentResource` dla IBL
 - [ ] Zapis projektów i plików: SwiftData

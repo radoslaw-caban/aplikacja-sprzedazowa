@@ -483,3 +483,104 @@ final class ScanFitTests: XCTestCase {
         XCTAssertFalse(r.isValid)
     }
 }
+
+
+final class ProjectStoreTests: XCTestCase {
+
+    private func tempStore() throws -> ProjectStore {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("projekty-\(UUID().uuidString)")
+        let store = ProjectStore(root: dir)
+        try store.ensureDirectories()
+        return store
+    }
+
+    func testSaveAndLoadRoundTrip() throws {
+        let store = try tempStore()
+        let project = Project(name: "Kuchnia Kowalski", cabinets: [Library.make(Library.base[0])])
+        try store.save([project])
+
+        let loaded = store.load()
+        XCTAssertEqual(loaded.count, 1)
+        XCTAssertEqual(loaded[0].name, "Kuchnia Kowalski")
+        XCTAssertEqual(loaded[0].cabinets.count, 1)
+        XCTAssertEqual(loaded[0].cabinets[0].width, 600)
+    }
+
+    func testImportDocumentCopiesFile() throws {
+        let store = try tempStore()
+        // źródło poza katalogiem projektów
+        let source = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("umowa-\(UUID().uuidString).pdf")
+        try Data("umowa".utf8).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let project = Project(name: "Test")
+        let (doc, updated) = try store.importDocument(from: source, into: project)
+
+        XCTAssertEqual(updated.documents.count, 1)
+        XCTAssertEqual(doc.kind, .umowa)
+        XCTAssertEqual(doc.sizeBytes, 5)
+        let copied = store.url(for: doc, in: updated)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copied.path))
+        XCTAssertEqual(try Data(contentsOf: copied), Data("umowa".utf8))
+    }
+
+    func testImportNameCollisionGetsSuffix() throws {
+        let store = try tempStore()
+        let project = Project(name: "Test")
+        let source = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("rzut-\(UUID().uuidString).dwg")
+        try Data("x".utf8).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let (_, first) = try store.importDocument(from: source, into: project)
+        let (second, _) = try store.importDocument(from: source, into: first)
+        XCTAssertNotEqual(second.fileName, first.documents[0].fileName)
+        XCTAssertTrue(second.fileName.contains("-2"))
+    }
+
+    func testDeleteDocumentRemovesFile() throws {
+        let store = try tempStore()
+        let source = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("zdjecie-\(UUID().uuidString).jpg")
+        try Data("img".utf8).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let (doc, project) = try store.importDocument(from: source, into: Project(name: "T"))
+        let fileURL = store.url(for: doc, in: project)
+        let afterDelete = store.deleteDocument(doc, from: project)
+        XCTAssertTrue(afterDelete.documents.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    func testDocumentKindFromExtension() {
+        XCTAssertEqual(DocumentKind.from(fileName: "umowa.PDF"), .umowa)
+        XCTAssertEqual(DocumentKind.from(fileName: "kuchnia.e57"), .skan)
+        XCTAssertEqual(DocumentKind.from(fileName: "rzut.dwg"), .rzut)
+        XCTAssertEqual(DocumentKind.from(fileName: "foto.HEIC"), .zdjecie)
+        XCTAssertEqual(DocumentKind.from(fileName: "cokolwiek.bin"), .inne)
+    }
+}
+
+final class GestureNavTests: XCTestCase {
+
+    func testAxisDetection() {
+        XCTAssertEqual(GestureNav.axis(dx: 10, dy: 120), .vertical)
+        XCTAssertEqual(GestureNav.axis(dx: 140, dy: 20), .horizontal)
+        XCTAssertEqual(GestureNav.axis(dx: 30, dy: 40), .none)   // za mało
+        XCTAssertEqual(GestureNav.axis(dx: 90, dy: 90), .none)   // ukośny
+    }
+
+    func testNextIndexWraps() {
+        XCTAssertEqual(GestureNav.nextIndex(0, count: 3, step: 1), 1)
+        XCTAssertEqual(GestureNav.nextIndex(2, count: 3, step: 1), 0)
+        XCTAssertEqual(GestureNav.nextIndex(0, count: 3, step: -1), 2)
+        XCTAssertEqual(GestureNav.nextIndex(0, count: 0, step: 1), 0)
+    }
+
+    func testStepDirection() {
+        // palec w górę (dy < 0) → następny projekt
+        XCTAssertEqual(GestureNav.step(for: .vertical, dx: 0, dy: -120), 1)
+        XCTAssertEqual(GestureNav.step(for: .vertical, dx: 0, dy: 120), -1)
+        // palec w lewo (dx < 0) → następny dokument
+        XCTAssertEqual(GestureNav.step(for: .horizontal, dx: -120, dy: 0), 1)
+        XCTAssertEqual(GestureNav.step(for: .horizontal, dx: 120, dy: 0), -1)
+    }
+}
