@@ -150,6 +150,12 @@ struct ContentView: View {
                 // weryfikacja menu wysuwanego z krawędzi
                 drawerOpen = true
             }
+            // hak diagnostyczny: otwórz kartotekę o zadanym indeksie
+            if UserDefaults.standard.object(forKey: "demoClient") != nil {
+                let index = UserDefaults.standard.integer(forKey: "demoClient")
+                if model.projects.indices.contains(index) { model.selectProject(index) }
+            }
+
             // kartoteki klientów z tabeli zamówień (raz, brakujące)
             let added = model.seedClients()
             if added > 0 { NSLog("[dane] dodano %d kartotek klientów", added) }

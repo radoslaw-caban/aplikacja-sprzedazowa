@@ -41,26 +41,82 @@ final class AppModel {
         if !force, defaults.bool(forKey: ClientSeed.defaultsKey) { return 0 }
 
         var added = 0
+        var filled = 0
+        let removed = removeDuplicateClients()
+
         for client in ClientSeed.all {
-            let exists = projects.contains { project in
-                guard let order = project.order else { return false }
-                return order.clientLastName == client.lastName
-                    && order.clientFirstName == client.firstName
-                    && abs(order.price - client.total) < 0.01
-                    && Calendar.current.isDate(order.deliveryDate ?? .distantPast,
-                                               inSameDayAs: client.deliveryDate ?? .distantFuture)
+            if let index = projects.firstIndex(where: { matches($0, client) }) {
+                // kartoteka już jest — uzupełniamy tylko PUSTE pola (nie nadpisujemy danych użytkownika)
+                var order = projects[index].order ?? ProjectOrder()
+                var changed = false
+                if order.address.isEmpty, !client.address.isEmpty { order.address = client.address; changed = true }
+                if order.phone.isEmpty, !client.phone.isEmpty { order.phone = client.phone; changed = true }
+                if order.email.isEmpty, !client.email.isEmpty { order.email = client.email; changed = true }
+                if order.notes.isEmpty, !client.note.isEmpty { order.notes = client.note; changed = true }
+                if order.deliveryDate == nil { order.deliveryDate = client.deliveryDate; changed = true }
+                if order.status == nil { order.status = client.status; changed = true }
+                if changed {
+                    projects[index].order = order
+                    projects[index].updatedAt = Date()
+                    filled += 1
+                }
+                continue
             }
-            if exists { continue }
+
             projects.append(ClientSeed.project(from: client))
             added += 1
         }
 
-        if added > 0 {
+        if added > 0 || filled > 0 || removed > 0 {
             persist()
-            status = "Dodano \(added) kartotek klientów"
+            if added > 0 {
+                status = "Dodano \(added) kartotek klientów"
+            } else if filled > 0 {
+                status = "Uzupełniono \(filled) kartotek"
+            }
+            if removed > 0 { NSLog("[dane] usunięto %d duplikatów kartotek", removed) }
         }
         defaults.set(true, forKey: ClientSeed.defaultsKey)
-        return added
+        return added + filled
+    }
+
+    /// Usuwa zdublowane kartoteki: zostawia tę z największą liczbą wypełnionych pól.
+    @discardableResult
+    func removeDuplicateClients() -> Int {
+        var removed = 0
+        for client in ClientSeed.all {
+            let indexes = projects.indices.filter { matches(projects[$0], client) }
+            guard indexes.count > 1 else { continue }
+            let scored = indexes.map { index -> (Int, Int) in
+                let order = projects[index].order ?? ProjectOrder()
+                var score = 0
+                if !order.address.isEmpty { score += 1 }
+                if !order.phone.isEmpty { score += 1 }
+                if !order.email.isEmpty { score += 1 }
+                if !order.notes.isEmpty { score += 1 }
+                if order.deliveryDate != nil { score += 1 }
+                return (index, score)
+            }
+            let keep = scored.max { $0.1 < $1.1 }?.0
+            for (index, _) in scored.sorted(by: { $0.0 > $1.0 }) where index != keep {
+                projects.remove(at: index)
+                removed += 1
+            }
+        }
+        if removed > 0 {
+            currentIndex = min(currentIndex, max(0, projects.count - 1))
+        }
+        return removed
+    }
+
+    /// Czy projekt odpowiada pozycji z tabeli. Dopasowujemy po imieniu, nazwisku
+    /// i kwocie — data dostawy bywa pusta w starszych zapisach, więc nie może
+    /// decydować o dopasowaniu (inaczej powstawały duplikaty kartotek).
+    private func matches(_ project: Project, _ client: SeedClient) -> Bool {
+        guard let order = project.order else { return false }
+        return order.clientLastName == client.lastName
+            && order.clientFirstName == client.firstName
+            && abs(order.price - client.total) < 0.01
     }
 
     var current: Project {

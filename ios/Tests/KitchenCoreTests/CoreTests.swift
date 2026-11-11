@@ -890,4 +890,37 @@ final class GestureNavTests: XCTestCase {
         XCTAssertEqual(pauliny.count, 2)
         XCTAssertNotEqual(pauliny[0].total, pauliny[1].total)
     }
+
+    // MARK: - dane przykładowe w kartotekach
+
+    func testSeedClientsHaveContactData() {
+        for client in ClientSeed.all {
+            XCTAssertFalse(client.address.isEmpty, "\(client.fullName): brak adresu")
+            XCTAssertFalse(client.phone.isEmpty, "\(client.fullName): brak telefonu")
+            XCTAssertFalse(client.email.isEmpty, "\(client.fullName): brak e-maila")
+            XCTAssertFalse(client.note.isEmpty, "\(client.fullName): brak notatki")
+            XCTAssertTrue(client.address.contains("34-400 Nowy Targ"), "\(client.fullName): adres spoza rejonu")
+            XCTAssertEqual(client.remaining, max(0, client.total - client.deposit), accuracy: 0.01)
+        }
+    }
+
+    func testSeedProjectCarriesAddressAndPhone() {
+        let project = ClientSeed.project(from: ClientSeed.all[7])   // Emil Kędra
+        XCTAssertEqual(project.order?.clientLastName, "Kędra")
+        XCTAssertEqual(project.order?.phone, "668 214 500")
+        XCTAssertEqual(project.order?.email, "emil.kedra@gmail.com")
+        XCTAssertTrue(project.order?.address.contains("Kościuszki") ?? false)
+        XCTAssertTrue(project.order?.notes.contains("wyspa") ?? false)
+    }
+
+    /// Dopasowanie kartotek idzie po (imię, nazwisko, kwota) — ten klucz MUSI być unikalny,
+    /// inaczej kolejne uruchomienie dopisze duplikat zamiast uzupełnić istniejący wpis.
+    func testSeedKeysAreUnique() {
+        var seen = Set<String>()
+        for client in ClientSeed.all {
+            let key = "\(client.firstName)|\(client.lastName)|\(client.total)"
+            XCTAssertFalse(seen.contains(key), "powtórzony klucz kartoteki: \(key)")
+            seen.insert(key)
+        }
+    }
 }
