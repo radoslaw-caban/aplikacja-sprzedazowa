@@ -162,6 +162,13 @@ struct ContentView: View {
                     showPlan = true
                 }
             }
+            if UserDefaults.standard.bool(forKey: "demoZones") {
+                locked = false
+                zoneWall = 0
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                showZones = true
+                print("[ui] strefy otwarte: ściana 1, stref \(model.currentZones.count)")
+            }
             if UserDefaults.standard.bool(forKey: "demoPlan") {
                 // weryfikacja widoku mapy bez dotykania ekranu
                 planDraft = model.currentPlan

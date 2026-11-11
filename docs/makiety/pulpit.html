@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Pulpit zarządzania firmą</title>
+<style>
+  :root{
+    --bg:#eceef1; --card:#fff; --ink:#14171a; --muted:#6b7280; --line:#e3e6ea;
+    --accent:#0a84ff; --ok:#23a55a; --warn:#f59e0b; --danger:#e5484d;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"SF Pro Text","Helvetica Neue",Arial,sans-serif;font-size:14px}
+  .app{display:flex;height:820px}
+
+  .rail{width:236px;background:#f7f8fa;border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:12px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;font-size:15px}
+  .brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:13px;font-weight:700}
+  .nav{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:10px;color:#3b4148;font-size:13px}
+  .nav.active{background:#e8f2ff;color:#12508f;font-weight:600}
+  .rail .spacer{flex:1}
+  .rail .who{padding:10px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:12px}
+  .rail .who b{display:block;font-size:13px}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .top{display:flex;align-items:center;gap:14px;padding:16px 22px;background:#f7f8fa;border-bottom:1px solid var(--line)}
+  .top h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em}
+  .top .date{color:var(--muted);font-size:12.5px}
+  .top .search{margin-left:auto;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;width:290px;color:var(--muted);font-size:12.5px}
+  .top .btn{padding:8px 14px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:12.5px;font-weight:600}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:16px 22px 0}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  .kpi span{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:650}
+  .kpi b{display:block;font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:6px}
+  .kpi i{font-style:normal;font-size:12px;color:var(--muted)}
+  .kpi.alert{border-color:#f7d9a8;background:#fff8ec}
+
+  .grid{flex:1;display:grid;grid-template-columns:1.5fr 1fr;gap:14px;padding:14px 22px 18px;overflow:hidden}
+  .col{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:0 1px 2px rgba(16,24,40,.04);min-height:0}
+  .card h3{margin:0 0 10px;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:650;display:flex;align-items:center}
+  .card h3 span{margin-left:auto;font-size:11px;text-transform:none;letter-spacing:0;color:var(--accent);font-weight:600}
+
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:650;padding:4px 6px}
+  td{padding:9px 6px;border-top:1px solid var(--line);font-size:12.5px}
+  td.name{font-weight:600}
+  .pill{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.d3{background:#fdeaea;color:#b4262b}
+  .pill.d7{background:#fff3e0;color:#a15c00}
+  .pill.ok{background:#e7f6ec;color:#1c7a41}
+  .right{text-align:right}
+
+  .week{display:flex;gap:6px;margin-top:4px}
+  .day{flex:1;border-radius:10px;background:#f6f7f9;padding:7px 6px;text-align:center;border:1px solid transparent}
+  .day.today{border-color:var(--accent);background:#eef6ff}
+  .day b{display:block;font-size:12px}
+  .day span{font-size:10px;color:var(--muted)}
+  .ev{font-size:10px;padding:2px 4px;border-radius:4px;margin-top:4px;text-align:left;line-height:1.2}
+  .ev.a{background:#e6f1ff;color:#1c4d80}
+  .ev.b{background:#e7f6ec;color:#1c7a41}
+  .ev.c{background:#fff3e0;color:#a15c00}
+
+  .list{display:flex;flex-direction:column;gap:8px}
+  .item{display:flex;align-items:center;gap:9px;font-size:12.5px}
+  .item .ico{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:10px;font-weight:700;flex:none}
+  .ico.pdf{background:#fde8e8;color:#b4262b}
+  .ico.img{background:#e6f1ff;color:#1c4d80}
+  .ico.mail{background:#eef0f3;color:#4b5563}
+  .item .meta{color:var(--muted);font-size:11px;margin-left:auto;white-space:nowrap}
+
+  .bars{display:flex;align-items:flex-end;gap:10px;height:96px;margin-top:6px}
+  .bars .b{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;font-size:10px;color:var(--muted)}
+  .bars .b i{display:block;width:100%;min-height:8px;border-radius:6px 6px 3px 3px;background:#cfe0f5}
+  .bars .b.peak i{background:var(--accent)}
+
+  .empty{border:1.5px dashed #c9cfd8;border-radius:12px;padding:14px;color:var(--muted);font-size:12px;text-align:center;background:#fafbfc}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="rail">
+    <div class="brand"><span class="dot">K</span> Karpatia</div>
+    <div class="nav active">▦ Pulpit</div>
+    <div class="nav">▤ Zlecenia</div>
+    <div class="nav">◫ Biblioteka tekstur</div>
+    <div class="nav">✉ Maile</div>
+    <div class="nav">⚙ Ustawienia</div>
+    <div class="spacer"></div>
+    <div class="who"><b>Radosław Caban</b>właściciel · 4 ekipy</div>
+  </aside>
+
+  <main class="main">
+    <div class="top">
+      <div>
+        <h1>Pulpit</h1>
+        <div class="date">wtorek, 11 listopada 2026</div>
+      </div>
+      <div class="search">⌕ Szukaj klienta, adresu, zlecenia…</div>
+      <button class="btn">+ Nowe zlecenie</button>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><span>Zlecenia w toku</span><b>12</b><i>3 nowe w tym tygodniu</i></div>
+      <div class="kpi"><span>Montaże w tym tygodniu</span><b>4</b><i>najbliższy: czw 14.11</i></div>
+      <div class="kpi"><span>Wartość w pipeline</span><b>186 400 zł</b><i>oferty oczekujące</i></div>
+      <div class="kpi alert"><span>Zaległe zaliczki</span><b>3</b><i>12 400 zł do wpłaty</i></div>
+    </div>
+
+    <div class="grid">
+
+      <div class="col">
+        <div class="card">
+          <h3>Najpilniejsze zlecenia <span>sortuj: termin montażu</span></h3>
+          <table>
+            <thead><tr><th>Klient</th><th>Zakres</th><th>Montaż</th><th>Status</th><th class="right">Wartość</th></tr></thead>
+            <tbody>
+              <tr><td class="name">Nowak Anna</td><td>Szafa wnękowa</td><td>14.11 · 07:30</td><td><span class="pill d3">za 3 dni</span></td><td class="right">9 200 zł</td></tr>
+              <tr><td class="name">Kowalski Jan</td><td>Kuchnia 5 szafek</td><td>18.11 · 08:00</td><td><span class="pill d7">za 7 dni</span></td><td class="right">24 800 zł</td></tr>
+              <tr><td class="name">Wiśniewscy</td><td>Salon + RTV</td><td>26.11 · 09:00</td><td><span class="pill ok">potwierdzony</span></td><td class="right">31 500 zł</td></tr>
+              <tr><td class="name">Zieliński Marek</td><td>Garderoba</td><td>termin otwarty</td><td><span class="pill ok">oferta</span></td><td class="right">7 800 zł</td></tr>
+              <tr><td class="name">Lewandowscy</td><td>Zabudowa pod schody</td><td>02.12 · 08:00</td><td><span class="pill ok">umówiony</span></td><td class="right">12 400 zł</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card" style="flex:1">
+          <h3>Ostatnia aktywność</h3>
+          <div class="list">
+            <div class="item"><div class="ico mail">✉</div><div>Kowalski Jan — „Re: wymiary kuchni"</div><div class="meta">14:32</div></div>
+            <div class="item"><div class="ico pdf">PDF</div><div>Umowa — Nowak Anna</div><div class="meta">12:10</div></div>
+            <div class="item"><div class="ico img">IMG</div><div>Skan pomieszczenia — Wiśniewscy</div><div class="meta">wczoraj</div></div>
+            <div class="item"><div class="ico mail">✉</div><div>Zielinski Marek — „termin montażu"</div><div class="meta">wczoraj</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div class="card">
+          <h3>Tydzień</h3>
+          <div class="week">
+            <div class="day"><b>10</b><span>pon</span></div>
+            <div class="day today"><b>11</b><span>wt</span><div class="ev a">Pomiar 14:00</div></div>
+            <div class="day"><b>12</b><span>śr</span><div class="ev b">Wycena</div></div>
+            <div class="day"><b>13</b><span>czw</span></div>
+            <div class="day"><b>14</b><span>pt</span><div class="ev c">Montaż 07:30</div></div>
+            <div class="day"><b>15</b><span>sob</span></div>
+            <div class="day"><b>16</b><span>niedz</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Oferty — ostatnie 6 miesięcy</h3>
+          <div class="bars">
+            <div class="b"><i style="height:38%"></i>VI</div>
+            <div class="b"><i style="height:55%"></i>VII</div>
+            <div class="b"><i style="height:44%"></i>VIII</div>
+            <div class="b"><i style="height:70%"></i>IX</div>
+            <div class="b peak"><i style="height:86%"></i>X</div>
+            <div class="b"><i style="height:62%"></i>XI</div>
+          </div>
+        </div>
+
+        <div class="card" style="flex:1">
+          <h3>Maile — miejsce zarezerwowane</h3>
+          <div class="empty">Tu pojawi się skrzynka powiązana z klientami.<br>Podłączymy później.</div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+</body>
+</html>

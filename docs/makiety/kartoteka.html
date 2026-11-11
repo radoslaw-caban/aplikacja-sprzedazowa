@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>Kartoteka klienta</title>
+<style>
+  :root {
+    --bg: #eceef1;
+    --rail: #f7f8fa;
+    --card: #ffffff;
+    --ink: #14171a;
+    --muted: #6b7280;
+    --line: #e3e6ea;
+    --accent: #0a84ff;
+    --accent-soft: #e8f2ff;
+    --warn: #f59e0b;
+    --danger: #e5484d;
+    --ok: #23a55a;
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+  }
+  .app { display: flex; height: 820px; }
+
+  /* ── lewa szyna: projekty ───────────────────────────── */
+  .rail {
+    width: 252px; background: var(--rail); border-right: 1px solid var(--line);
+    padding: 18px 14px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 15px; }
+  .brand .dot { width: 26px; height: 26px; border-radius: 8px; background: var(--accent); color: #fff;
+                display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+  .rail h4 { margin: 6px 0 0; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .proj { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 10px; }
+  .proj.active { background: var(--accent-soft); }
+  .proj .swatch { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .proj .swatch.warn { background: var(--warn); }
+  .proj .swatch.danger { background: var(--danger); }
+  .proj .txt { display: flex; flex-direction: column; gap: 1px; }
+  .proj .txt b { font-weight: 600; font-size: 13px; }
+  .proj .txt span { font-size: 11px; color: var(--muted); }
+  .rail .spacer { flex: 1; }
+  .rail .bottom { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--muted); }
+  .rail .bottom div { display: flex; align-items: center; gap: 8px; }
+
+  /* ── główna część ───────────────────────────────────── */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    display: flex; align-items: center; gap: 16px; padding: 16px 22px;
+    background: var(--rail); border-bottom: 1px solid var(--line);
+  }
+  .who { display: flex; align-items: center; gap: 12px; }
+  .avatar {
+    width: 46px; height: 46px; border-radius: 14px; background: #d9e6f7; color: #1c4d80;
+    display: grid; place-items: center; font-weight: 700; font-size: 16px;
+  }
+  .who b { font-size: 17px; font-weight: 650; }
+  .who span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .badges { display: flex; gap: 8px; margin-left: auto; }
+  .badge {
+    display: flex; flex-direction: column; gap: 2px; padding: 7px 12px; border-radius: 10px;
+    background: #fff; border: 1px solid var(--line); min-width: 108px;
+  }
+  .badge span { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .badge b { font-size: 14px; font-weight: 650; }
+  .badge.alert { border-color: #f7d9a8; background: #fff8ec; }
+
+  .grid {
+    flex: 1; display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px;
+    padding: 18px 22px; overflow: hidden;
+  }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 14px 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .card h3 {
+    margin: 0 0 10px; font-size: 11px; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--muted); font-weight: 650;
+  }
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row .k { color: var(--muted); font-size: 12.5px; }
+  .row .v { font-weight: 600; font-size: 13.5px; text-align: right; }
+
+  /* montaż */
+  .mount { display: flex; align-items: center; gap: 16px; }
+  .mount .date {
+    font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1;
+  }
+  .mount .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .mount .left { margin-left: auto; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .chip { padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; }
+  .chip.soft { background: var(--accent-soft); color: #12508f; }
+  .chip.gray { background: #f1f2f4; color: var(--muted); }
+  .btns { display: flex; gap: 8px; }
+  .btn {
+    padding: 7px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600;
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.ghost { background: transparent; }
+
+  /* mapa */
+  .map {
+    height: 150px; border-radius: 12px; overflow: hidden; position: relative;
+    background:
+      radial-gradient(circle at 28% 32%, #dbe7d2 0 22%, transparent 23%),
+      radial-gradient(circle at 70% 62%, #d7e4cf 0 26%, transparent 27%),
+      linear-gradient(0deg, #eef3e8, #f3f6ef);
+    border: 1px solid var(--line);
+  }
+  .map .road { position: absolute; background: #fff; box-shadow: 0 0 0 1px #e6e9e3; }
+  .map .r1 { left: -10%; top: 58%; width: 120%; height: 9px; transform: rotate(-6deg); }
+  .map .r2 { left: 38%; top: -10%; width: 8px; height: 130%; transform: rotate(4deg); }
+  .map .pin {
+    position: absolute; left: 46%; top: 40%; width: 26px; height: 26px; border-radius: 50% 50% 50% 4px;
+    background: var(--danger); transform: rotate(-45deg); box-shadow: 0 4px 10px rgba(0,0,0,.25);
+  }
+  .map .pin::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: #fff; }
+  .map .label {
+    position: absolute; left: 12px; bottom: 12px; padding: 6px 10px; border-radius: 8px;
+    background: rgba(255,255,255,.92); font-size: 11.5px; font-weight: 600;
+  }
+
+  /* maile — miejsce na później */
+  .mailbox {
+    border: 1.5px dashed #c9cfd8; border-radius: 14px; padding: 16px; background: #fafbfc;
+  }
+  .bubble { max-width: 78%; padding: 9px 12px; border-radius: 16px; font-size: 12.5px; line-height: 1.35; }
+  .bubble.them { background: #ececf0; border-bottom-left-radius: 5px; }
+  .bubble.me { background: #0a84ff; color: #fff; margin-left: auto; border-bottom-right-radius: 5px; }
+  .thumbs { display: flex; gap: 6px; margin-top: 8px; }
+  .thumb { width: 46px; height: 46px; border-radius: 8px; background: #dfe4ea; display: grid; place-items: center; font-size: 10px; color: #6b7280; }
+  .thumb.pdf { background: #fde8e8; color: #b4262b; }
+  .mailnote { margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+
+  /* dokumenty */
+  .doc { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .doc:last-child { border-bottom: 0; }
+  .doc .ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+  .doc .ico.pdf { background: #fde8e8; color: #b4262b; }
+  .doc .ico.img { background: #e6f1ff; color: #1c4d80; }
+  .doc .ico.xls { background: #e7f6ec; color: #1c7a41; }
+  .doc .nm { font-size: 12.5px; font-weight: 600; }
+  .doc .sz { font-size: 11px; color: var(--muted); }
+  .doc .date { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+  .money { display: flex; align-items: baseline; gap: 8px; }
+  .money .big { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  .money .cur { font-size: 12px; color: var(--muted); }
+  .bar { height: 6px; border-radius: 3px; background: #eef0f3; margin-top: 8px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--ok); width: 30%; }
+
+  .footer {
+    display: flex; align-items: center; gap: 10px; padding: 12px 22px 16px;
+    border-top: 1px solid var(--line); background: var(--rail);
+  }
+  .footer .note { color: var(--muted); font-size: 12px; }
+  .footer .right { margin-left: auto; display: flex; gap: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- lewa szyna: projekty klientów -->
+  <aside class="rail">
+    <div class="brand"><span class="dot">K</span> Karpatia</div>
+
+    <h4>Zlecenia</h4>
+    <div class="proj active"><span class="swatch warn"></span><div class="txt"><b>Kowalski Jan</b><span>Kuchnia · montaż 18.11</span></div></div>
+    <div class="proj"><span class="swatch danger"></span><div class="txt"><b>Nowak Anna</b><span>Szafa · montaż 14.11</span></div></div>
+    <div class="proj"><span class="swatch"></span><div class="txt"><b>Wiśniewscy</b><span>Salon · montaż 26.11</span></div></div>
+    <div class="proj"><span class="swatch"></span><div class="txt"><b>Zieliński Marek</b><span>Garderoba · termin otwarty</span></div></div>
+
+    <div class="spacer"></div>
+    <div class="bottom">
+      <div>▦ Pulpit zarządzania</div>
+      <div>◫ Biblioteka tekstur</div>
+      <div>⚙ Ustawienia</div>
+    </div>
+  </aside>
+
+  <!-- główna część -->
+  <main class="main">
+
+    <div class="topbar">
+      <div class="who">
+        <div class="avatar">JK</div>
+        <div>
+          <b>Kowalski Jan</b>
+          <span>ul. Ogrodowa 14/3, 34-400 Nowy Targ · tel. 602 118 447 · j.kowalski@mail.pl</span>
+        </div>
+      </div>
+      <div class="badges">
+        <div class="badge alert"><span>Montaż</span><b>18.11 · 08:00</b></div>
+        <div class="badge"><span>Oferta</span><b>24 800 zł</b></div>
+        <div class="badge"><span>Zaliczka</span><b>7 440 zł</b></div>
+      </div>
+    </div>
+
+    <div class="grid">
+
+      <!-- kolumna lewa -->
+      <div class="col">
+
+        <div class="card">
+          <h3>Montaż</h3>
+          <div class="mount">
+            <div>
+              <div class="date">18 listopada</div>
+              <div class="sub">poniedziałek · 08:00–16:00 · ekipa: R. Caban, T. Sowa</div>
+            </div>
+            <div class="left">
+              <span class="chip soft">za 7 dni</span>
+              <div class="btns">
+                <button class="btn">Zmień termin</button>
+                <button class="btn ghost">Przypomnij</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Adres montażu</h3>
+          <div class="map">
+            <div class="road r1"></div><div class="road r2"></div>
+            <div class="pin"></div>
+            <div class="label">Ogrodowa 14 · Nowy Targ</div>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <span class="k">Wjazd / uwagi</span>
+            <span class="v">brama od podwórza, kod 2244</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Maile — miejsce zarezerwowane</h3>
+          <div class="mailbox">
+            <div class="bubble them">
+              Dzień dobry, przesyłam wymiary kuchni i zdjęcia ścian.
+              <div class="thumbs"><div class="thumb">IMG</div><div class="thumb pdf">PDF</div><div class="thumb">IMG</div></div>
+            </div>
+            <div class="bubble me" style="margin-top:8px">Dziękuję, w poniedziałek potwierdzę montaż.</div>
+            <div class="mailnote">Podgląd poglądowy — docelowo wątki zasysane ze skrzynki. Tu tylko miejsce, podłączymy później.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- kolumna prawa -->
+      <div class="col">
+
+        <div class="card">
+          <h3>Zamówienie</h3>
+          <div class="money"><span class="big">24 800</span><span class="cur">zł</span></div>
+          <div class="bar"><i></i></div>
+          <div class="row" style="margin-top:10px"><span class="k">Zaliczka wpłacona</span><span class="v">7 440 zł (30%)</span></div>
+          <div class="row"><span class="k">Pozostało</span><span class="v">17 360 zł</span></div>
+          <div class="row"><span class="k">Zakres</span><span class="v">5 szafek · blat · cokół</span></div>
+          <div class="row"><span class="k">Zmiany klienta</span><span class="v">front z dębu → lakier mat</span></div>
+        </div>
+
+        <div class="card">
+          <h3>Dokumenty</h3>
+          <div class="doc"><div class="ico pdf">PDF</div><div><div class="nm">Umowa – Kowalski</div><div class="sz">412 kB</div></div><div class="date">04.11</div></div>
+          <div class="doc"><div class="ico img">IMG</div><div><div class="nm">Skan pomieszczenia</div><div class="sz">18 MB</div></div><div class="date">02.11</div></div>
+          <div class="doc"><div class="ico xls">XLS</div><div><div class="nm">Wycena v3</div><div class="sz">96 kB</div></div><div class="date">29.10</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Notatki</h3>
+          <div style="font-size:12.5px;color:#3b4148;line-height:1.45">
+            Klient chce fronty bez uchwytów (push-to-open). Zmywarka przesunięta o 200 mm w prawo.
+            Blat kamień — zamówić po zatwierdzeniu kolorystyki.
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="footer">
+      <span class="note">Ostatnia zmiana: dziś 14:32 · projekt odblokowany</span>
+      <div class="right">
+        <button class="btn">Edytuj plan</button>
+        <button class="btn">Dodaj dokument</button>
+        <button class="btn primary">Zablokuj projekt</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

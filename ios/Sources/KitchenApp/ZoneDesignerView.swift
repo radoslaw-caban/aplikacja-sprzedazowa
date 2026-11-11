@@ -53,6 +53,13 @@ struct ZoneDesignerView: View {
         #endif
         .onAppear {
             wallIndex = min(max(0, wallIndex), max(0, plan.wallCount - 1))
+            #if DEBUG
+            // weryfikacja bez dotykania ekranu: symulator + defaults demoZoneCook
+            if UserDefaults.standard.bool(forKey: "demoZoneCook"), draftID == nil {
+                let z = model.addZone(kind: .kitchenCook, wallIndex: wallIndex)
+                draftID = z.id
+            }
+            #endif
         }
     }
 
