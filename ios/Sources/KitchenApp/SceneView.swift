@@ -21,6 +21,8 @@ struct SceneView: View {
     /// plan domu wyprowadzony ze skanu (chmura X9) — jeśli jest, bryła domu
     /// powstaje z pomiaru, a nie z generatora willi
     var scanPlan: ScanPlan?
+    /// nałóż chmurę punktów 1:1 na zbudowany dom (kontrola dopasowania)
+    var showScanCloud = false
     /// tryb wskazywania punktów skanu
     var picking = false
     /// znormalizowany punkt ekranu (0…1) po dotknięciu
@@ -61,11 +63,14 @@ struct SceneView: View {
             content.renderingEffects.motionBlur = .enabled
             #endif
             content.add(SceneBuilder.sunlight())
-            content.add(SceneBuilder.buildRoom(room, walls: scan == nil, scanPlan: scanPlan))
+            content.add(SceneBuilder.buildRoom(room, walls: scan == nil, scanPlan: scanPlan, scanCloud: showScanCloud))
             if showEnvironment, scan == nil {
                 let environment = EnvironmentBuilder.makeEntity(room: room)
                 cache.environment = environment
                 content.add(environment)
+            }
+            if showScanCloud, let scanPlan {
+                content.add(ScanCloudOverlay.entity(plan: scanPlan))
             }
             let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
             let cabinetRoot = built.root
@@ -105,13 +110,16 @@ struct SceneView: View {
                 cache.signature = signature
                 content.entities.removeAll()
                 content.add(SceneBuilder.sunlight())
-                content.add(SceneBuilder.buildRoom(room, walls: scan == nil, scanPlan: scanPlan))
+                content.add(SceneBuilder.buildRoom(room, walls: scan == nil, scanPlan: scanPlan, scanCloud: showScanCloud))
                 if showEnvironment, scan == nil {
                     let environment = EnvironmentBuilder.makeEntity(room: room)
                     cache.environment = environment
                     content.add(environment)
                 }
-                let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
+                if showScanCloud, let scanPlan {
+                content.add(ScanCloudOverlay.entity(plan: scanPlan))
+            }
+            let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
                 content.add(built.root)
                 let scanEntity = scanEntityToAdd()
                 if let scanEntity { content.add(scanEntity) }

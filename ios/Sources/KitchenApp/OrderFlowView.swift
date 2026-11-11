@@ -373,6 +373,8 @@ struct LockedWorkspace: View {
     var interiorView: Bool
     /// plan domu ze skanu (chmura X9); nil = willa proceduralna
     var scanPlan: ScanPlan?
+    /// nałóż chmurę punktów na dom (kontrola dopasowania)
+    var showScanCloud: Bool = false
     @Binding var locked: Bool
 
     var body: some View {
@@ -389,6 +391,7 @@ struct LockedWorkspace: View {
                 transform: model.scanTransform,
                 interiorView: interiorView,
                 scanPlan: scanPlan,
+                showScanCloud: showScanCloud,
                 locked: true
             )
 

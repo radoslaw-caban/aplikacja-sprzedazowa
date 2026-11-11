@@ -118,6 +118,11 @@ walls = sorted(kept, key=lambda w: (w["axis"], w["pos"]))
 
 plan = {
     "source": "dom-chmura.ply",
+    # transformacja chmury do sceny: pion to Z chmury, a plan jest
+    # wyśrodkowany na (cx, cy) i oparty na podłodze floor_z
+    "up": "z",
+    "center": {"x": round(cx, 4), "y": round(cy, 4)},
+    "floor": round(floor_z, 4),
     "points": int(len(x)),
     "height": round(height, 3),
     "width": round(width, 3),

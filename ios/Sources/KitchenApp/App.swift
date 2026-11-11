@@ -29,6 +29,10 @@ struct ContentView: View {
     @State private var interiorView = false   // start: willa w otoczeniu (klient najpierw widzi dom)
     /// bryła domu z chmury punktów (skan X9) zamiast willi proceduralnej
     @State private var useScanHouse = true
+    /// nakładka: chmura punktów na zbudowanym domu
+    /// (domyślnie wyłączona; `defaults write ... showScanCloud -bool YES`
+    /// pozwala zweryfikować dopasowanie bez dotykania ekranu)
+    @State private var showScanCloud = UserDefaults.standard.bool(forKey: "showScanCloud")
     @State private var showScan = false
     @State private var showPlan = false
     @State private var planDraft = FloorPlan.rectangle()
@@ -44,6 +48,7 @@ struct ContentView: View {
             if locked {
                 LockedWorkspace(model: model, interiorView: interiorView,
                                 scanPlan: useScanHouse ? ScanPlan.bundled() : nil,
+                                showScanCloud: showScanCloud,
                                 locked: $locked)
                     .ignoresSafeArea(edges: .bottom)
             } else {
@@ -341,6 +346,14 @@ struct ContentView: View {
                       systemImage: useScanHouse ? "cube.transparent" : "building.2")
             }
             .help("Bryła domu z chmury punktów X9 (ScanPlan) albo willa proceduralna")
+            Button {
+                showScanCloud.toggle()
+            } label: {
+                Label(showScanCloud ? "Chmura ON" : "Chmura",
+                      systemImage: "circle.grid.3x3")
+            }
+            .disabled(ScanPlan.bundled() == nil)
+            .help("Nałóż chmurę punktów 1:1 na dom — widać, czy ściany pokrywają się ze skanem")
             Button { showScan = true } label: {
                 Label("Skanuj", systemImage: "sensor.tag.radiowaves.forward")
             }

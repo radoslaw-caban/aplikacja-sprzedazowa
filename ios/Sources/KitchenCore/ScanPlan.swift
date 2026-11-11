@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 /// Plan domu wyprowadzony z chmury punktów (skan Trimble X9).
 ///
@@ -26,13 +27,43 @@ public struct ScanPlan: Codable, Sendable {
     public let depth: Float
     public let walls: [Wall]
 
-    public init(source: String, points: Int, height: Float, width: Float, depth: Float, walls: [Wall]) {
+    /// Wyśrodkowanie planu w chmurze (współrzędne chmury, m).
+    /// Pozwala nałożyć chmurę na zbudowany dom 1:1.
+    public struct Center: Codable, Sendable {
+        public let x: Float
+        public let y: Float
+        public init(x: Float, y: Float) {
+            self.x = x
+            self.y = y
+        }
+    }
+    public let center: Center
+    /// Poziom podłogi w chmurze (współrzędna pionowa, m).
+    public let floor: Float
+    /// Oś pionowa chmury: "z" dla skanów Trimble/CloudCompare.
+    public let up: String
+
+    /// Chmura (x, y, z) → scena (x, y=up, z): pion chmury trafia w Y sceny,
+    /// a plan jest wyśrodkowany na `center` i oparty na `floor`.
+    public func scenePoint(_ p: SIMD3<Float>) -> SIMD3<Float> {
+        if up == "y" {
+            return [(p.x - center.x), (p.y - floor), (p.z - center.y)]
+        }
+        // domyślnie pionem jest Z
+        return [(p.x - center.x), (p.z - floor), (p.y - center.y)]
+    }
+
+    public init(source: String, points: Int, height: Float, width: Float, depth: Float,
+                walls: [Wall], center: Center = Center(x: 0, y: 0), floor: Float = 0, up: String = "z") {
         self.source = source
         self.points = points
         self.height = height
         self.width = width
         self.depth = depth
         self.walls = walls
+        self.center = center
+        self.floor = floor
+        self.up = up
     }
 
     /// Wczytuje plan z pliku JSON.

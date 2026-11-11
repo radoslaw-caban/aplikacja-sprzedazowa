@@ -1,5 +1,11 @@
 {
  "source": "dom-chmura.ply",
+ "up": "z",
+ "center": {
+  "x": 0.6971,
+  "y": -3.8268
+ },
+ "floor": -1.6535,
  "points": 491953,
  "height": 2.887,
  "width": 10.348,

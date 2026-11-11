@@ -26,7 +26,7 @@ public enum ScanHouseBuilder {
     /// Grubość stropu/podłogi (m).
     public static let slabThickness: Float = 0.22
 
-    public static func entity(plan: ScanPlan) -> Entity {
+    public static func entity(plan: ScanPlan, includeCeiling: Bool = true) -> Entity {
         let root = Entity()
         root.name = "scan-house"
 
@@ -67,7 +67,7 @@ public enum ScanHouseBuilder {
         )
         ceiling.position = [0, h + slabThickness / 2, 0]
         ceiling.name = "scan-ceiling"
-        root.addChild(ceiling)
+        if includeCeiling { root.addChild(ceiling) }
 
         // MARK: ściany zewnętrzne z otworami okiennymi
         // Otwory rozstawiamy co ~2,6 m: bez nich dom jest zamkniętą skrzynią.
