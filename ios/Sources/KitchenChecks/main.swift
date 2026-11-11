@@ -679,6 +679,8 @@ func runChecks() {
                 report?.replacingOccurrences(of: "\n", with: " | ") ?? "nil")
     }
 
+    runRoomModelChecks(r)
+
     let passed = r.checks - r.failures
     print("\n\(passed)/\(r.checks) warunków spełnionych")
     if r.failures > 0 {

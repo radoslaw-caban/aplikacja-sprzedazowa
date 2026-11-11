@@ -13,6 +13,7 @@ let package = Package(
         .executable(name: "KitchenApp", targets: ["KitchenApp"]),
         .executable(name: "KitchenChecks", targets: ["KitchenChecks"]),
         .executable(name: "FitDebug", targets: ["FitDebug"]),
+        .executable(name: "RoomDiag", targets: ["RoomDiag"]),
     ],
     targets: [
         .target(name: "KitchenCore"),
@@ -27,6 +28,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "FitDebug",
+            dependencies: ["KitchenCore"]
+        ),
+        .executableTarget(
+            name: "RoomDiag",
             dependencies: ["KitchenCore"]
         ),
         .testTarget(

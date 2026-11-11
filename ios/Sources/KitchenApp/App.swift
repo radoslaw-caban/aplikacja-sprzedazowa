@@ -36,6 +36,7 @@ struct ContentView: View {
     @State private var showScan = false
     @State private var showPlan = false
     @State private var showTextures = false
+    @State private var showSettings = false
     @State private var planDraft = FloorPlan.rectangle()
     /// Projekt zablokowany: na ekranie tylko 3D i kłódka (przeciąganie przesuwa).
     @State private var locked = true
@@ -75,7 +76,7 @@ struct ContentView: View {
         .sheet(isPresented: $showDocuments) {
             DocumentsSheet(model: model)
         }
-        .sheet(isPresented: $showPlan) {
+        .planPresentation(isPresented: $showPlan) {
             PlanEditorView(
                 plan: $planDraft,
                 onChange: { newPlan in
@@ -88,6 +89,9 @@ struct ContentView: View {
             #if os(iOS)
             .presentationSizing(.page)
             #endif
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
         .sheet(isPresented: $showTextures) {
             TextureLibraryView { texture in
@@ -133,6 +137,14 @@ struct ContentView: View {
             if UserDefaults.standard.bool(forKey: "demoTextures") {
                 try? await Task.sleep(nanoseconds: 800_000_000)
                 showTextures = true
+            }
+            // Start aplikacji = edycja planu, nie oglądanie bryły domu.
+            if UserDefaults.standard.object(forKey: "startWithPlan") == nil || UserDefaults.standard.bool(forKey: "startWithPlan") {
+                if !showPlan {
+                    planDraft = model.currentPlan
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    showPlan = true
+                }
             }
             if UserDefaults.standard.bool(forKey: "demoPlan") {
                 // weryfikacja widoku mapy bez dotykania ekranu
@@ -418,6 +430,9 @@ struct ContentView: View {
             Button { showTextures = true } label: {
                 Label("Tekstury", systemImage: "photo.on.rectangle.angled")
             }
+            Button { showSettings = true } label: {
+                Label("Ustawienia", systemImage: "gear")
+            }
             Button { showDocuments = true } label: {
                 Label("Dokumenty", systemImage: "folder")
             }
@@ -431,5 +446,18 @@ struct ContentView: View {
         }
         .padding(12)
         .background(.bar)
+    }
+}
+
+private extension View {
+    /// Plan to główny widok pracy — na iPadzie pełny ekran, na Macu arkusz
+    /// (macOS nie ma `fullScreenCover`).
+    @ViewBuilder
+    func planPresentation<Content: View>(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Content) -> some View {
+        #if os(iOS)
+        self.fullScreenCover(isPresented: isPresented, content: content)
+        #else
+        self.sheet(isPresented: isPresented, content: content)
+        #endif
     }
 }

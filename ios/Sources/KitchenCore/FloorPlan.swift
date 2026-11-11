@@ -125,6 +125,27 @@ public struct FloorPlan: Codable, Sendable, Equatable {
         return (a, b, length, angle)
     }
 
+    /// Przesunięcie ściany prostopadle do niej (mm). Sąsiednie ściany same się
+    /// wydłużają/skracają, bo plan jest zamknięty — tak działa „ciągnięcie ściany palcem".
+    public mutating func moveWall(_ index: Int, by distance: Double) {
+        guard let wall = wall(index), distance != 0 else { return }
+        let d = wall.b - wall.a
+        let length = simd_length(d)
+        guard length > 1e-6 else { return }
+        let normal = SIMD2<Double>(-d.y / length, d.x / length)
+        let shift = normal * distance
+        for i in [index, (index + 1) % points.count] {
+            points[i] = SIMD2(Units.quantize(points[i].x + shift.x),
+                              Units.quantize(points[i].y + shift.y))
+        }
+    }
+
+    /// Przesunięcie narożnika (wierzchołka) planu.
+    public mutating func moveVertex(_ index: Int, to point: SIMD2<Double>) {
+        guard points.indices.contains(index) else { return }
+        points[index] = SIMD2(Units.quantize(point.x), Units.quantize(point.y))
+    }
+
     /// Wszystkie długości ścian (mm) — do tabeli wymiarów.
     public var wallLengths: [Double] {
         (0..<wallCount).compactMap { wall($0)?.length }

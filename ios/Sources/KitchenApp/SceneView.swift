@@ -61,6 +61,8 @@ struct SceneView: View {
         var cabinetFocus: SIMD3<Float>?
     }
     @State private var cache = SceneCache()
+    /// Ustawienia: ogniskowa (domyślnie 47°), czułości gestów.
+    @State private var settings = AppSettings.load()
 
     var body: some View {
         RealityView { content in
@@ -222,8 +224,9 @@ struct SceneView: View {
     private var cameraZoom: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                let next = cache.zoomTarget / Float(value.magnification)
-                cache.zoomTarget = min(3.0, max(0.25, next))
+                // wykładniczo i z czułością z Ustawień — brak „latania" przy szczypaniu
+                let factor = pow(1 / Float(max(0.2, value.magnification)), Float(settings.zoomSensitivity))
+                cache.zoomTarget = min(2.6, max(0.35, cache.zoomTarget * factor))
             }
     }
     #endif
@@ -240,10 +243,12 @@ struct SceneView: View {
         let cam = controlled(base)
 
         let camera = Entity()
+        // Ogniskowa jest STAŁA (domyślnie 47°) i zmienia się tylko w Ustawieniach —
+        // wcześniej FOV zmieniał się razem z kadrem i widok „latał".
         camera.components.set(PerspectiveCameraComponent(
             near: 0.02,
             far: 20000,
-            fieldOfViewInDegrees: cam.verticalFOVDegrees
+            fieldOfViewInDegrees: Float(settings.clampedFieldOfView)
         ))
         camera.position = cam.position
         camera.look(at: cam.target, from: cam.position, relativeTo: nil)

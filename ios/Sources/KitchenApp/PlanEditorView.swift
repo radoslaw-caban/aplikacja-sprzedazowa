@@ -49,17 +49,31 @@ struct PlanEditorView: View {
     /// Skok przyciągania przy rysowaniu (mm).
     private let snap: Double = 50
 
+    // widok kartki: zbliżenie i przesunięcie
+    @State private var zoom: CGFloat = 1
+    @State private var panOffset: CGSize = .zero
+    @State private var showPresets = false
+    @State private var showTakeoff = false
+    @State private var settings = AppSettings.load()
+
+    // przesuwanie ściany palcem
+    @State private var draggingWall: Int?
+    @State private var lastDragMM: SIMD2<Double> = .zero
+    @State private var lastDrag: CGSize = .zero
+
     var body: some View {
         VStack(spacing: 0) {
             header
             modeBar
 
             GeometryReader { geo in
-                let fit = PlanFit(plan: plan, size: geo.size)
+                let fit = PlanFit(plan: plan, size: geo.size, zoom: zoom, offset: panOffset)
                 ZStack(alignment: .bottom) {
-                    PlanCanvas(plan: plan, fit: fit, selected: selectedWall, preview: previewRect)
+                    NotebookCanvas(plan: plan, fit: fit, selected: selectedWall, preview: previewRect,
+                                   zoom: zoom, showPencil: settings.showPencil && zoom < 0.85)
                         .contentShape(Rectangle())
                         .gesture(drawGesture(fit: fit))
+                        .simultaneousGesture(zoomGesture)
                         .onTapGesture { location in
                             guard mode == .lines else { return }
                             handleTap(at: location, fit: fit)
@@ -81,6 +95,18 @@ struct PlanEditorView: View {
             controls
         }
         .background(Color(red: 0.10, green: 0.11, blue: 0.12))
+        .sheet(isPresented: $showPresets) {
+            PlanPresetSheet { preset in
+                plan = preset.plan()
+                selectedWall = nil
+                zoom = 1
+                panOffset = .zero
+                syncFields(from: plan)
+            }
+        }
+        .sheet(isPresented: $showTakeoff) {
+            TakeoffSheet(plan: plan, settings: settings)
+        }
         .onChange(of: plan) { _, new in
             syncFields(from: new)
             onChange(new)
@@ -106,6 +132,10 @@ struct PlanEditorView: View {
             if let saved = UserDefaults.standard.string(forKey: "planMode"), let savedMode = Mode(rawValue: saved) {
                 mode = savedMode
             }
+            // hak diagnostyczny: zbliżenie kartki z Ustawień (weryfikacja widoku notesu)
+            if UserDefaults.standard.object(forKey: "planZoom") != nil {
+                zoom = CGFloat(UserDefaults.standard.double(forKey: "planZoom"))
+            }
             if let preset = UserDefaults.standard.string(forKey: "planPreset") {
                 let values: [String: (Double, Double)] = [
                     "Kuchnia": (3000, 3600), "Salon": (5200, 6400),
@@ -126,6 +156,20 @@ struct PlanEditorView: View {
                 Text("Pomieszczenie").font(.headline)
                 Text(summary).font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
+            Button {
+                showPresets = true
+            } label: {
+                Label("Plany", systemImage: "square.grid.2x2")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            Button {
+                showTakeoff = true
+            } label: {
+                Label("Zestawienie", systemImage: "list.bullet.rectangle")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
             Spacer()
             if plan.closed {
                 Label("zamknięty", systemImage: "checkmark.seal")
@@ -311,14 +355,65 @@ struct PlanEditorView: View {
         )
     }
 
+    /// Główny gest kartki:
+    /// 1) złapanie ściany → przesuwanie prostopadłe (plan się rozszerza/zwęża),
+    /// 2) tryb prostokąta → rysowanie nowego obrysu,
+    /// 3) przy zbliżeniu → przesuwanie kartki.
     private func drawGesture(fit: PlanFit) -> some Gesture {
         DragGesture(minimumDistance: 3)
             .onChanged { value in
-                guard mode == .rectangle else { return }
+                // 1) ściana pod palcem?
+                if draggingWall == nil, dragStart == nil {
+                    let start = fit.planPoint(fromScreen: value.startLocation)
+                    if let hit = plan.nearestWall(to: start), hit.distance <= fit.mmPerPoint * 26 {
+                        draggingWall = hit.index
+                        selectedWall = hit.index
+                        lastDragMM = .zero
+                    }
+                }
+
+                if let index = draggingWall {
+                    let total = fit.planPoint(fromScreen: value.location)
+                        - fit.planPoint(fromScreen: value.startLocation)
+                    let delta = total - lastDragMM
+                    lastDragMM = total
+                    guard let wall = plan.wall(index) else { return }
+                    let d = wall.b - wall.a
+                    let length = simd_length(d)
+                    guard length > 1e-6 else { return }
+                    let normal = SIMD2<Double>(-d.y / length, d.x / length)
+                    let shift = simd_dot(delta, normal)
+                    if abs(shift) > 0.5 {
+                        // przyciąganie do siatki 10 mm — palcem nie trafimy w 1 mm
+                        plan.moveWall(index, by: Units.quantize((shift / 10).rounded() * 10))
+                    }
+                    return
+                }
+
+                guard mode == .rectangle else {
+                    // tryb kresek: tylko przesuwanie kartki przy zbliżeniu
+                    if zoom > 1.02 {
+                        panOffset.width += value.translation.width - lastDrag.width
+                        panOffset.height += value.translation.height - lastDrag.height
+                        lastDrag = value.translation
+                    }
+                    return
+                }
+
                 if dragStart == nil { dragStart = fit.planPoint(fromScreen: value.startLocation) }
                 dragCurrent = fit.planPoint(fromScreen: value.location)
             }
             .onEnded { value in
+                if draggingWall != nil {
+                    draggingWall = nil
+                    lastDragMM = .zero
+                    syncFields(from: plan)
+                    lastDrag = .zero
+                    return
+                }
+
+                lastDrag = .zero
+
                 guard mode == .rectangle, let start = dragStart else { return }
                 let end = fit.planPoint(fromScreen: value.location)
                 defer {
@@ -335,6 +430,15 @@ struct PlanEditorView: View {
                     thickness: parse(thicknessText).clamped(to: 40...400, fallback: 120)
                 )
                 selectedWall = nil
+            }
+    }
+
+    /// Szczypanie: mnożnik wykładniczy, ograniczony — bez „latania" widoku.
+    private var zoomGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                let step = pow(Double(value.magnification), settings.zoomSensitivity)
+                zoom = min(4.0, max(0.45, zoom * CGFloat(1 / max(0.25, step))))
             }
     }
 
@@ -520,18 +624,19 @@ struct PlanFit {
     let center: CGPoint      // gdzie leży (0,0) planu
     let size: CGSize
 
-    init(plan: FloorPlan, size: CGSize) {
+    init(plan: FloorPlan, size: CGSize, zoom: CGFloat = 1, offset: CGSize = .zero) {
         let b = plan.bounds
         let spanX = Swift.max(1000, b.max.x - b.min.x)
         let spanY = Swift.max(1000, b.max.y - b.min.y)
-        let padding: Double = 70
+        let padding: Double = 90
         let sx = (Double(size.width) - padding * 2) / spanX
         let sy = (Double(size.height) - padding * 2) / spanY
-        self.scale = Swift.max(0.0008, Swift.min(sx, sy))
+        let base = Swift.max(0.0002, Swift.min(sx, sy))
+        self.scale = base * Double(zoom)
         let planCenter = SIMD2<Double>((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2)
         self.center = CGPoint(
-            x: size.width / 2 - planCenter.x * scale,
-            y: size.height / 2 - planCenter.y * scale
+            x: size.width / 2 - planCenter.x * self.scale + offset.width,
+            y: size.height / 2 - planCenter.y * self.scale + offset.height
         )
         self.size = size
     }

@@ -759,4 +759,62 @@ final class GestureNavTests: XCTestCase {
         XCTAssertEqual(first.name, "front")
         XCTAssertEqual(second.name, "front 2", "druga tekstura o tej samej nazwie dostaje numer")
     }
+
+    // MARK: - przesuwanie ścian (palcem)
+
+    func testMoveWallKeepsLengthAndMovesBothCorners() {
+        var plan = FloorPlan.rectangle(x: 0, z: 0, width: 3000, depth: 3600)
+        // wall(0) to ściana południowa; dodatnia wartość = ruch do wnętrza
+        // (normalna liczona „do środka", tak samo jak przy przeciąganiu palcem)
+        let before = plan.wall(0)!.length
+        plan.moveWall(0, by: 200)
+        // przesuwana ściana zachowuje długość; sąsiednie skracają się same
+        XCTAssertEqual(plan.wall(0)!.length, before, accuracy: 0.0001)
+        XCTAssertEqual(plan.size.y, 3400, accuracy: 0.0001)
+        XCTAssertEqual(plan.size.x, 3000, accuracy: 0.0001)
+    }
+
+    func testMoveVertexSnapsToPrecision() {
+        var plan = FloorPlan.rectangle(width: 3000, depth: 3000)
+        plan.moveVertex(2, to: SIMD2(3123.456789, 3010.123456))
+        XCTAssertEqual(plan.points[2].x, 3123.4568, accuracy: 0.0001)
+        XCTAssertEqual(plan.points[2].y, 3010.1235, accuracy: 0.0001)
+    }
+
+    // MARK: - gotowe plany i zestawienie
+
+    func testPresetsProduceValidPlans() {
+        for preset in PlanPresets.all {
+            let plan = preset.plan()
+            XCTAssertTrue(plan.closed)
+            XCTAssertGreaterThanOrEqual(plan.wallCount, 3)
+            XCTAssertGreaterThan(plan.areaM2, 5)
+            XCTAssertEqual(plan.size.x, preset.width, accuracy: 1)
+            XCTAssertEqual(plan.size.y, preset.depth, accuracy: 1)
+        }
+    }
+
+    func testTakeoffCountsMaterials() {
+        let plan = FloorPlan.rectangle(width: 3000, depth: 3600, height: 2600)
+        let t = Takeoff.compute(plan: plan, windowCount: 2, doorCount: 1, coats: 2, coverage: 11)
+        XCTAssertEqual(t.floorAreaM2, 10.8, accuracy: 0.01)
+        XCTAssertEqual(t.perimeterMeters, 13.2, accuracy: 0.01)
+        XCTAssertEqual(t.wallAreaWithOpeningsM2, 34.32, accuracy: 0.01)
+        // otwory: 2 × 1,68 m² + 1 × 1,89 m²
+        XCTAssertEqual(t.wallAreaM2, 34.32 - 5.25, accuracy: 0.01)
+        XCTAssertEqual(t.skirtingMeters, 13.2 - 0.9, accuracy: 0.01)
+        XCTAssertEqual(t.paintLiters, (34.32 - 5.25) * 2 / 11, accuracy: 0.01)
+        XCTAssertEqual(t.windows.count, 2)
+        XCTAssertEqual(t.doors.count, 1)
+    }
+
+    func testSettingsDefaultFOVIs47() {
+        let settings = AppSettings()
+        XCTAssertEqual(settings.fieldOfView, 47, accuracy: 0.0001)
+        var wide = AppSettings()
+        wide.fieldOfView = 500
+        XCTAssertEqual(wide.clampedFieldOfView, 75)
+        wide.fieldOfView = 5
+        XCTAssertEqual(wide.clampedFieldOfView, 28)
+    }
 }
