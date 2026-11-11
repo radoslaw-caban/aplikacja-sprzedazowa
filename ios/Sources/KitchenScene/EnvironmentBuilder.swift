@@ -193,6 +193,17 @@ public enum EnvironmentBuilder {
             if abs(x) < 9 && z > 0 { continue }   // pas podjazdu i trawnika przed domem
 
             let height = rng.range(5.5, 12)
+
+            // przy domu stawiamy prawdziwe modele (współdzielona siatka = jedna pamięć)
+            if distance < houseRadius + 26, placed < 14,
+               let model = ModelLibrary.entity(named: "IslandTree", targetSize: rng.range(6, 9)) {
+                model.position = [x, 0, z]
+                model.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
+                model.name = "tree-model-\(placed)"
+                root.addChild(model)
+                placed += 1
+                continue
+            }
             let trunk = ModelEntity(
                 mesh: .generateCylinder(height: height * 0.34, radius: height * 0.028),
                 materials: [trunkMaterial]

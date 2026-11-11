@@ -95,6 +95,22 @@ public enum GLBLoader {
                let texture = imageTexture(bufferViews[view], bin: bin) {
                 m.baseColor = .init(tint: .white, texture: .init(texture))
             }
+            // liście w modelach roślin to alphaMask — bez tego renderują się jako białe kwadraty
+            if let alphaMode = json["alphaMode"] as? String {
+                switch alphaMode {
+                case "MASK":
+                    let cutoff = (json["alphaCutoff"] as? Double) ?? 0.5
+                    m.opacityThreshold = Float(cutoff)
+                    m.blending = .opaque
+                case "BLEND":
+                    m.blending = .transparent(opacity: .init(floatLiteral: 0.85))
+                default:
+                    m.blending = .opaque
+                }
+            }
+            if json["doubleSided"] as? Bool == true {
+                m.faceCulling = .none
+            }
             if let rough = pbr["roughnessFactor"] as? Double { m.roughness = .init(floatLiteral: Float(rough)) }
             if let metal = pbr["metallicFactor"] as? Double { m.metallic = .init(floatLiteral: Float(metal)) }
             return m
