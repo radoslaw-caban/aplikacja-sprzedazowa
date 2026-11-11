@@ -15,7 +15,7 @@ public enum EnvironmentBuilder {
         public var radius: Float = 210          // promień terenu z teksturą (m)
         public var forestTrees: Int = 900       // gęsty las wokół posesji
         public var forestBackdrop: Bool = true  // uproszczone tło lasu (pierścień)
-        public var grassTufts: Int = 3200       // kępy trawy przy domu
+        public var grassTufts: Int = 3600       // kępy trawy przy domu (5 cm)
         public var fogBanks: Int = 40           // mgła w dolinach
         public var mountains: Int = 26
         public var birds: Int = 6
@@ -34,6 +34,8 @@ public enum EnvironmentBuilder {
             return Float((state >> 33) & 0xFFFFFF) / Float(0xFFFFFF)
         }
         mutating func range(_ a: Float, _ b: Float) -> Float { a + (b - a) * next() }
+        /// Liczba z zakresu ±v — do odchyłek i przechyłów.
+        mutating func signed(_ v: Float) -> Float { (next() * 2 - 1) * v }
     }
 
     // MARK: - scena
@@ -49,14 +51,22 @@ public enum EnvironmentBuilder {
         root.addChild(farMeadow(inner: options.radius - 2, outer: 6000))
         // Bieszczady: pasma w warstwach, za nimi uproszczone tło lasu,
         // a między nimi mgła w dolinach. Kolejność = kolejność malowania pleneru.
-        root.addChild(mountainRange(options: options, rng: &rng))
-        if options.forestBackdrop {
-            root.addChild(forestBackdrop(radius: options.radius))
-        }
+        // Tło: trzy plany ZIELONYCH wzgórz z lasem, każde za pasem mgły.
+        // Od najbliższego: ciemna zieleń → średnia → blada mglista.
+        root.addChild(hillBackdrop(radius: options.radius * 3.2, heightRange: 14...38,
+                                   tint: (0.13, 0.24, 0.17)))
+        root.addChild(fogRings(radius: options.radius * 3.35, count: 22, height: 26, opacity: 0.45))
+        root.addChild(hillBackdrop(radius: options.radius * 5.0, heightRange: 32...78,
+                                   tint: (0.24, 0.35, 0.28)))
+        root.addChild(fogRings(radius: options.radius * 5.3, count: 20, height: 48, opacity: 0.55))
+        root.addChild(hillBackdrop(radius: options.radius * 7.6, heightRange: 60...130,
+                                   tint: (0.40, 0.49, 0.44), jitter: false))
+        root.addChild(fogRings(radius: options.radius * 8.0, count: 18, height: 80, opacity: 0.62))
         root.addChild(fogBanks(options: options, rng: &rng))
         root.addChild(clouds(options: options, rng: &rng))
         root.addChild(forest(options: options, rng: &rng, room: room))
         root.addChild(grassTufts(options: options, rng: &rng, room: room))
+        root.addChild(fence(room: room))
         root.addChild(road(room: room))
         root.addChild(driveway(room: room))
         root.addChild(tesla(position: SIMD3(-1.3, 0, Float(room.depth / 2000) + 9.5)))
@@ -260,38 +270,43 @@ public enum EnvironmentBuilder {
         return root
     }
 
-    /// Uproszczone tło lasu: pierścień z poszarpaną górną krawędzią.
+    /// Wzgórza z lasem w tle: pierścień z poszarpaną górną krawędzią
+    /// (ząbki = korony drzew) i pasem mgły przed nim.
     ///
     /// PO CO: pojedyncze drzewa kończą się w pewnej odległości i horyzont robi
-    /// się pusty. Zamiast sadzić tysiące dodatkowych modeli, stawiamy jedną
-    /// taflę w kolorze lasu z nierównym grzbietem — z dystansu nie do odróżnienia,
-    /// a koszt to kilkaset trójkątów.
-    static func forestBackdrop(radius: Float) -> Entity {
+    /// się pusty. Zamiast sadzić tysiące dodatkowych modeli, stawiamy taflę
+    /// w kolorze lasu z nierównym grzbietem — z dystansu nie do odróżnienia.
+    static func hillBackdrop(
+        radius: Float,
+        heightRange: ClosedRange<Float>,
+        tint: (Float, Float, Float),
+        jitter: Bool = true
+    ) -> Entity {
         let root = Entity()
         root.name = "forest-backdrop"
 
-        let ringRadius = radius * 3.4
-        let segments = 200
+        let segments = 220
         var positions: [SIMD3<Float>] = []
         var normals: [SIMD3<Float>] = []
         var uvs: [SIMD2<Float>] = []
         var indices: [UInt32] = []
 
-        // wysokości grzbietu: suma sinusów o różnych okresach — bez szumu
+        // Grzbiet: kilka sinusów o różnych okresach (bez szumu pseudolosowego).
+        // Wysoki okres = pojedyncze korony drzew, niski = łagodne wzgórze.
         func ridge(_ i: Int) -> Float {
             let a = Float(i) / Float(segments) * .pi * 2
-            let n1 = 0.5 + 0.5 * sin(a * 7.0 + 0.9)
-            let n2 = 0.5 + 0.5 * sin(a * 17.0 + 2.3)
-            let n3 = 0.5 + 0.5 * sin(a * 31.0 + 4.1)
-            // niska ściana lasu: ma być tłem dla pasm górskich, nie je zasłaniać
-            return 12 + (n1 * 0.55 + n2 * 0.3 + n3 * 0.15) * 22
+            let hills = 0.5 + 0.5 * sin(a * 3.0 + 0.7)
+            let woods = 0.5 + 0.5 * sin(a * 19.0 + 2.1)
+            let crowns = 0.5 + 0.5 * sin(a * 61.0 + 4.3)
+            let blend = hills * 0.60 + woods * 0.25 + (jitter ? crowns * 0.15 : 0)
+            return heightRange.lowerBound + blend * (heightRange.upperBound - heightRange.lowerBound)
         }
 
         for i in 0..<segments {
             let a0 = Float(i) / Float(segments) * .pi * 2
             let a1 = Float(i + 1) / Float(segments) * .pi * 2
-            let x0 = cos(a0) * ringRadius, z0 = sin(a0) * ringRadius
-            let x1 = cos(a1) * ringRadius, z1 = sin(a1) * ringRadius
+            let x0 = cos(a0) * radius, z0 = sin(a0) * radius
+            let x1 = cos(a1) * radius, z1 = sin(a1) * radius
             let h0 = ridge(i), h1 = ridge(i + 1)
 
             let base = UInt32(positions.count)
@@ -305,18 +320,47 @@ public enum EnvironmentBuilder {
             indices += [base, base + 1, base + 2, base, base + 2, base + 3]
         }
 
-        var descriptor = MeshDescriptor(name: "forestBackdrop")
+        var descriptor = MeshDescriptor(name: "hillBackdrop")
         descriptor.positions = MeshBuffer(positions)
         descriptor.normals = MeshBuffer(normals)
         descriptor.textureCoordinates = MeshBuffer(uvs)
         descriptor.primitives = .triangles(indices)
         guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return root }
 
-        // ciemna zieleń buczyny, lekko rozjaśniona mgłą (Unlit = bez odblasków)
-        let material = UnlitMaterial(color: PlatformColor(red: 0.16, green: 0.27, blue: 0.24, alpha: 1))
+        let material = UnlitMaterial(color: PlatformColor(
+            red: CGFloat(tint.0), green: CGFloat(tint.1), blue: CGFloat(tint.2), alpha: 1
+        ))
         let entity = ModelEntity(mesh: mesh, materials: [material])
-        entity.name = "forest-silhouette"
+        entity.name = "hills-silhouette"
         root.addChild(entity)
+        return root
+    }
+
+    /// Pas mgły przed wzgórzami: pionowe karty z gradientem, ustawione w krąg.
+    /// Mgła między planami to połowa efektu Bieszczadów — bez niej wzgórza
+    /// wyglądają jak wycinanki.
+    static func fogRings(radius: Float, count: Int, height: Float, opacity: Float) -> Entity {
+        let root = Entity()
+        root.name = "fog-ring"
+        guard let texture = EnvironmentArt.hazeGradient() else { return root }
+
+        var material = UnlitMaterial()
+        material.color = .init(tint: .white, texture: .init(texture))
+        material.blending = .transparent(opacity: .init(floatLiteral: opacity))
+        material.faceCulling = .none
+
+        let plane = MeshResource.generatePlane(width: 1, height: 1)
+        for i in 0..<count {
+            let angle = Float(i) / Float(count) * .pi * 2
+            let card = ModelEntity(mesh: plane, materials: [material])
+            let span = 2 * .pi * radius / Float(count) * 1.6
+            card.scale = [span, height, 1]
+            card.position = [cos(angle) * radius, height * 0.35, sin(angle) * radius]
+            // karta patrzy w środek sceny
+            card.orientation = simd_quatf(angle: angle + .pi / 2, axis: [0, 1, 0])
+            card.name = "fog-card-\(i)"
+            root.addChild(card)
+        }
         return root
     }
 
@@ -369,7 +413,9 @@ public enum EnvironmentBuilder {
         while placed < options.grassTufts && guardCount < options.grassTufts * 5 {
             guardCount += 1
             let angle = rng.range(0, .pi * 2)
-            let distance = rng.range(4.5, 42)
+            // trawnik 5 cm: kępy tylko tam, gdzie widać detal (do 26 m);
+            // dalej i tak liczy się tekstura podłoża
+            let distance = rng.range(4.0, 26)
             let x = cos(angle) * distance
             let z = sin(angle) * distance
 
@@ -410,20 +456,107 @@ public enum EnvironmentBuilder {
         while placed < options.forestTrees && guardCount < options.forestTrees * 6 {
             guardCount += 1
             let angle = rng.range(0, .pi * 2)
-            // las podchodzi bliżej domu niż wcześniej — ma go otaczać, nie być tłem
-            let distance = rng.range(houseRadius * 0.72, options.radius * 0.82)
+            // las zaczyna się za trawnikiem, nie tuż za płotem
+            let distance = rng.range(houseRadius + 8, options.radius * 0.82)
             let x = cos(angle) * distance
             let z = sin(angle) * distance
             // nie sadzimy na podjeździe i w korytarzu kamery zewnętrznej
             if z > 0 && abs(x) < 26 { continue }
 
+            // Bliżej domu stawiamy PRAWDZIWE modele z paczki (jakość, jaką widać
+            // na zdjęciach), dalej proceduralne — 900 modeli GLB zjadłoby pamięć.
+            let near = distance < houseRadius + 60
+            if near, let model = ModelLibrary.entity(named: "IslandTree", targetSize: rng.range(5.5, 9.5)) {
+                model.position = [x, 0, z]
+                model.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
+                model.name = "tree-model-\(placed)"
+                root.addChild(model)
+                placed += 1
+                continue
+            }
+
             let variant = variants[Int(rng.next() * Float(variants.count)) % variants.count]
             let height = rng.range(9.0, 26.0)
-            let tree = TreeFactory.instance(variant, height: height, rotation: rng.range(0, .pi * 2))
+            let tree = TreeFactory.instance(
+                variant,
+                height: height,
+                rotation: rng.range(0, .pi * 2),
+                squash: rng.range(0.80, 1.20),
+                tilt: rng.signed(0.10)
+            )
             tree.position = [x, 0, z]
             tree.name = "tree-\(placed)"
             root.addChild(tree)
             placed += 1
+        }
+        return root
+    }
+
+    /// Ogrodzenie posesji: słupki co 2,4 m i dwa poziome profile, z bramą
+    /// wjazdową od strony podjazdu (bez niej płot przecinałby kostkę).
+    static func fence(room: Room) -> Entity {
+        let root = Entity()
+        root.name = "fence"
+
+        let halfW = Float(room.width / 2000) + 12
+        let halfD = Float(room.depth / 2000) + 14
+        let height: Float = 1.25
+        let spacing: Float = 2.4
+        let gateHalf: Float = 3.4
+
+        var wood = PhysicallyBasedMaterial()
+        wood.baseColor = .init(tint: PlatformColor(red: 0.34, green: 0.26, blue: 0.18, alpha: 1))
+        wood.roughness = .init(floatLiteral: 0.9)
+        wood.metallic = .init(floatLiteral: 0)
+
+        var postMaterial = PhysicallyBasedMaterial()
+        postMaterial.baseColor = .init(tint: PlatformColor(red: 0.24, green: 0.19, blue: 0.14, alpha: 1))
+        postMaterial.roughness = .init(floatLiteral: 0.95)
+
+        func addPost(_ x: Float, _ z: Float) {
+            let entity = ModelEntity(
+                mesh: .generateBox(width: 0.14, height: height, depth: 0.14, cornerRadius: 0.012),
+                materials: [postMaterial]
+            )
+            entity.position = [x, height / 2, z]
+            entity.name = "fence-post"
+            root.addChild(entity)
+        }
+
+        func addRails(from a: SIMD2<Float>, to b: SIMD2<Float>) {
+            let delta = b - a
+            let length = simd_length(delta)
+            guard length > 0.05 else { return }
+            let angle = atan2(delta.x, delta.y)
+            for y in [height * 0.42, height * 0.82] {
+                let rail = ModelEntity(
+                    mesh: .generateBox(width: 0.07, height: 0.12, depth: length, cornerRadius: 0.005),
+                    materials: [wood]
+                )
+                rail.position = [(a.x + b.x) / 2, y, (a.y + b.y) / 2]
+                rail.orientation = simd_quatf(angle: angle, axis: [0, 1, 0])
+                rail.name = "fence-rail"
+                root.addChild(rail)
+            }
+        }
+
+        let runs: [(SIMD2<Float>, SIMD2<Float>)] = [
+            (SIMD2(-halfW, -halfD), SIMD2(halfW, -halfD)),    // tył
+            (SIMD2(-halfW, -halfD), SIMD2(-halfW, halfD)),    // lewa
+            (SIMD2(halfW, -halfD), SIMD2(halfW, halfD)),      // prawa
+            (SIMD2(-halfW, halfD), SIMD2(-gateHalf, halfD)),  // przód lewy
+            (SIMD2(gateHalf, halfD), SIMD2(halfW, halfD)),    // przód prawy
+        ]
+
+        for (a, b) in runs {
+            let delta = b - a
+            let length = simd_length(delta)
+            let count = max(1, Int((length / spacing).rounded()))
+            for i in 0...count {
+                let t = Float(i) / Float(count)
+                addPost(a.x + delta.x * t, a.y + delta.y * t)
+            }
+            addRails(from: a, to: b)
         }
         return root
     }
@@ -531,11 +664,24 @@ public enum EnvironmentBuilder {
         return root
     }
 
-    /// Tesla Model Y (bryła): niski, gładki nadwozie bez grilla, duże koła.
+    /// Samochód na podjeździe: model Tesla Model 3 (CC-BY-4.0, Ameer Studio),
+    /// a gdy pliku nie ma — bryła proceduralna.
     ///
-    /// Świadomie bez pliku GLB: model z paczki był „zabawką" i ważył 40 MB,
-    /// a z 20 metrów liczy się sylwetka, nie detale.
+    /// UWAGA LICENCYJNA: CC-BY wymaga podania autora w aplikacji (stopka/„o
+    /// programie”). Model jest fanowski, nie pochodzi od Tesli.
     static func tesla(position: SIMD3<Float>) -> Entity {
+        if let model = ModelLibrary.entity(named: "TeslaModel3", targetLength: 4.7, axis: 2) {
+            let root = Entity()
+            root.name = "tesla"
+            root.addChild(model)
+            root.position = position
+            return root
+        }
+        return teslaProcedural(position: position)
+    }
+
+    /// Zapas, gdy modelu nie da się wczytać: bryła czytelna z 20 m.
+    static func teslaProcedural(position: SIMD3<Float>) -> Entity {
         let root = Entity()
         root.name = "tesla"
 

@@ -369,7 +369,13 @@ enum TreeFactory {
     /// Instancja wariantu: skala = docelowa wysokość, losowy obrót.
     /// Siatka i materiały są wspólne — to jedno pole i jedna encja na drzewo.
     @MainActor
-    static func instance(_ variant: Variant, height: Float, rotation: Float) -> Entity {
+    static func instance(
+        _ variant: Variant,
+        height: Float,
+        rotation: Float,
+        squash: Float = 1,
+        tilt: Float = 0
+    ) -> Entity {
         let root = Entity()
         let scale = height / variant.baseHeight
 
@@ -383,9 +389,12 @@ enum TreeFactory {
             root.addChild(leaves)
         }
 
-        // lekko węższa w planie korona — drzewa nie są kulkami
-        root.scale = SIMD3(scale * 0.95, scale, scale * 0.95)
-        root.orientation = simd_quatf(angle: rotation, axis: [0, 1, 0])
+        // Każda instancja inaczej „wyciągnięta" w planie i lekko przechylona —
+        // inaczej widać, że to ten sam model kopiowany setki razy.
+        root.scale = SIMD3(scale * squash, scale, scale * (1 / max(0.4, squash)))
+        let yaw = simd_quatf(angle: rotation, axis: [0, 1, 0])
+        let lean = simd_quatf(angle: tilt, axis: normalize(SIMD3<Float>(1, 0, 0.6)))
+        root.orientation = yaw * lean
         return root
     }
 }
@@ -408,33 +417,52 @@ enum GrassFactory {
 
         var built: [Patch] = []
 
-        // trzy warianty samej trawy
+        // Trawnik strzyżony na 5 cm: niskie, szerokie kępy
         for seed in [UInt64(3), 8, 15] {
-            if let patch = makePatch(seed: seed, texture: blades) { built.append(patch) }
+            if let patch = makePatch(seed: seed, texture: blades,
+                                     minHeight: 0.05, maxHeight: 0.09,
+                                     minWidth: 0.55, maxWidth: 0.95,
+                                     cards: 4, name: "grass-patch") {
+                built.append(patch)
+            }
         }
-        // kępa z kwiatami — osobny materiał, żeby kwiaty miały własne kolory
-        if let patch = makePatch(seed: 21, texture: flowers) { built.append(patch) }
+        // Kwiaty wyższe od trawnika (12-22 cm) — inaczej znikają w trawie
+        if let patch = makePatch(seed: 21, texture: flowers,
+                                 minHeight: 0.12, maxHeight: 0.22,
+                                 minWidth: 0.32, maxWidth: 0.55,
+                                 cards: 3, name: "flower-patch") {
+            built.append(patch)
+        }
 
         cache = built
         return cache
     }
 
-    private static func makePatch(seed: UInt64, texture: TextureResource) -> Patch? {
+    private static func makePatch(
+        seed: UInt64,
+        texture: TextureResource,
+        minHeight: Float,
+        maxHeight: Float,
+        minWidth: Float,
+        maxWidth: Float,
+        cards: Int,
+        name: String
+    ) -> Patch? {
         var rng = TreeFactory.RNG(seed)
         var builder = TreeFactory.MeshBuilder()
 
-        // 5 kart w wachlarzu — gęsta kępa widziana z każdej strony
-        for i in 0..<5 {
-            let angle = Float(i) / 5 * .pi
-            let width = rng.range(0.9, 1.5)
-            let height = rng.range(0.55, 0.95)
+        // karty w wachlarzu — kępa widziana z każdej strony
+        for i in 0..<cards {
+            let angle = Float(i) / Float(cards) * .pi
+            let width = rng.range(minWidth, maxWidth)
+            let height = rng.range(minHeight, maxHeight)
             let right = SIMD3<Float>(cos(angle) * width, 0, sin(angle) * width)
             let up = SIMD3<Float>(0, height, 0)
-            builder.addQuad(center: SIMD3(rng.signed(0.15), height / 2, rng.signed(0.15)),
+            builder.addQuad(center: SIMD3(rng.signed(0.12), height / 2, rng.signed(0.12)),
                             right: right, up: up)
         }
 
-        guard let desc = builder.descriptor("grass-patch"),
+        guard let desc = builder.descriptor(name),
               let mesh = try? MeshResource.generate(from: [desc]) else { return nil }
 
         var material = PhysicallyBasedMaterial()

@@ -17,6 +17,8 @@ public enum ModelLibrary {
     /// Spis modeli z licencjami (wymóg CC-BY: podanie autora).
     public static let catalog: [Entry] = [
         Entry(name: "IslandTree", license: "CC0", author: "Poly Haven"),
+        Entry(name: "TeslaModel3", license: "CC-BY-4.0",
+              author: "Ameer Studio · https://sketchfab.com/3d-models/tesla-2018-model-3-5ef9b845aaf44203b6d04e2c677e444f"),
     ]
 
     private static var cache: [String: Entity] = [:]
