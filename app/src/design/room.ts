@@ -35,6 +35,8 @@ export interface RoomBox {
   color: string;
   opacity?: number;
   kind: 'floor' | 'wall' | 'window' | 'door';
+  /** do wyboru ściany w 3D (płaszczyzna projektowa) */
+  side?: WallSide;
   mat?: 'wood' | 'wood-dark' | 'laminate' | 'stone' | 'glass' | 'metal' | 'grass' | 'cobble' | 'plaster' | 'roof' | 'foliage' | 'deck' | 'brick';
 }
 
@@ -54,10 +56,10 @@ export function roomBoxes(r: Room): RoomBox[] {
 
   // listwy przypodłogowe 80 × 20 mm wzdłuż wszystkich ścian
   const skirting = { color: '#f6f4ef', mat: 'plaster' as const };
-  out.push({ kind: 'wall', size: [W, 80, 20], position: [0, 40, -D / 2 + 10], ...skirting });
-  out.push({ kind: 'wall', size: [W, 80, 20], position: [0, 40, D / 2 - 10], ...skirting });
-  out.push({ kind: 'wall', size: [20, 80, D], position: [-W / 2 + 10, 40, 0], ...skirting });
-  out.push({ kind: 'wall', size: [20, 80, D], position: [W / 2 - 10, 40, 0], ...skirting });
+  out.push({ kind: 'wall', size: [W, 80, 20], position: [0, 40, -D / 2 + 10], side: 'north', ...skirting });
+  out.push({ kind: 'wall', size: [W, 80, 20], position: [0, 40, D / 2 - 10], side: 'south', ...skirting });
+  out.push({ kind: 'wall', size: [20, 80, D], position: [-W / 2 + 10, 40, 0], side: 'west', ...skirting });
+  out.push({ kind: 'wall', size: [20, 80, D], position: [W / 2 - 10, 40, 0], side: 'east', ...skirting });
 
   // ściana północna (z = -D/2), z oknem
   out.push(...wallWithHole('north', r, W, D, H, T));
@@ -65,11 +67,11 @@ export function roomBoxes(r: Room): RoomBox[] {
   out.push(...wallWithHole('south', r, W, D, H, T));
   // wschodnia (x = +W/2)
   out.push({
-    kind: 'wall', size: [T, H, D], position: [W / 2 + T / 2, H / 2, 0], color: '#cfc7ba',
+    kind: 'wall', size: [T, H, D], position: [W / 2 + T / 2, H / 2, 0], color: '#cfc7ba', side: 'east',
   });
   // zachodnia (x = -W/2)
   out.push({
-    kind: 'wall', size: [T, H, D], position: [-W / 2 - T / 2, H / 2, 0], color: '#cfc7ba',
+    kind: 'wall', size: [T, H, D], position: [-W / 2 - T / 2, H / 2, 0], color: '#cfc7ba', side: 'west',
   });
 
   return out;
@@ -102,6 +104,7 @@ function wallWithHole(
       size: [holeX, H, T],
       position: [-len / 2 + holeX / 2, H / 2, z],
       color,
+      side,
     });
   }
   // prawy segment
@@ -112,6 +115,7 @@ function wallWithHole(
       size: [rightW, H, T],
       position: [len / 2 - rightW / 2, H / 2, z],
       color,
+      side,
     });
   }
   // pod otworem
@@ -121,6 +125,7 @@ function wallWithHole(
       size: [holeLen, holeY, T],
       position: [-len / 2 + holeX + holeLen / 2, holeY / 2, z],
       color,
+      side,
     });
   }
   // nad otworem
@@ -131,6 +136,7 @@ function wallWithHole(
       size: [holeLen, above, T],
       position: [-len / 2 + holeX + holeLen / 2, holeY + holeH + above / 2, z],
       color,
+      side,
     });
   }
   // szyba / skrzydło

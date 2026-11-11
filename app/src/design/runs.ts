@@ -18,8 +18,14 @@ export interface RunSpec {
   hasBase: boolean;
   /** czy bieg ma cokół (wszystko poza wiszącymi) */
   hasPlinth: boolean;
-  /** wysokość korpusu nad cokołem (mm) */
+  /** górna krawędź korpusu nad podłogą (cokół + korpus + montaż) — mm */
   bodyTop: number;
+  /** wysokość cokołu w biegu (mm) */
+  plinthHeight: number;
+  /** głębokość blatu (wyspa: 900 z nawisem) — mm */
+  worktopDepth?: number;
+  /** przesunięcie blatu w głąb (lokalne +z) — mm */
+  worktopShift?: number;
 }
 
 /** Grupuje szafki w biegi: ta sama linia, ten sam obrót, stykające się. */
@@ -54,8 +60,15 @@ export function computeRuns(cabinets: Cabinet[], tol = 20): RunSpec[] {
         length: hi - lo,
         rotation: first.rotation,
         hasBase: group.some((c) => c.type === 'base'),
-        hasPlinth: group.some((c) => c.type !== 'wall'),
-        bodyTop: Math.max(...group.map((c) => c.height + ((c as { mountHeight?: number }).mountHeight ?? 0))),
+        // cokół tylko gdy szafka ma realny cokół (szafki wiszące/podwieszone — nie)
+        hasPlinth: group.some((c) => c.type !== 'wall' && c.plinth > 0),
+        // blat leży na korpusie: cokół + korpus (+ montaż dla podwieszonych)
+        bodyTop: Math.max(
+          ...group.map((c) => c.height + (c.type === 'base' ? c.plinth : 0) + (c.mountHeight ?? 0)),
+        ),
+        plinthHeight: Math.max(0, ...group.map((c) => (c.type === 'wall' ? 0 : c.plinth))),
+        worktopDepth: Math.max(580, ...group.map((c) => c.worktopDepth ?? 0)),
+        worktopShift: group.find((c) => c.worktopShift !== undefined)?.worktopShift ?? 0,
       });
       // dla biegu wzdłuż Z środek X to pierwsza szafka
       if (alongZ) {
@@ -108,12 +121,18 @@ export function worktopBoxes(runs: RunSpec[], p: WorktopParams): SceneBox[] {
     .filter((r) => r.hasBase)
     .map((r) => {
       const y = r.bodyTop + p.thickness / 2;
+      const shift = r.worktopShift ?? 0;
+      const rad = (r.rotation * Math.PI) / 180;
       return {
         id: `${r.id}:worktop`,
         kind: 'panel' as const,
         cabinetId: r.cabinetIds[0],
-        size: [r.length + p.overhang * 2, p.thickness, 580] as [number, number, number],
-        position: [r.cx, y, r.cz] as [number, number, number],
+        size: [r.length + p.overhang * 2, p.thickness, r.worktopDepth ?? 580] as [number, number, number],
+        position: [
+          r.cx + shift * Math.sin(rad),
+          y,
+          r.cz + shift * Math.cos(rad),
+        ] as [number, number, number],
         rotationY: r.rotation,
         color: p.color,
         outline: true,
@@ -157,8 +176,8 @@ export function plinthBoxes(runs: RunSpec[], p: PlinthParams): SceneBox[] {
       id: `${r.id}:plinth`,
       kind: 'panel' as const,
       cabinetId: r.cabinetIds[0],
-      size: [r.length, p.height, 540 - cof] as [number, number, number],
-      position: [r.cx, p.height / 2, r.cz + cof / 2] as [number, number, number],
+      size: [r.length, r.plinthHeight || p.height, 540 - cof] as [number, number, number],
+      position: [r.cx, (r.plinthHeight || p.height) / 2, r.cz + cof / 2] as [number, number, number],
       rotationY: r.rotation,
       color: '#3a3a37',
       outline: true,

@@ -62,6 +62,19 @@ export interface RenderEngine {
   drawGuides?(guides: { axis: 'x' | 'z'; value: number; from: number; to: number }[]): void;
   clearGuides?(): void;
   highlightCabinet?(cabinetId: string | null): void;
+  /** wybór płaszczyzny ściany w 3D (tryb stref) */
+  pickWall?(clientX: number, clientY: number): {
+    side: 'north' | 'south' | 'east' | 'west';
+    point: [number, number, number];
+    t: number;
+    y: number;
+  } | null;
+  /** podświetlenie ściany projektowej */
+  highlightWall?(side: 'north' | 'south' | 'east' | 'west' | null): void;
+  /** kadr na ścianę (środek t, szerokość zabudowy) */
+  frameWall?(side: 'north' | 'south' | 'east' | 'west', t?: number, width?: number): void;
+  /** kadr na punkt sceny (mm) — zbliżenie na element strefy */
+  frameAt?(x: number, y: number, z: number, dist?: number): void;
   setCloudVisible?(visible: boolean): void;
   /** transformacja chmury punktów: jednostka (m 1 / cm 0.01 / mm 0.001), obrót i przesunięcie w METRACH */
   setCloudTransform?(t: CloudTransform): void;

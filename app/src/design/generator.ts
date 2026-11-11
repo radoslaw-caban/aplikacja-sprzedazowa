@@ -16,6 +16,7 @@ import {
   type SceneBox,
 } from './types';
 import { organizerBoxes } from './organizer';
+import { applianceBoxes } from './appliances';
 
 /**
  * Generator geometrii wg realnej konstrukcji bezramowej (EU):
@@ -59,6 +60,8 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
   const bodyY = plinth;
   /** szafki wiszące stoją na wysokości montażu, nie na podłodze */
   const lift = c.mountHeight ?? 0;
+  /** zewnętrzna płaszczyzna frontu (lokalne +z) */
+  const zFront = Dp / 2 + GAP + D / 2;
 
   const push = (
     kind: SceneBox['kind'],
@@ -103,9 +106,6 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
 
   // --- blat: osobny obiekt w biegu (runs.ts) ---
 
-  // przesunięcie szafki wiszącej na wysokość montażu
-  if (lift) for (const b of boxes) b.position[1] += lift;
-
   // --- elementy wnętrza ---
   for (const el of c.elements) {
     boxes.push(...buildElement(c, el));
@@ -118,7 +118,6 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
 
   // --- OKUCIA: uchwyty na frontach, zawiasy, nóżki, wieszaki ---
   const handleType = c.handle ?? (c.type === 'wall' ? 'edge' : 'bar');
-  const zFront = Dp / 2 + GAP + D / 2; // zewnętrzna płaszczyzna frontu
   for (const f of c.fronts) {
     const fw = f.x1 - f.x0;
     const fh = f.y1 - f.y0;
@@ -137,6 +136,22 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
         boxes.push(...hingeBoxes(c.id, 'left', -W / 2 + f.x0 + 21, hy, zFront, Dp));
         boxes.push(...hingeBoxes(c.id, 'right', -W / 2 + f.x1 - 21, hy, zFront, Dp));
       }
+    }
+  }
+
+  // --- szafa przesuwna: panele w płaszczyźnie frontu (bez zawiasów) ---
+  if (c.slidingPanels && c.slidingPanels > 1) {
+    const n = c.slidingPanels;
+    const pw = W / n + 30;
+    for (let i = 0; i < n; i++) {
+      const px = -W / 2 + (i + 0.5) * (W / n);
+      const pz = zFront + i * 20;
+      push('front', [pw, bodyH - GAP * 2, PANEL], [px, bodyY + bodyH / 2, pz], {
+        color: i % 2 === 0 ? (c.color ?? '#c8bca9') : shade(c.color ?? '#c8bca9', -8),
+      });
+      push('handle', [16, 420, 18], [px + (i % 2 === 0 ? -pw / 2 + 50 : pw / 2 - 50), bodyY + bodyH * 0.55, pz + 14], {
+        color: '#9aa3ae',
+      });
     }
   }
 
@@ -181,7 +196,25 @@ export function buildCabinet(c: Cabinet): SceneBox[] {
     boxes.push(...buildCutout(c, cut));
   }
 
+  // --- AGD i urządzenia w tej szafce ---
+  if (c.appliances?.length) boxes.push(...applianceBoxes(c));
+
+  // przesunięcie szafki wiszącej / podwieszonej na wysokość montażu
+  // (na końcu — bryły, fronty, półki i urządzenia razem)
+  if (lift) for (const b of boxes) b.position[1] += lift;
+
   return boxes;
+}
+
+/** Proste przyciemnienie koloru HEX (do paneli przesuwnych). */
+function shade(hex: string, delta: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) =>
+    Math.max(0, Math.min(255, v + delta)),
+  );
+  return `#${ch.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
 /**

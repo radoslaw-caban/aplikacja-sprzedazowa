@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test:scan": "node tools/test-scan-import.mts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:zones": "node tools/test-zone-plan.mts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",

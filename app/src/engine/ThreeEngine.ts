@@ -63,6 +63,8 @@ export class ThreeEngine implements RenderEngine {
   private degraded = 0;
   /** ściany półprzezroczyste — widok roboczy wnętrza */
   private wallGhost = true;
+  /** wymiary pomieszczenia w mm (do wyboru ściany w 3D) */
+  private roomSize = { width: 5000, depth: 5000, height: 2600 };
   /** zamrożenie obrazu — scena przestaje się renderować */
   private frozen = false;
 
@@ -599,6 +601,19 @@ export class ThreeEngine implements RenderEngine {
   /** Renderuje pomieszczenie testowe (podłoga, ściany, okno, drzwi). */
   renderRoom(boxes: import('./RenderEngine').RoomBox[], visible = true) {
     if (!this.scene) throw new Error('Engine not initialized');
+    // wymiary pomieszczenia z bryły podłogi i najwyższego wierzchołka ścian
+    const floor = boxes.find((b) => b.kind === 'floor');
+    const wallTop = Math.max(
+      0,
+      ...boxes.filter((b) => b.kind === 'wall' && b.side).map((b) => b.position[1] + b.size[1] / 2),
+    );
+    if (floor) {
+      this.roomSize = {
+        width: floor.size[0],
+        depth: floor.size[2],
+        height: wallTop > 0 ? wallTop : this.roomSize.height,
+      };
+    }
     for (const o of [...this.roomGroup.children]) {
       o.removeFromParent();
       const m = o as THREE.Mesh;
@@ -640,11 +655,141 @@ export class ThreeEngine implements RenderEngine {
       });
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(b.position[0] * mm, b.position[1] * mm, b.position[2] * mm);
-      mesh.userData = { kind: 'room-' + b.kind };
+      mesh.userData = { kind: 'room-' + b.kind, wallSide: b.side };
       mesh.receiveShadow = b.kind !== 'wall';
       mesh.castShadow = b.kind === 'wall';
       this.roomGroup.add(mesh);
     }
+    this.draw();
+  }
+
+  /**
+   * Wybór ściany w widoku 3D — czysto matematycznie (4 pionowe płaszczyzny),
+   * niezależnie od przezroczystości i cullingu materiałów.
+   */
+  pickWall(clientX: number, clientY: number): {
+    side: 'north' | 'south' | 'east' | 'west';
+    point: [number, number, number];
+    t: number;
+    y: number;
+  } | null {
+    if (!this.renderer || !this.camera) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, this.camera);
+    const { width: W, depth: D, height: H } = this.roomSize;
+    // scena jest w METRACH — wymiary pomieszczenia w mm przeliczamy na metry
+    const m = 0.001;
+    const Wm = W * m;
+    const Dm = D * m;
+    const Hm = H * m;
+    const planes: {
+      side: 'north' | 'south' | 'east' | 'west';
+      plane: THREE.Plane;
+      inside: (p: THREE.Vector3) => boolean;
+      t: (p: THREE.Vector3) => number;
+    }[] = [
+      {
+        side: 'north',
+        plane: new THREE.Plane(new THREE.Vector3(0, 0, 1), Dm / 2),
+        inside: (p) => Math.abs(p.x) <= Wm / 2 + 0.01 && p.y >= 0 && p.y <= Hm,
+        t: (p) => p.x + Wm / 2,
+      },
+      {
+        side: 'south',
+        plane: new THREE.Plane(new THREE.Vector3(0, 0, -1), Dm / 2),
+        inside: (p) => Math.abs(p.x) <= Wm / 2 + 0.01 && p.y >= 0 && p.y <= Hm,
+        t: (p) => p.x + Wm / 2,
+      },
+      {
+        side: 'west',
+        plane: new THREE.Plane(new THREE.Vector3(1, 0, 0), Wm / 2),
+        inside: (p) => Math.abs(p.z) <= Dm / 2 + 0.01 && p.y >= 0 && p.y <= Hm,
+        t: (p) => p.z + Dm / 2,
+      },
+      {
+        side: 'east',
+        plane: new THREE.Plane(new THREE.Vector3(-1, 0, 0), Wm / 2),
+        inside: (p) => Math.abs(p.z) <= Dm / 2 + 0.01 && p.y >= 0 && p.y <= Hm,
+        t: (p) => p.z + Dm / 2,
+      },
+    ];
+    let best: { side: 'north' | 'south' | 'east' | 'west'; point: THREE.Vector3; t: number; d: number } | null = null;
+    for (const f of planes) {
+      const hit = new THREE.Vector3();
+      if (!ray.ray.intersectPlane(f.plane, hit)) continue;
+      if (!f.inside(hit)) continue;
+      const d = hit.distanceTo(ray.ray.origin);
+      if (!best || d < best.d) best = { side: f.side, point: hit, t: f.t(hit), d };
+    }
+    if (!best) return null;
+    const lenMm = (best.side === 'north' || best.side === 'south' ? this.roomSize.width : this.roomSize.depth);
+    return {
+      side: best.side,
+      point: [best.point.x * 1000, best.point.y * 1000, best.point.z * 1000],
+      t: Math.max(0, Math.min(lenMm, best.t * 1000)),
+      y: best.point.y * 1000,
+    };
+  }
+
+  /** Podświetla wybraną ścianę (płaszczyznę projektową). */
+  highlightWall(side: 'north' | 'south' | 'east' | 'west' | null) {
+    for (const o of this.roomGroup.children) {
+      const mesh = o as THREE.Mesh;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (!mat || !mat.emissive) continue;
+      const on = side !== null && mesh.userData.wallSide === side;
+      mat.emissive.setHex(on ? 0x6a4a12 : 0x000000);
+      mat.emissiveIntensity = on ? 0.9 : 0;
+    }
+    this.draw();
+  }
+
+  /** Kadr na ścianę projektową (widok od wnętrza). */
+  frameWall(side: 'north' | 'south' | 'east' | 'west', t?: number, width?: number) {
+    if (!this.camera || !this.controls) return;
+    const { width: W, depth: D } = this.roomSize;
+    const m = 0.001;
+    const len = side === 'north' || side === 'south' ? W : D;
+    const along = t ?? len / 2;
+    const span = width ?? Math.min(len, 2400);
+    // mm → metry (scena jest w metrach)
+    const target =
+      side === 'north' ? new THREE.Vector3((-W / 2 + along) * m, 1.2, (-D / 2) * m)
+      : side === 'south' ? new THREE.Vector3((-W / 2 + along) * m, 1.2, (D / 2) * m)
+      : side === 'west' ? new THREE.Vector3((-W / 2) * m, 1.2, (-D / 2 + along) * m)
+      : new THREE.Vector3((W / 2) * m, 1.2, (-D / 2 + along) * m);
+    const dist = Math.max(1.6, Math.min(4.2, span * m * 1.5 + 0.9));
+    const inward =
+      side === 'north' ? new THREE.Vector3(0, 0, 1)
+      : side === 'south' ? new THREE.Vector3(0, 0, -1)
+      : side === 'west' ? new THREE.Vector3(1, 0, 0)
+      : new THREE.Vector3(-1, 0, 0);
+    this.camera.position.copy(target.clone().add(inward.multiplyScalar(dist)).add(new THREE.Vector3(0, 0.7, 0)));
+    this.controls.target.copy(target);
+    this.controls.update();
+    this.draw();
+  }
+
+  /** Kadr na dowolny punkt sceny (mm) z odległości dist (mm) — zbliżenia na elementy. */
+  frameAt(x: number, y: number, z: number, dist = 2200) {
+    if (!this.camera || !this.controls) return;
+    const m = 0.001;
+    const dx = -x;
+    const dz = -z;
+    const L = Math.hypot(dx, dz) || 1;
+    // kamera zawsze w świetle pomieszczenia (200 mm od ściany)
+    const limX = Math.max(0, this.roomSize.width / 2 - 200);
+    const limZ = Math.max(0, this.roomSize.depth / 2 - 200);
+    const px = Math.max(-limX, Math.min(limX, x + (dx / L) * dist));
+    const pz = Math.max(-limZ, Math.min(limZ, z + (dz / L) * dist));
+    this.camera.position.set(px * m, (y + 500) * m, pz * m);
+    this.controls.target.set(x * m, y * m, z * m);
+    this.controls.update();
     this.draw();
   }
 

@@ -1,6 +1,7 @@
 import type { Cabinet, Cutout } from './types';
 import type { SceneBox } from './types';
 import type { Room } from './room';
+import type { Zone } from './zones';
 
 /**
  * Projekty: wiele niezależnych aranżacji w jednej aplikacji.
@@ -11,6 +12,8 @@ export interface ProjectData {
   cabinets: Cabinet[];
   lights: SceneBox[];
   room: Room;
+  /** strefy zabudowy (auto-projekt) — brak pola = projekt bez stref */
+  zones?: Zone[];
   purpose?: string;
   notes?: string;
 }
@@ -67,13 +70,19 @@ export function setActiveProjectId(id: string) {
 }
 
 /** Tworzy pusty projekt z domyślnym pomieszczeniem. */
-export function makeProject(name: string, room: Room, cabinets: Cabinet[] = [], lights: SceneBox[] = []): Project {
+export function makeProject(
+  name: string,
+  room: Room,
+  cabinets: Cabinet[] = [],
+  lights: SceneBox[] = [],
+  zones: Zone[] = [],
+): Project {
   return {
     id: newId(),
     name,
     updatedAt: Date.now(),
     locked: true,
-    data: { cabinets, lights, room },
+    data: { cabinets, lights, room, zones },
   };
 }
 

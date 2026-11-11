@@ -112,6 +112,18 @@ export interface Cabinet {
   detail?: 'basic' | 'full';
   /** system szuflad */
   runner?: 'legrabox' | 'tandembox' | 'antaro' | 'aventech' | 'none';
+  /** strefa zabudowy, która wygenerowała szafkę (auto-projekt) */
+  zoneId?: string;
+  /** rola w strefie — do kadrowania kamery: sink / hob / oven / fridge / tv… */
+  zoneRole?: string;
+  /** urządzenia i AGD rysowane razem z szafką */
+  appliances?: import('./appliances').Appliance[];
+  /** szafa przesuwna: liczba paneli (fronty rysowane bez zawiasów) */
+  slidingPanels?: number;
+  /** blat głębszy niż korpus (wyspa) — mm */
+  worktopDepth?: number;
+  /** przesunięcie blatu w głąb, lokalne +z (nawis na siedzenie) — mm */
+  worktopShift?: number;
 }
 
 /** Neutralny opis bryły — renderer nie zna pojęcia „szafka". */

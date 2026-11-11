@@ -15,6 +15,10 @@ import {
 import { baseCabinet, makeDoors, type Cabinet, type Cutout, type SceneBox } from './design/types';
 import { collidesWithCabinets, elementCollides, findFreeY, collectSnapPoints, nearestSnap, snapToLines } from './design/collision';
 import { defaultRoom, roomBoxes, snapToWalls, cornerSnap, type WallSide } from './design/room';
+import { activeQuestions, type ZoneAnswers, type ZoneKind } from './design/zonePlan';
+import { buildAllZoneCabinets, buildZoneCabinets, featureCabinet, makeZone, planForZone, wallFrame, wallLabel, type Zone } from './design/zones';
+import ZoneLibrary from './ui/ZoneLibrary';
+import ZoneWizard from './ui/ZoneWizard';
 import { GROUP_LABELS } from './design/library';
 import { computeRuns, worktopBoxes, plinthBoxes, contactShadows } from './design/runs';
 import { exteriorBoxes } from './design/exterior';
@@ -47,7 +51,7 @@ const CLOUD_URL = `${import.meta.env.BASE_URL}dom-chmura.ply`;
 const NO_TRANSFORM: CloudTransform = { scale: 1, rotationY: 0, offset: [0, 0, 0] };
 const COLORS = ['#e8e2d8', '#c9a06a', '#b08968', '#2f3437', '#5b6b73', '#8d9b6a'];
 
-type Tab = 'layout' | 'interior' | 'lights';
+type Tab = 'layout' | 'interior' | 'lights' | 'zones';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -102,6 +106,19 @@ export default function App() {
   const [fileViewer, setFileViewer] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [locked, setLocked] = useState(true);
+  /** STREFY: ściana projektowa, strefy w projekcie, kreator pytań */
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [designWall, setDesignWall] = useState<WallSide | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [zoneStep, setZoneStep] = useState(0);
+  const [placement, setPlacement] = useState(false);
+  const zoneDragRef = useRef(false);
+  const draftZone = zones.find((z) => z.id === draftId) ?? null;
+  /** wartości dla handlerów wskaźnika bez re-bindowania listenerów w trakcie przeciągania */
+  const zoneLive = useRef({ tab, placement, zones, draftId, room, zoneStep });
+  useEffect(() => {
+    zoneLive.current = { tab, placement, zones, draftId, room, zoneStep };
+  });
 
   /** Rozczytuje pojedynczą szafkę wybraną z modelu. */
   const parseCabinetPartsFromCluster = (cl: Cluster): ParsedCabinet =>
@@ -256,6 +273,7 @@ export default function App() {
       setCabinets(cur.data.cabinets);
       setLights(cur.data.lights);
       setRoom(cur.data.room);
+      setZones(cur.data.zones ?? []);
     } else {
       // brak zapisanych — tworzymy Projekt 1 od razu, żeby pierwszy gest działał
       const p = makeProject('Projekt 1', room, cabinets, lights);
@@ -273,19 +291,19 @@ export default function App() {
       setProjects((list) =>
         list.map((p) =>
           p.id === id
-            ? { ...p, updatedAt: Date.now(), locked, data: { cabinets, lights, room } }
+            ? { ...p, updatedAt: Date.now(), locked, data: { cabinets, lights, room, zones } }
             : p,
         ),
       );
     },
-    [cabinets, lights, room, locked],
+    [cabinets, lights, room, zones, locked],
   );
 
   useEffect(() => {
     if (!projectId) return;
     const t = setTimeout(() => snapshot(projectId), 600);
     return () => clearTimeout(t);
-  }, [projectId, cabinets, lights, room, snapshot]);
+  }, [projectId, cabinets, lights, room, zones, snapshot]);
 
   useEffect(() => {
     if (projects.length) saveProjects(projects);
@@ -319,6 +337,10 @@ export default function App() {
         setProjectId(p.id);
         setCabinets([]);
         setLights([]);
+        setZones([]);
+        setDraftId(null);
+        setDesignWall(null);
+        setPlacement(false);
         setLocked(true);
         flash(`Nowy: ${p.name}`);
         return;
@@ -329,6 +351,10 @@ export default function App() {
         setProjectId(p.id);
         setCabinets([]);
         setLights([]);
+        setZones([]);
+        setDraftId(null);
+        setDesignWall(null);
+        setPlacement(false);
         setLocked(true);
         flash(`Nowy: ${p.name}`);
         return;
@@ -339,6 +365,10 @@ export default function App() {
       setCabinets(target.data.cabinets);
       setLights(target.data.lights);
       setRoom(target.data.room);
+      setZones(target.data.zones ?? []);
+      setDraftId(null);
+      setDesignWall(null);
+      setPlacement(false);
       flash(`${target.name}`);
       window.setTimeout(() => engineRef.current?.frameDesign?.(), 250);
     },
@@ -432,8 +462,9 @@ export default function App() {
   const navMode = frozen;
 
   useEffect(() => {
-    engineRef.current?.setControlsEnabled?.(!navMode && !moveMode);
-  }, [navMode, moveMode, ready, engineEpoch]);
+    // przy przesuwaniu urządzenia po blacie kamera stoi (palec nie obraca sceny)
+    engineRef.current?.setControlsEnabled?.(!navMode && !moveMode && !placement);
+  }, [navMode, moveMode, placement, ready, engineEpoch]);
 
   useEffect(() => {
     const el = canvasRef.current?.parentElement ?? canvasRef.current;
@@ -495,13 +526,13 @@ export default function App() {
   //      bez timerów i bez wracania po dotknięciu ekranu. ----
   // ---- tryb przesuwania: kamera zablokowana, żeby nie uciekała z szafką ----
   useEffect(() => {
-    engineRef.current?.setControlsEnabled?.(!moveMode);
+    engineRef.current?.setControlsEnabled?.(!moveMode && !placement);
     if (!moveMode) {
       dragRef.current = null;
       setCarrying(null);
       engineRef.current?.clearGuides?.();
     }
-  }, [moveMode]);
+  }, [moveMode, placement, ready]);
 
   // ---- ustawienia → silnik ----
   useEffect(() => {
@@ -543,10 +574,10 @@ export default function App() {
       ...contactShadows(runs),
       ...(exterior ? exteriorBoxes(room, { roof }) : []),
       ...(exterior ? landscapeBoxes(room) : []),
-      ...(styling ? stylingBoxes(room) : []),
+      ...(styling && tab !== 'zones' ? stylingBoxes(room) : []),
       ...lights,
     ];
-  }, [cabinets, settings.showFronts, settings.worktop, settings.plinth, exterior, roof, room, lights]);
+  }, [cabinets, settings.showFronts, settings.worktop, settings.plinth, exterior, roof, room, lights, styling, tab]);
 
   // pokój przebudowywany przy zmianie wymiarów / przeznaczenia
   useEffect(() => {
@@ -597,6 +628,17 @@ export default function App() {
 
     const onDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY, t: Date.now(), moved: false };
+      // STREFY: przeciąganie zlewu / płyty po blacie
+      const ZL = zoneLive.current;
+      if (ZL.tab === 'zones' && ZL.placement) {
+        const z = ZL.zones.find((x) => x.id === ZL.draftId);
+        const qs = z ? activeQuestions(z.kind, z.answers) : [];
+        const q = qs[Math.min(ZL.zoneStep, Math.max(0, qs.length - 1))];
+        if (q?.type === 'position') {
+          zoneDragRef.current = true;
+          e.stopPropagation();
+        }
+      }
       // W trybie M nie ruszamy przyciskiem: jedno kliknięcie podnosi szafkę,
       // drugie odkłada. Kamera jest wyłączona, więc nie ucieka razem z szafką.
       if (moveMode) e.stopPropagation();
@@ -604,6 +646,29 @@ export default function App() {
 
     const onMove = (e: PointerEvent) => {
       if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) down.moved = true;
+      // STREFY: przesuwanie urządzenia po blacie (punkt z blatu, nie z podłogi)
+      if (zoneDragRef.current) {
+        const ZL = zoneLive.current;
+        const z = ZL.zones.find((x) => x.id === ZL.draftId);
+        if (!z) return;
+        const qs = activeQuestions(z.kind, z.answers);
+        const q = qs[Math.min(ZL.zoneStep, qs.length - 1)];
+        if (!q || q.type !== 'position') return;
+        const hit = engineRef.current?.pickAt?.(e.clientX, e.clientY);
+        const pt = hit
+          ? { x: hit.point[0] * 1000, z: hit.point[2] * 1000 }
+          : engineRef.current?.screenToFloor?.(e.clientX, e.clientY);
+        if (!pt) return;
+        const plan = planForZone(z, ZL.room);
+        if (plan.width <= 0) return;
+        const t = wallFrame(ZL.room, z.side).t(pt.x, pt.z);
+        const pct = Math.round(Math.max(2, Math.min(98, ((t - plan.start) / plan.width) * 100)));
+        if (pct === Number(z.answers[q.id] ?? 50)) return;
+        setZones((list) =>
+          list.map((x) => (x.id === z.id ? { ...x, answers: { ...x.answers, [q.id]: pct } } : x)),
+        );
+        return;
+      }
       const drag = dragRef.current;
       if (!drag) return;
       const floor = engineRef.current?.screenToFloor?.(e.clientX, e.clientY);
@@ -649,6 +714,7 @@ export default function App() {
     };
 
     const onUp = () => {
+      zoneDragRef.current = false;
       // w trybie M szafka pozostaje „w ręce" — odkłada ją dopiero klik
       if (moveMode) return;
       dragRef.current = null;
@@ -656,6 +722,17 @@ export default function App() {
     };
 
     const onClick = (e: MouseEvent) => {
+      // STREFY: klik w płaszczyznę ściany = ściana projektowa
+      if (zoneLive.current.tab === 'zones') {
+        if (zoneLive.current.placement) return;
+        const wall = engineRef.current?.pickWall?.(e.clientX, e.clientY);
+        if (wall) {
+          setDesignWall(wall.side);
+          engineRef.current?.frameWall?.(wall.side);
+          flash(`Ściana ${wallLabel(wall.side)} · ${Math.round(wall.side === 'north' || wall.side === 'south' ? room.width : room.depth)} mm`);
+        }
+        return;
+      }
       if (moveMode) {
         if (!carrying) {
           if (startCarry(e as unknown as PointerEvent)) {
@@ -685,6 +762,7 @@ export default function App() {
     };
 
     const onDbl = (e: MouseEvent) => {
+      if (zoneLive.current.tab === 'zones') return;
       const hit = engineRef.current?.pickAt?.(e.clientX, e.clientY);
       const c = cabinets.find((x) => x.id === hit?.cabinetId);
       if (c) enterInterior(c);
@@ -703,7 +781,7 @@ export default function App() {
       canvas.removeEventListener('dblclick', onDbl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, moveMode, cabinets, room, carrying]);
+  }, [ready, moveMode, cabinets, room, carrying, tab, placement]);
 
   // ---- operacje ----
   const guardLocked = () => {
@@ -925,6 +1003,82 @@ export default function App() {
     setStatus('Dociągnięto do narożnika');
   };
 
+  // ---- STREFY: szafki stref są odtwarzane deterministycznie z reguł ----
+  useEffect(() => {
+    if (!ready || !zones.length) return;
+    setCabinets((cs) => buildAllZoneCabinets(cs, zones, room, { detail: settings.hardwareDetail }));
+  }, [ready, zones, room, settings.hardwareDetail]);
+
+  // podświetlenie ściany projektowej
+  useEffect(() => {
+    if (!ready) return;
+    engineRef.current?.highlightWall?.(tab === 'zones' ? designWall : null);
+  }, [ready, designWall, tab, engineEpoch]);
+
+  // tryb stref wyłącza przesuwanie szafek
+  useEffect(() => {
+    if (tab === 'zones' && moveMode) setMoveMode(false);
+  }, [tab, moveMode]);
+
+  /** Kadr na strefę albo na konkretny element (zlew, płyta, piekarnik…). */
+  const frameZone = useCallback((zone: Zone, feature?: string) => {
+    const plan = planForZone(zone, room);
+    if (feature && feature !== 'zone') {
+      const cab = featureCabinet(buildZoneCabinets(zone, room, { detail: 'basic' }), zone, feature);
+      if (cab) {
+        // zbliżenie z 2,2 m — widać urządzenie i kontekst zabudowy
+        engineRef.current?.frameAt?.(cab.x, 1100, cab.z, 2200);
+        return;
+      }
+    }
+    engineRef.current?.frameWall?.(zone.side, plan.start + plan.width / 2, plan.width);
+  }, [room]);
+
+  // kamera zjeżdża na element omawiany w pytaniu
+  useEffect(() => {
+    if (!draftZone) return;
+    const qs = activeQuestions(draftZone.kind, draftZone.answers);
+    const q = qs[Math.min(zoneStep, qs.length - 1)];
+    const t = window.setTimeout(() => frameZone(draftZone, q?.feature), 120);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId, zoneStep, frameZone]);
+
+  const patchZone = (zoneId: string, patch: ZoneAnswers) =>
+    setZones((list) => list.map((z) => (z.id === zoneId ? { ...z, answers: { ...z.answers, ...patch } } : z)));
+
+  /** Nowa strefa = natychmiastowa gotowa propozycja + kreator pytań. */
+  const startZone = (kind: ZoneKind) => {
+    if (!guardLocked()) return;
+    if (!designWall) {
+      flash('Kliknij najpierw ścianę w 3D');
+      return;
+    }
+    const z = makeZone(kind, designWall);
+    setZones((list) => [...list, z]);
+    setDraftId(z.id);
+    setZoneStep(0);
+    setPlacement(false);
+    flash(`Gotowa propozycja: ${z.name}`);
+    window.setTimeout(() => frameZone(z), 220);
+  };
+
+  const deleteZone = (id: string) => {
+    if (!guardLocked()) return;
+    setZones((list) => list.filter((z) => z.id !== id));
+    setCabinets((cs) => cs.filter((c) => c.zoneId !== id));
+    if (draftId === id) setDraftId(null);
+    flash('Strefa usunięta');
+  };
+
+  const resetZone = (id: string) => {
+    const z = zones.find((x) => x.id === id);
+    if (!z) return;
+    const fresh = makeZone(z.kind, z.side);
+    setZones((list) => list.map((x) => (x.id === id ? { ...fresh, id: x.id } : x)));
+    flash('Przywrócono propozycję domyślną');
+  };
+
   // ---- projekt ----
   const saveProject = () => {
     downloadJSON(
@@ -1131,6 +1285,7 @@ export default function App() {
             <button className={tab === 'layout' ? 'on' : ''} onClick={() => setTab('layout')}>Układ</button>
             <button className={tab === 'interior' ? 'on' : ''} onClick={() => active && enterInterior(active)}>Wnętrze</button>
             <button className={tab === 'lights' ? 'on' : ''} onClick={() => setTab('lights')}>Oświetlenie</button>
+            <button className={tab === 'zones' ? 'on' : ''} onClick={() => setTab('zones')}>Strefy</button>
           </div>
           <span className="badge ok">{status || (ready ? 'gotowe' : 'ładowanie…')}</span>
         </div>
@@ -1138,7 +1293,7 @@ export default function App() {
 
       <div className="main">
         {libOpen && (
-          <aside className="sidebar" style={barStyle}>
+          <aside className={`sidebar${tab === 'zones' ? ' sidebar-zones' : ''}`} style={barStyle}>
             {tab === 'lights' && (
               <>
                 {(['podszafkowe', 'cokół', 'sufit', 'ściana', 'wyspa'] as const).map((grp) => {
@@ -1160,7 +1315,34 @@ export default function App() {
               </>
             )}
 
-            {tab === 'layout' ? (
+            {tab === 'zones' ? (
+              draftZone ? (
+                <ZoneWizard
+                  zone={draftZone}
+                  room={room}
+                  cabinets={cabinets}
+                  step={zoneStep}
+                  onStep={setZoneStep}
+                  onAnswer={(patch) => patchZone(draftZone.id, patch)}
+                  onFrame={(f) => frameZone(draftZone, f)}
+                  onClose={() => { setDraftId(null); setPlacement(false); }}
+                  onDelete={() => deleteZone(draftZone.id)}
+                  onReset={() => resetZone(draftZone.id)}
+                  onPlacement={setPlacement}
+                  placement={placement}
+                />
+              ) : (
+                <ZoneLibrary
+                  room={room}
+                  wall={designWall}
+                  zones={zones}
+                  activeZoneId={draftId}
+                  onPick={startZone}
+                  onSelect={(id) => { setDraftId(id); setZoneStep(0); setPlacement(false); }}
+                  onDelete={deleteZone}
+                />
+              )
+            ) : tab === 'layout' ? (
               LIBRARY_GROUPS.map((g) => (
                 <div className="sb-group" key={g}>
                   <div className="sb-title">{GROUP_LABELS[g] ?? g}</div>
@@ -1233,9 +1415,15 @@ export default function App() {
           {!ready && !error && <div className="loader">Ładowanie…</div>}
           {error && <div className="loader error">⚠️ {error}</div>}
           <p className="hint" style={barStyle}>
-            {tab === 'layout'
-              ? `Klik = zaznacz · dwuklik = wnętrze · M = przesuwanie · D = fronty (${settings.showFronts ? 'wid.' : 'ukryte'})`
-              : 'Kliknij element, aby go edytować · wycięcia z panelu po lewej'}
+            {tab === 'zones'
+              ? (placement
+                  ? 'Kliknij albo przeciągnij po blacie — ustawiasz pozycję urządzenia'
+                  : (designWall
+                      ? `Ściana ${wallLabel(designWall)} wybrana · strefa z biblioteki po lewej · klik w inną ścianę, aby zmienić`
+                      : 'Kliknij płaszczyznę ściany w 3D — stanie się ścianą projektową'))
+              : tab === 'layout'
+                ? `Klik = zaznacz · dwuklik = wnętrze · M = przesuwanie · D = fronty (${settings.showFronts ? 'wid.' : 'ukryte'})`
+                : 'Kliknij element, aby go edytować · wycięcia z panelu po lewej'}
           </p>
 
           {tab === 'interior' && active && (
