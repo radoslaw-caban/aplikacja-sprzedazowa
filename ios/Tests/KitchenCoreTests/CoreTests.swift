@@ -302,13 +302,24 @@ final class SurfaceNetsTests: XCTestCase {
         let w = mesh.bounds.max.x - mesh.bounds.min.x
         XCTAssertEqual(Double(w), 1.0, accuracy: 0.2)
 
-        // normalne są jednostkowe i skierowane na zewnątrz (średnio)
-        var outward: Float = 0
-        for (p, n) in zip(mesh.positions, mesh.normals) {
+        // normalne jednostkowe
+        for n in mesh.normals {
             XCTAssertEqual(Double(length(n)), 1.0, accuracy: 0.01)
-            outward += dot(normalize(p), n)
         }
-        XCTAssertGreaterThan(outward / Float(mesh.positions.count), 0.5, "normalne powinny wskazywać na zewnątrz")
+
+        // spójna orientacja = dodatnia objętość z twierdzenia o dywergencji
+        var volume: Float = 0
+        var t = 0
+        while t + 2 < mesh.indices.count {
+            let a = mesh.positions[Int(mesh.indices[t])]
+            let b = mesh.positions[Int(mesh.indices[t + 1])]
+            let c = mesh.positions[Int(mesh.indices[t + 2])]
+            volume += dot(a, cross(b, c)) / 6
+            t += 3
+        }
+        // sfera r = 0.5 → 0.524 m³
+        XCTAssertGreaterThan(volume, 0.2, "orientacja trójkątów niespójna (objętość ujemna/zbyt mała)")
+        XCTAssertEqual(Double(volume), 0.524, accuracy: 0.25)
     }
 
     func testEmptyInput() {
