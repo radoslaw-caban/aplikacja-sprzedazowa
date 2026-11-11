@@ -150,6 +150,10 @@ struct ContentView: View {
                 // weryfikacja menu wysuwanego z krawędzi
                 drawerOpen = true
             }
+            // kartoteki klientów z tabeli zamówień (raz, brakujące)
+            let added = model.seedClients()
+            if added > 0 { NSLog("[dane] dodano %d kartotek klientów", added) }
+
             if UserDefaults.standard.bool(forKey: "demoTextures") {
                 try? await Task.sleep(nanoseconds: 800_000_000)
                 showTextures = true
@@ -198,6 +202,27 @@ struct ContentView: View {
 
     // MARK: - panel boczny
 
+    /// Podpis wiersza: data dostawy i status, jeśli kartoteka ma zamówienie.
+    private func projectSubtitle(_ project: Project) -> String {
+        guard let order = project.order, let date = order.deliveryDate else {
+            return "\(project.cabinets.count) szafek · \(project.documents.count) dok."
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy"
+        let status = order.status ?? "Do dostarczenia"
+        return "\(status) · \(formatter.string(from: date))"
+    }
+
+    /// Kwota w formacie „11 500 zł".
+    private func priceLabel(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        formatter.groupingSeparator = " "
+        let text = formatter.string(from: NSNumber(value: value)) ?? String(Int(value))
+        return "\(text) zł"
+    }
+
     private var sidebar: some View {
         List {
             Section("Projekty") {
@@ -208,11 +233,16 @@ struct ContentView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(project.name).font(.callout)
-                                Text("\(project.cabinets.count) szafek · \(project.documents.count) dok.")
+                                Text(projectSubtitle(project))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
+                            if let order = project.order, order.price > 0 {
+                                Text(priceLabel(order.price))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
                             if index == model.currentIndex {
                                 Image(systemName: "checkmark").foregroundStyle(.tint)
                             }

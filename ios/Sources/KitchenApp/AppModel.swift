@@ -34,6 +34,35 @@ final class AppModel {
         self.projects = loaded
     }
 
+    /// Wgrywa kartoteki klientów z tabeli zamówień — raz, tylko brakujące.
+    /// Klucz w UserDefaults pilnuje, żeby nie wracały po usunięciu.
+    @discardableResult
+    func seedClients(force: Bool = false, defaults: UserDefaults = .standard) -> Int {
+        if !force, defaults.bool(forKey: ClientSeed.defaultsKey) { return 0 }
+
+        var added = 0
+        for client in ClientSeed.all {
+            let exists = projects.contains { project in
+                guard let order = project.order else { return false }
+                return order.clientLastName == client.lastName
+                    && order.clientFirstName == client.firstName
+                    && abs(order.price - client.total) < 0.01
+                    && Calendar.current.isDate(order.deliveryDate ?? .distantPast,
+                                               inSameDayAs: client.deliveryDate ?? .distantFuture)
+            }
+            if exists { continue }
+            projects.append(ClientSeed.project(from: client))
+            added += 1
+        }
+
+        if added > 0 {
+            persist()
+            status = "Dodano \(added) kartotek klientów"
+        }
+        defaults.set(true, forKey: ClientSeed.defaultsKey)
+        return added
+    }
+
     var current: Project {
         guard projects.indices.contains(currentIndex) else {
             return Project(name: "Projekt 1")

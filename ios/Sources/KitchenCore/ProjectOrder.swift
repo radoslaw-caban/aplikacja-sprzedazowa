@@ -18,6 +18,10 @@ public struct ProjectOrder: Codable, Sendable, Equatable {
     public var changeReason: String
     /// Konwersacja z klientem: notatki ze spotkania, ustalenia, terminy.
     public var notes: String
+    /// Data dostawy (z tabeli zamówień). `nil` = jeszcze nie ustalona.
+    public var deliveryDate: Date?
+    /// Status zamówienia w formie tekstowej („Do dostarczenia", „W realizacji").
+    public var status: String?
     public var updatedAt: Date
 
     public init(
@@ -30,6 +34,8 @@ public struct ProjectOrder: Codable, Sendable, Equatable {
         deposit: Double = 0,
         changeReason: String = "",
         notes: String = "",
+        deliveryDate: Date? = nil,
+        status: String? = nil,
         updatedAt: Date = Date()
     ) {
         self.clientLastName = clientLastName
@@ -41,6 +47,8 @@ public struct ProjectOrder: Codable, Sendable, Equatable {
         self.deposit = deposit
         self.changeReason = changeReason
         self.notes = notes
+        self.deliveryDate = deliveryDate
+        self.status = status
         self.updatedAt = updatedAt
     }
 

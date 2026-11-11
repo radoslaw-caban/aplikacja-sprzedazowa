@@ -857,4 +857,37 @@ final class GestureNavTests: XCTestCase {
         let gray = [UInt8](repeating: 255, count: 100 * 100)
         XCTAssertNil(PlanImageImport.analyze(gray: gray, width: 100, height: 100))
     }
+
+    // MARK: - kartoteki z tabeli zamówień
+
+    func testClientSeedHasThirteenClients() {
+        XCTAssertEqual(ClientSeed.all.count, 13)
+        XCTAssertEqual(ClientSeed.all.map(\.total).reduce(0, +), 359_463, accuracy: 0.01)
+        XCTAssertEqual(ClientSeed.all.map(\.deposit).reduce(0, +), 36_700, accuracy: 0.01)
+    }
+
+    func testClientSeedBuildsProjectWithOrder() {
+        let client = ClientSeed.all[0]        // Alicja Lidwin
+        let project = ClientSeed.project(from: client)
+        XCTAssertEqual(project.name, "Alicja Lidwin")
+        let order = project.order
+        XCTAssertEqual(order?.clientLastName, "Lidwin")
+        XCTAssertEqual(order?.clientFirstName, "Alicja")
+        XCTAssertEqual(order?.price ?? -1, 11_500, accuracy: 0.01)
+        XCTAssertEqual(order?.deposit ?? -1, 4_000, accuracy: 0.01)
+        XCTAssertEqual(order?.status, "Do dostarczenia")
+        let day = order?.deliveryDate.map { Calendar.current.component(.day, from: $0) }
+        let month = order?.deliveryDate.map { Calendar.current.component(.month, from: $0) }
+        let year = order?.deliveryDate.map { Calendar.current.component(.year, from: $0) }
+        XCTAssertEqual(day, 30)
+        XCTAssertEqual(month, 9)
+        XCTAssertEqual(year, 2027)
+    }
+
+    func testClientSeedKeepsDuplicateNamesSeparate() {
+        // Paulina Bartodziej występuje dwa razy — to dwa różne zamówienia
+        let pauliny = ClientSeed.all.filter { $0.fullName == "Paulina Bartodziej" }
+        XCTAssertEqual(pauliny.count, 2)
+        XCTAssertNotEqual(pauliny[0].total, pauliny[1].total)
+    }
 }
