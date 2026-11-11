@@ -809,6 +809,17 @@ func runChecks() {
 
 if CommandLine.arguments.contains("--sweep") {
     runSweep()
+} else if CommandLine.arguments.contains("--zones") {
+    // szybki przebieg tylko reguł stref (bez ciężkich testów skanu)
+    let r = Reporter()
+    runZoneChecks(r)
+    let passed = r.checks - r.failures
+    print("\n\(passed)/\(r.checks) warunków stref")
+    if r.failures > 0 {
+        print("NIEPOWODZENIE: \(r.failures)")
+        exit(1)
+    }
+    print("OK")
 } else {
     runChecks()
 }
