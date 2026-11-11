@@ -102,6 +102,38 @@ final class AppModel {
         projects[currentIndex].room = room
     }
 
+    /// Plan bieżącego projektu. Gdy jeszcze nie rysowany — prostokąt z pokoju,
+    /// żeby widok mapy nie startował od pustki.
+    var currentPlan: FloorPlan {
+        current.plan ?? FloorPlan.rectangle(
+            width: current.room.width,
+            depth: current.room.depth,
+            height: current.room.height
+        )
+    }
+
+    /// Szczegóły zamówienia (ekran startowy). Brak zapisu = pusty formularz.
+    var currentOrder: ProjectOrder { current.order ?? ProjectOrder() }
+
+    func updateOrder(_ order: ProjectOrder) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var updated = order
+        updated.updatedAt = Date()
+        projects[currentIndex].order = updated
+        projects[currentIndex].updatedAt = Date()
+        persist()
+    }
+
+    /// Zapis planu: plan jest źródłem prawdy dla bryły domu, więc pokój
+    /// przelicza się z jego obrysu (szerokość × głębokość × wysokość).
+    func updatePlan(_ plan: FloorPlan) {
+        guard projects.indices.contains(currentIndex) else { return }
+        projects[currentIndex].plan = plan
+        projects[currentIndex].room = plan.room(name: projects[currentIndex].room.name)
+        projects[currentIndex].updatedAt = Date()
+        persist()
+    }
+
     // MARK: - dokumenty
 
     /// Gest poziomy: kolejny/poprzedni dokument; wchodzi w podgląd, jeśli jest co pokazać.

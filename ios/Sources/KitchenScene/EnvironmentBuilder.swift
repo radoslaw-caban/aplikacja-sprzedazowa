@@ -13,9 +13,10 @@ public enum EnvironmentBuilder {
 
     public struct Options: Sendable {
         public var radius: Float = 210          // promień terenu z teksturą (m)
-        public var forestTrees: Int = 220
+        public var forestTrees: Int = 600       // gęsty las wokół posesji
         public var mountains: Int = 26
         public var birds: Int = 6
+        public var clouds: Int = 16
         public var seed: UInt64 = 20261111
         public init() {}
     }
@@ -44,9 +45,11 @@ public enum EnvironmentBuilder {
         root.addChild(ground(radius: options.radius))
         root.addChild(farMeadow(inner: options.radius - 2, outer: 6000))
         root.addChild(mountainRange(options: options, rng: &rng))
+        root.addChild(clouds(options: options, rng: &rng))
         root.addChild(forest(options: options, rng: &rng, room: room))
+        root.addChild(road(room: room))
         root.addChild(driveway(room: room))
-        root.addChild(car(position: SIMD3(0, 0, Float(room.depth / 2000) + 7)))
+        root.addChild(tesla(position: SIMD3(-1.3, 0, Float(room.depth / 2000) + 9.5)))
         root.addChild(birds(options: options, rng: &rng))
         return root
     }
@@ -253,12 +256,19 @@ public enum EnvironmentBuilder {
         }
         trunkMaterial.roughness = .init(floatLiteral: 0.95)
 
-        let leavesMaterials: [PhysicallyBasedMaterial] = (0..<3).map { i in
+        // trzy odcienie igliwia + dwa liści — las przestaje być jednolitą masą
+        let needle: [PhysicallyBasedMaterial] = (0..<3).map { i in
             var m = PhysicallyBasedMaterial()
-            let g = 0.26 + Double(i) * 0.06
-            m.baseColor = .init(tint: PlatformColor(red: 0.10, green: CGFloat(g), blue: 0.13, alpha: 1))
+            m.baseColor = .init(tint: PlatformColor(red: 0.07, green: CGFloat(0.20 + Double(i) * 0.05), blue: 0.10, alpha: 1))
             m.roughness = .init(floatLiteral: 1.0)
-            m.metallic = .init(floatLiteral: 0)
+            return m
+        }
+        let leaf: [PhysicallyBasedMaterial] = (0..<2).map { i in
+            var m = PhysicallyBasedMaterial()
+            m.baseColor = .init(tint: PlatformColor(red: CGFloat(0.22 + Double(i) * 0.06),
+                                                    green: CGFloat(0.36 + Double(i) * 0.06),
+                                                    blue: 0.13, alpha: 1))
+            m.roughness = .init(floatLiteral: 1.0)
             return m
         }
 
@@ -274,10 +284,8 @@ public enum EnvironmentBuilder {
             // nie sadzimy na podjeździe (pas szerokości 6 m wzdłuż +Z)
             if abs(x) < 9 && z > 0 { continue }   // pas podjazdu i trawnika przed domem
 
-            let height = rng.range(5.5, 12)
-
-            // przy domu stawiamy prawdziwe modele (współdzielona siatka = jedna pamięć)
-            if placed < options.forestTrees,
+            // co któryś model z paczki (współdzielona siatka = jedna pamięć)
+            if placed % 4 == 0,
                let model = ModelLibrary.entity(named: "IslandTree", targetSize: rng.range(6, 9)) {
                 model.position = [x, 0, z]
                 model.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
@@ -286,39 +294,19 @@ public enum EnvironmentBuilder {
                 placed += 1
                 continue
             }
-            let trunk = ModelEntity(
-                mesh: .generateCylinder(height: height * 0.34, radius: height * 0.028),
-                materials: [trunkMaterial]
-            )
-            trunk.position = [x, height * 0.17, z]
 
-            let tree = Entity()
-            tree.addChild(trunk)
-            for tier in 0..<3 {
-                let tierHeight = height * (0.42 - Float(tier) * 0.08)
-                let radius = height * (0.20 - Float(tier) * 0.05)
-                let cone = ModelEntity(
-                    mesh: .generateCone(height: tierHeight, radius: max(0.4, radius)),
-                    materials: [leavesMaterials[tier]]
-                )
-                cone.position = [0, height * (0.30 + Float(tier) * 0.22), 0]
-                tree.addChild(cone)
-            }
-            // każdemu drzewu inny odcień i lekkie przechylenie — las przestaje być „klockami"
-            let tint = rng.range(0.85, 1.12)
-            for child in tree.children {
-                if var model = child as? ModelEntity {
-                    model.model?.materials = model.model?.materials.map { material in
-                        var m = (material as? PhysicallyBasedMaterial) ?? PhysicallyBasedMaterial()
-                        if var base = m.baseColor.tint as PlatformColor? {
-                            _ = base
-                        }
-                        return m
-                    } ?? []
-                }
-            }
-            tree.orientation = simd_quatf(angle: rng.range(-0.06, 0.06), axis: [0, 1, 0])
-            tree.scale = .one * tint
+            // gatunki: 45% świerk, 22% sosna, 20% brzoza, 13% dąb
+            let roll = rng.next()
+            let species: TreeSpecies = roll < 0.45 ? .spruce : (roll < 0.67 ? .pine : (roll < 0.87 ? .birch : .oak))
+            let height = rng.range(5.0, 14.0)
+            let tree = treeEntity(
+                species: species,
+                height: height,
+                trunk: trunkMaterial,
+                needle: needle,
+                leaf: leaf,
+                rng: &rng
+            )
             tree.position = [x, 0, z]
             tree.name = "tree-\(placed)"
             root.addChild(tree)
@@ -327,11 +315,152 @@ public enum EnvironmentBuilder {
         return root
     }
 
+    enum TreeSpecies { case spruce, pine, birch, oak }
+
+    /// Jedno drzewo z brył — świadomie proceduralne: 420 drzew z plików
+    /// zajęłoby gigabajty, a las ma być tłem, nie bohaterem.
+    static func treeEntity(
+        species: TreeSpecies,
+        height: Float,
+        trunk: PhysicallyBasedMaterial,
+        needle: [PhysicallyBasedMaterial],
+        leaf: [PhysicallyBasedMaterial],
+        rng: inout RNG
+    ) -> Entity {
+        let tree = Entity()
+        let tint = rng.range(0.88, 1.10)
+        let lean = simd_quatf(angle: rng.range(-0.05, 0.05), axis: normalize(SIMD3<Float>(rng.range(-1, 1), 0, rng.range(-1, 1))))
+
+        switch species {
+        case .spruce:
+            // stożki warstwami, im wyżej tym mniejsze
+            let trunkHeight = height * 0.30
+            let t = ModelEntity(mesh: .generateCylinder(height: trunkHeight, radius: height * 0.022), materials: [trunk])
+            t.position = [0, trunkHeight / 2, 0]
+            tree.addChild(t)
+            for tier in 0..<6 {
+                let tierHeight = height * (0.30 - Float(tier) * 0.035)
+                let radius = height * (0.17 - Float(tier) * 0.023)
+                let cone = ModelEntity(
+                    mesh: .generateCone(height: tierHeight, radius: max(0.30, radius)),
+                    materials: [needle[tier % needle.count]]
+                )
+                cone.position = [0, height * (0.22 + Float(tier) * 0.135), 0]
+                tree.addChild(cone)
+            }
+
+        case .pine:
+            // wysoki, odsłonięty pień; korona jak parasol z boku
+            let trunkHeight = height * 0.62
+            let t = ModelEntity(mesh: .generateCylinder(height: trunkHeight, radius: height * 0.020), materials: [trunk])
+            t.position = [0, trunkHeight / 2, 0]
+            tree.addChild(t)
+            for i in 0..<2 {
+                let crown = ModelEntity(
+                    mesh: .generateSphere(radius: height * (0.19 - Float(i) * 0.03)),
+                    materials: [needle[2]]
+                )
+                crown.scale = [1.15, 0.55, 1.15]
+                crown.position = [0, height * (0.74 + Float(i) * 0.12), 0]
+                tree.addChild(crown)
+            }
+
+        case .birch:
+            // biały, cienki pień (jaśniejszy materiał) + lekkie, jasne liście
+            var white = PhysicallyBasedMaterial()
+            white.baseColor = .init(tint: PlatformColor(red: 0.86, green: 0.85, blue: 0.80, alpha: 1))
+            white.roughness = .init(floatLiteral: 0.85)
+            let trunkHeight = height * 0.55
+            let t = ModelEntity(mesh: .generateCylinder(height: trunkHeight, radius: height * 0.013), materials: [white])
+            t.position = [0, trunkHeight / 2, 0]
+            tree.addChild(t)
+            for i in 0..<3 {
+                let crown = ModelEntity(
+                    mesh: .generateSphere(radius: height * (0.13 - Float(i) * 0.02)),
+                    materials: [leaf[1]]
+                )
+                crown.scale = [1.0, 1.35, 1.0]
+                crown.position = [rng.range(-0.5, 0.5), height * (0.62 + Float(i) * 0.14), rng.range(-0.5, 0.5)]
+                tree.addChild(crown)
+            }
+
+        case .oak:
+            // gruby, krótki pień i szeroka, ciemna korona
+            let trunkHeight = height * 0.36
+            let t = ModelEntity(mesh: .generateCylinder(height: trunkHeight, radius: height * 0.038), materials: [trunk])
+            t.position = [0, trunkHeight / 2, 0]
+            tree.addChild(t)
+            let crown = ModelEntity(mesh: .generateSphere(radius: height * 0.26), materials: [leaf[0]])
+            crown.scale = [1.25, 0.85, 1.25]
+            crown.position = [0, height * 0.60, 0]
+            tree.addChild(crown)
+            for i in 0..<3 {
+                let lobe = ModelEntity(mesh: .generateSphere(radius: height * 0.15), materials: [leaf[0]])
+                lobe.position = [cos(Float(i) * 2.1) * height * 0.16, height * (0.66 + Float(i) * 0.05),
+                                 sin(Float(i) * 2.1) * height * 0.16]
+                tree.addChild(lobe)
+            }
+        }
+
+        tree.orientation = lean
+        tree.scale = .one * tint
+        return tree
+    }
+
+    /// Droga gminna przed posesją — asfalt z linią i krawężnikami.
+    /// Bez niej podjazd kończył się w trawie i dom wyglądał na odludziu.
+    static func road(room: Room) -> Entity {
+        let root = Entity()
+        root.name = "road"
+        let z = Float(room.depth / 2000) + 34
+        let length: Float = 300
+        let width: Float = 7
+
+        var material = PhysicallyBasedMaterial()
+        if let asphalt = EnvironmentArt.asphalt() {
+            material.baseColor = .init(tint: .white, texture: .init(asphalt))
+        } else {
+            material.baseColor = .init(tint: PlatformColor(red: 0.22, green: 0.22, blue: 0.23, alpha: 1))
+        }
+        material.roughness = .init(floatLiteral: 0.92)
+
+        if let mesh = MeshFactory.texturedBox(width: length, height: 0.10, depth: width, tile: 4) {
+            let surface = ModelEntity(mesh: mesh, materials: [material])
+            surface.position = [0, 0.03, z]
+            surface.name = "road-surface"
+            root.addChild(surface)
+        }
+
+        // linia przerywana
+        var paint = UnlitMaterial(color: PlatformColor(red: 0.92, green: 0.92, blue: 0.88, alpha: 1))
+        paint.faceCulling = .none
+        var x = -length / 2 + 4
+        while x < length / 2 - 4 {
+            let dash = ModelEntity(mesh: .generateBox(width: 3, height: 0.01, depth: 0.16), materials: [paint])
+            dash.position = [x, 0.085, z]
+            root.addChild(dash)
+            x += 9
+        }
+
+        // krawężniki po obu stronach jezdni
+        let kerbMaterial = SimpleMaterial(color: .init(red: 0.58, green: 0.57, blue: 0.54, alpha: 1), isMetallic: false)
+        for side in [Float(-1), Float(1)] {
+            let kerb = ModelEntity(
+                mesh: .generateBox(width: length, height: 0.14, depth: 0.3, cornerRadius: 0.01),
+                materials: [kerbMaterial]
+            )
+            kerb.position = [0, 0.07, z + side * (width / 2 + 0.15)]
+            root.addChild(kerb)
+        }
+        return root
+    }
+
     static func driveway(room: Room) -> Entity {
         let root = Entity()
         root.name = "driveway"
         let halfDepth = Float(room.depth / 2000)
-        let length: Float = 26
+        let roadZ = halfDepth + 34
+        let length = roadZ - halfDepth - 3.6     // do krawędzi jezdni
 
         var material = PhysicallyBasedMaterial()
         if let cobble = EnvironmentArt.cobble() {
@@ -340,88 +469,178 @@ public enum EnvironmentBuilder {
             material.baseColor = .init(tint: PlatformColor(red: 0.44, green: 0.43, blue: 0.41, alpha: 1))
         }
         material.roughness = .init(floatLiteral: 0.85)
+        // UV w metrach: kafel 1,6 m = 8 kostek po 20 cm — inaczej kostka jest plakatem
+        let tile: Float = 1.6
 
-        let slab = ModelEntity(
-            mesh: .generateBox(width: 5.5, height: 0.12, depth: length, cornerRadius: 0.02),
-            materials: [material]
-        )
-        slab.position = [0, 0.05, halfDepth + length / 2]
-        root.addChild(slab)
+        // 1) podjazd od domu do drogi
+        if let mesh = MeshFactory.texturedBox(width: 5.6, height: 0.12, depth: length, tile: tile) {
+            let slab = ModelEntity(mesh: mesh, materials: [material])
+            slab.position = [0, 0.04, halfDepth + length / 2]
+            slab.name = "driveway-slab"
+            root.addChild(slab)
+        }
 
-        // krawężniki
+        // 2) plac przed domem (miejsca postojowe, szersza płyta)
+        if let mesh = MeshFactory.texturedBox(width: 11, height: 0.12, depth: 6.5, tile: tile) {
+            let apron = ModelEntity(mesh: mesh, materials: [material])
+            apron.position = [0, 0.04, halfDepth + 3.25]
+            apron.name = "driveway-apron"
+            root.addChild(apron)
+        }
+
+        // 3) zjazd na drogę: łagodne rozszerzenie przy krawędzi jezdni
+        for side in [Float(-1), Float(1)] {
+            if let mesh = MeshFactory.texturedBox(width: 2.4, height: 0.12, depth: 3.6, tile: tile) {
+                let flare = ModelEntity(mesh: mesh, materials: [material])
+                flare.position = [side * (5.6 / 2 + 0.7), 0.04, roadZ - 1.8]
+                flare.orientation = simd_quatf(angle: side * 0.42, axis: [0, 1, 0])
+                flare.name = "driveway-flare"
+                root.addChild(flare)
+            }
+        }
+
+        // krawężniki podjazdu
         let kerbMaterial = SimpleMaterial(color: .init(red: 0.55, green: 0.54, blue: 0.52, alpha: 1), isMetallic: false)
-        for side in [-1.0 as Float, 1.0] {
+        for side in [Float(-1), Float(1)] {
             let kerb = ModelEntity(
-                mesh: .generateBox(width: 0.25, height: 0.18, depth: length, cornerRadius: 0.01),
+                mesh: .generateBox(width: 0.22, height: 0.16, depth: length, cornerRadius: 0.01),
                 materials: [kerbMaterial]
             )
-            kerb.position = [side * 2.9, 0.09, halfDepth + length / 2]
+            kerb.position = [side * 2.9, 0.08, halfDepth + length / 2]
             root.addChild(kerb)
         }
         return root
     }
 
-    /// Auto stojące na podjeździe (proste bryły, czytelne z odległości).
-    static func car(position: SIMD3<Float>) -> Entity {
-        // prawdziwy model (CC BY 4.0), z fallbackiem na bryły
-        if let model = ModelLibrary.entity(named: "ToyCar"), ProcessInfo.processInfo.environment["USE_GLB_CAR"] != nil {
-            let root = Entity()
-            root.name = "car"
-            model.name = "car-body"
-            // model wczytany; jeśli ma artefakty (płaszczyzny), łatwiej poprawić później
-            root.addChild(model)
-            root.position = position
-            return root
-        }
+    /// Tesla Model Y (bryła): niski, gładki nadwozie bez grilla, duże koła.
+    ///
+    /// Świadomie bez pliku GLB: model z paczki był „zabawką" i ważył 40 MB,
+    /// a z 20 metrów liczy się sylwetka, nie detale.
+    static func tesla(position: SIMD3<Float>) -> Entity {
         let root = Entity()
-        root.name = "car"
+        root.name = "tesla"
 
-        var bodyMaterial = PhysicallyBasedMaterial()
-        bodyMaterial.baseColor = .init(tint: PlatformColor(red: 0.12, green: 0.16, blue: 0.24, alpha: 1))
-        bodyMaterial.roughness = .init(floatLiteral: 0.35)
-        bodyMaterial.metallic = .init(floatLiteral: 0.5)
+        var paint = PhysicallyBasedMaterial()
+        paint.baseColor = .init(tint: PlatformColor(red: 0.90, green: 0.91, blue: 0.93, alpha: 1))
+        paint.roughness = .init(floatLiteral: 0.22)
+        paint.metallic = .init(floatLiteral: 0.35)
 
-        var glassMaterial = PhysicallyBasedMaterial()
-        glassMaterial.baseColor = .init(tint: PlatformColor(red: 0.15, green: 0.20, blue: 0.26, alpha: 1))
-        glassMaterial.roughness = .init(floatLiteral: 0.1)
-        glassMaterial.metallic = .init(floatLiteral: 0.2)
+        var glass = PhysicallyBasedMaterial()
+        glass.baseColor = .init(tint: PlatformColor(red: 0.08, green: 0.11, blue: 0.14, alpha: 1))
+        glass.roughness = .init(floatLiteral: 0.05)
+        glass.metallic = .init(floatLiteral: 0.1)
 
-        let body = ModelEntity(
-            mesh: .generateBox(width: 1.85, height: 0.65, depth: 4.4, cornerRadius: 0.12),
-            materials: [bodyMaterial]
+        var black = PhysicallyBasedMaterial()
+        black.baseColor = .init(tint: PlatformColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1))
+        black.roughness = .init(floatLiteral: 0.55)
+
+        // dolna część nadwozia (progi, zderzaki)
+        let lower = ModelEntity(
+            mesh: .generateBox(width: 1.92, height: 0.46, depth: 4.75, cornerRadius: 0.16),
+            materials: [paint]
         )
-        body.position = [0, 0.62, 0]
+        lower.position = [0, 0.62, 0]
+        root.addChild(lower)
 
+        // maska + tył (lekko zwężone, żeby nie był to prostopadłościan)
+        let hood = ModelEntity(
+            mesh: .generateBox(width: 1.80, height: 0.16, depth: 1.5, cornerRadius: 0.10),
+            materials: [paint]
+        )
+        hood.position = [0, 0.90, 1.55]
+        root.addChild(hood)
+
+        // kabina: szyby dookoła + dach
         let cabin = ModelEntity(
-            mesh: .generateBox(width: 1.62, height: 0.55, depth: 2.2, cornerRadius: 0.16),
-            materials: [glassMaterial]
+            mesh: .generateBox(width: 1.70, height: 0.52, depth: 2.55, cornerRadius: 0.20),
+            materials: [glass]
         )
-        cabin.position = [0, 1.16, -0.15]
-
-        root.addChild(body)
+        cabin.position = [0, 1.11, -0.25]
         root.addChild(cabin)
 
-        let tyreMaterial = SimpleMaterial(color: .init(red: 0.08, green: 0.08, blue: 0.09, alpha: 1), isMetallic: false)
-        let rimMaterial = SimpleMaterial(color: .init(red: 0.7, green: 0.72, blue: 0.75, alpha: 1), isMetallic: true)
-        for (dx, dz) in [(0.82 as Float, 1.45 as Float), (-0.82, 1.45), (0.82, -1.45), (-0.82, -1.45)] {
-            let tyre = ModelEntity(
-                mesh: .generateCylinder(height: 0.22, radius: 0.34),
-                materials: [tyreMaterial]
-            )
-            tyre.position = [dx, 0.34, dz]
+        let roof = ModelEntity(
+            mesh: .generateBox(width: 1.62, height: 0.06, depth: 2.1, cornerRadius: 0.03),
+            materials: [paint]
+        )
+        roof.position = [0, 1.38, -0.30]
+        root.addChild(roof)
+
+        // koła: czarna opona + jasna felga
+        let rimMaterial = SimpleMaterial(color: .init(red: 0.68, green: 0.70, blue: 0.73, alpha: 1), isMetallic: true)
+        for (dx, dz) in [(0.86 as Float, 1.48 as Float), (-0.86, 1.48), (0.86, -1.48), (-0.86, -1.48)] {
+            let tyre = ModelEntity(mesh: .generateCylinder(height: 0.26, radius: 0.36), materials: [black])
+            tyre.position = [dx, 0.36, dz]
             tyre.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             root.addChild(tyre)
 
-            let rim = ModelEntity(
-                mesh: .generateCylinder(height: 0.23, radius: 0.18),
-                materials: [rimMaterial]
-            )
-            rim.position = [dx, 0.34, dz]
+            let rim = ModelEntity(mesh: .generateCylinder(height: 0.27, radius: 0.21), materials: [rimMaterial])
+            rim.position = [dx, 0.36, dz]
             rim.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
             root.addChild(rim)
+
+            // nadkole: ciemna listwa nad kołem
+            let arch = ModelEntity(
+                mesh: .generateBox(width: 0.10, height: 0.34, depth: 0.86, cornerRadius: 0.04),
+                materials: [black]
+            )
+            arch.position = [dx > 0 ? 0.92 : -0.92, 0.62, dz]
+            root.addChild(arch)
+        }
+
+        // listwy progowe i lusterka — czytelne detale z 10 m
+        for side in [Float(-1), Float(1)] {
+            let sill = ModelEntity(mesh: .generateBox(width: 0.06, height: 0.10, depth: 2.6), materials: [black])
+            sill.position = [side * 0.97, 0.40, 0]
+            root.addChild(sill)
+
+            let mirror = ModelEntity(mesh: .generateBox(width: 0.22, height: 0.11, depth: 0.16, cornerRadius: 0.03), materials: [black])
+            mirror.position = [side * 0.94, 1.02, 0.75]
+            root.addChild(mirror)
         }
 
         root.position = position
+        return root
+    }
+
+    /// Chmury: kłębiaste karty z teksturą alfa, wysoko nad posesją.
+    /// Powolny dryf przez animację — bez ruchu niebo wygląda na zdjęcie.
+    static func clouds(options: Options, rng: inout RNG) -> Entity {
+        let root = Entity()
+        root.name = "clouds"
+        guard let texture = EnvironmentArt.cloud() else { return root }
+
+        var material = UnlitMaterial()
+        material.color = .init(tint: .white, texture: .init(texture))
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.85))
+        material.faceCulling = .none
+
+        let mesh = MeshFactory.ground(size: 1, tile: 1) ?? .generatePlane(width: 1, depth: 1)
+        for i in 0..<options.clouds {
+            let cloud = ModelEntity(mesh: mesh, materials: [material])
+            let angle = rng.range(0, .pi * 2)
+            let distance = rng.range(180, 900)
+            let size = rng.range(70, 190)
+            cloud.scale = [size, 1, size * rng.range(0.45, 0.7)]
+            cloud.position = [cos(angle) * distance, rng.range(85, 190), sin(angle) * distance]
+            cloud.orientation = simd_quatf(angle: rng.range(0, .pi), axis: [0, 1, 0])
+            cloud.name = "cloud-\(i)"
+            root.addChild(cloud)
+
+            // dryf: ten sam kierunek, różne prędkości
+            let speed = rng.range(6, 16)
+            Task { @MainActor in
+                var travelled: Float = 0
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 60_000_000)
+                    travelled += speed * 0.06
+                    cloud.position.x += speed * 0.06
+                    if travelled > 1400 || cloud.position.x > 900 {
+                        cloud.position.x = -900
+                        travelled = 0
+                    }
+                }
+            }
+        }
         return root
     }
 

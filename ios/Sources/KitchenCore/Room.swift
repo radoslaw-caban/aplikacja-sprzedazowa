@@ -7,7 +7,10 @@ public struct Room: Codable, Sendable, Equatable {
     public var depth: Double   // Z
     public var height: Double  // Y
 
-    public init(name: String = "Pomieszczenie", width: Double = 5000, depth: Double = 5000, height: Double = 2600) {
+    /// Domyślnie willa: 12,8 × 9,6 m parteru, 2,9 m wysokości.
+    /// Kuchnia to jedno pomieszczenie w takim domu — dlatego pokój startowy
+    /// jest duży, a nie 5 × 5 m jak w mieszkaniu.
+    public init(name: String = "Pomieszczenie", width: Double = 12800, depth: Double = 9600, height: Double = 2900) {
         self.name = name
         self.width = width
         self.depth = depth

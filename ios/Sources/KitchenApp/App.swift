@@ -26,8 +26,10 @@ struct ContentView: View {
     @Bindable var model: AppModel
 
     @State private var showDocuments = false
-    @State private var interiorView = true
+    @State private var interiorView = false   // start: willa w otoczeniu (klient najpierw widzi dom)
     @State private var showScan = false
+    @State private var showPlan = false
+    @State private var planDraft = FloorPlan.rectangle()
 
     var body: some View {
         NavigationSplitView {
@@ -37,6 +39,14 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showDocuments) {
             DocumentsSheet(model: model)
+        }
+        .sheet(isPresented: $showPlan) {
+            PlanEditorView(plan: $planDraft) { newPlan in
+                model.updatePlan(newPlan)
+            }
+            #if os(iOS)
+            .presentationSizing(.page)
+            #endif
         }
         .sheet(isPresented: $showScan) {
             #if os(iOS)
@@ -66,6 +76,13 @@ struct ContentView: View {
                 print("[ui] dokumenty dodane: \(added), razem \(model.documents.count)")
             }
             #endif
+            if UserDefaults.standard.bool(forKey: "demoPlan") {
+                // weryfikacja widoku mapy bez dotykania ekranu
+                planDraft = model.currentPlan
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                showPlan = true
+                print("[ui] plan otwarty: \(planDraft.wallCount) ścian, \(planDraft.areaM2) m²")
+            }
             if UserDefaults.standard.bool(forKey: "demoSwipe") {
                 // weryfikacja gestów bez dotykania ekranu
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
@@ -173,18 +190,18 @@ struct ContentView: View {
             if let doc = model.currentDocument {
                 documentViewer(doc)
             } else {
-                ZStack(alignment: .topLeading) {
-                    SceneView(
-                        cabinets: model.current.cabinets,
-                        room: model.current.room,
-                        scan: model.scan,
-                        transform: model.scanTransform,
-                        interiorView: interiorView
-                    )
-                    swipeHint
-                }
-                .contentShape(Rectangle())
-                .gesture(swipe)
+                // Przepływ według diagramu: ekrany przewijane poziomo,
+                // start na „Szczegółach zamówienia".
+                OrderFlowView(
+                    model: model,
+                    interiorView: $interiorView,
+                    openPlan: {
+                        planDraft = model.currentPlan
+                        showPlan = true
+                    },
+                    openScan: { showScan = true },
+                    openDocuments: { showDocuments = true }
+                )
             }
             bottomBar
         }
@@ -262,6 +279,13 @@ struct ContentView: View {
                 Text("· \(status)").font(.callout).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
+            Button {
+                planDraft = model.currentPlan
+                showPlan = true
+            } label: {
+                Label("Plan", systemImage: "map")
+            }
+            .help("Plan domu: rysuj kreskami i zmieniaj długości ścian")
             Button {
                 interiorView.toggle()
             } label: {

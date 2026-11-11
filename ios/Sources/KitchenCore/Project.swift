@@ -80,6 +80,11 @@ public struct Project: Identifiable, Codable, Sendable {
     public var documents: [ClientDocument]
     public var locked: Bool
     public var updatedAt: Date
+    /// Plan domu rysowany w widoku mapy. `nil` = plan jeszcze nie narysowany,
+    /// wtedy obowiązuje prostokąt z `room`.
+    public var plan: FloorPlan?
+    /// Szczegóły zamówienia — ekran startowy aplikacji.
+    public var order: ProjectOrder?
 
     public init(
         id: UUID = UUID(),
@@ -88,7 +93,9 @@ public struct Project: Identifiable, Codable, Sendable {
         room: Room = Room(),
         documents: [ClientDocument] = [],
         locked: Bool = false,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        plan: FloorPlan? = nil,
+        order: ProjectOrder? = nil
     ) {
         self.id = id
         self.name = name
@@ -97,6 +104,8 @@ public struct Project: Identifiable, Codable, Sendable {
         self.documents = documents
         self.locked = locked
         self.updatedAt = updatedAt
+        self.plan = plan
+        self.order = order
     }
 }
 

@@ -56,17 +56,22 @@ public struct PreviewCamera: Sendable {
         )
     }
 
-    /// Kadr z rzeczywistego obrysu geometrii: kamera na zewnątrz bryły,
-    /// na wysokości oczu, patrzy w środek.
+    /// Kadr z rzeczywistego obrysu geometrii: kamera cofnięta od zabudowy,
+    /// na wysokości oczu, patrzy lekko z boku — jak zdjęcie kuchni, nie jak
+    /// model w środku bryły.
+    ///
+    /// POPRAWKA: wcześniej odległość liczyła się tylko z promienia bryły
+    /// (dla dwóch szafek ~1 m), więc kamera stała 2 m od frontu i zasłaniała
+    /// ją rama szafki. Teraz jest dolna granica 3,4 m i minimalna wysokość
+    /// oczu 1,45 m — kadr obejmuje blat i kawałek ściany.
     public static func fit(center: SIMD3<Float>, extents: SIMD3<Float>) -> PreviewCamera {
-        // kadr bezpieczny także dla pionowego ekranu iPada: horyzontalne FOV
-        // jest węższe niż pionowe, więc odsuwamy się bardziej i patrzymy z góry
         let radius = max(extents.x, max(extents.y, extents.z)) / 2
-        let distance = radius * 3.1 + 1.0
-        let eyeY = center.y + max(0.5, extents.y * 0.35)
+        let distance = min(7.5, max(3.4, radius * 4.2 + 1.0))
+        let eyeY = max(1.45, center.y + extents.y * 0.9)
+        let side = distance * 0.28
         return PreviewCamera(
-            position: [center.x, eyeY, center.z + distance],
-            target: center
+            position: [center.x + side, eyeY, center.z + distance],
+            target: [center.x, max(0.55, center.y), center.z]
         )
     }
 

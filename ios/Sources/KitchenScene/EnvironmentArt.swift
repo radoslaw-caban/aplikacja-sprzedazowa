@@ -126,6 +126,86 @@ public enum EnvironmentArt {
         return try? TextureResource.generate(from: image, options: .init(semantic: .color))
     }
 
+    /// Beton fundamentu: szary, z kruszywem i śladami szalunku.
+    ///
+    /// Fundament musi być widoczny jako inny materiał niż elewacja — inaczej
+    /// dom „pływa" na trawie i nie wiadomo, gdzie kończy się budynek.
+    public static func concrete() -> TextureResource? {
+        let size = 256
+        guard let image = makeImage(width: size, height: size, draw: { ctx in
+            ctx.setFillColor(CGColor(red: 0.52, green: 0.51, blue: 0.49, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
+            // kruszywo
+            for _ in 0..<7000 {
+                let x = CGFloat.random(in: 0..<CGFloat(size))
+                let y = CGFloat.random(in: 0..<CGFloat(size))
+                let s = CGFloat.random(in: 1...3.5)
+                let v = CGFloat.random(in: 0.42...0.72)
+                ctx.setFillColor(CGColor(red: v, green: v * 0.99, blue: v * 0.96, alpha: 0.5))
+                ctx.fillEllipse(in: CGRect(x: x, y: y, width: s, height: s))
+            }
+            // ciemniejsze zacieki przy dole (wilgoć)
+            if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
+                CGColor(red: 0.3, green: 0.3, blue: 0.28, alpha: 0.0),
+                CGColor(red: 0.3, green: 0.3, blue: 0.28, alpha: 0.35),
+            ] as CFArray, locations: [0.55, 1]) {
+                ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: CGFloat(size) * 0.5),
+                                       end: CGPoint(x: 0, y: 0), options: [])
+            }
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
+    /// Asfalt drogi: ciemny, drobnoziarnisty, z jaśniejszymi smugami zużycia.
+    public static func asphalt() -> TextureResource? {
+        let size = 256
+        guard let image = makeImage(width: size, height: size, draw: { ctx in
+            ctx.setFillColor(CGColor(red: 0.20, green: 0.20, blue: 0.21, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
+            for _ in 0..<12000 {
+                let x = CGFloat.random(in: 0..<CGFloat(size))
+                let y = CGFloat.random(in: 0..<CGFloat(size))
+                let v = CGFloat.random(in: 0.18...0.42)
+                ctx.setFillColor(CGColor(red: v, green: v, blue: v * 1.05, alpha: 0.55))
+                ctx.fill(CGRect(x: x, y: y, width: 1, height: 1))
+            }
+            // smugi po kołach
+            ctx.setStrokeColor(CGColor(red: 0.28, green: 0.28, blue: 0.29, alpha: 0.35))
+            ctx.setLineWidth(6)
+            for x in [CGFloat(size) * 0.3, CGFloat(size) * 0.7] {
+                ctx.move(to: CGPoint(x: x, y: 0))
+                ctx.addLine(to: CGPoint(x: x + CGFloat.random(in: -3...3), y: CGFloat(size)))
+                ctx.strokePath()
+            }
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
+    /// Chmura: miękka biała plama z przezroczystym brzegiem.
+    ///
+    /// Alfa jest kluczowa — bez niej chmura to biała kartka na niebie.
+    /// Kilka nałożonych kół o losowej alfa daje kłębiasty obrys.
+    public static func cloud() -> TextureResource? {
+        let size = 256
+        guard let image = makeImage(width: size, height: size, draw: { ctx in
+            ctx.clear(CGRect(x: 0, y: 0, width: size, height: size))
+            for _ in 0..<26 {
+                let cx = CGFloat.random(in: CGFloat(size) * 0.2...CGFloat(size) * 0.8)
+                let cy = CGFloat.random(in: CGFloat(size) * 0.3...CGFloat(size) * 0.7)
+                let r = CGFloat.random(in: CGFloat(size) * 0.10...CGFloat(size) * 0.24)
+                let a = CGFloat.random(in: 0.35...0.8)
+                guard let blob = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
+                    CGColor(red: 1, green: 1, blue: 1, alpha: a),
+                    CGColor(red: 0.98, green: 0.98, blue: 1, alpha: a * 0.5),
+                    CGColor(red: 1, green: 1, blue: 1, alpha: 0),
+                ] as CFArray, locations: [0, 0.55, 1]) else { continue }
+                ctx.drawRadialGradient(blob, startCenter: CGPoint(x: cx, y: cy), startRadius: 0,
+                                       endCenter: CGPoint(x: cx, y: cy), endRadius: r, options: [])
+            }
+        }) else { return nil }
+        return try? TextureResource.generate(from: image, options: .init(semantic: .color))
+    }
+
     // MARK: - środowisko (IBL)
 
     /// Equirectangular skybox: gradient nieba + słońce + pas mgły przy horyzoncie.
