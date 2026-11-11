@@ -44,16 +44,21 @@ public enum VillaBuilder {
         frame.baseColor = .init(tint: PlatformColor(red: 0.10, green: 0.10, blue: 0.11, alpha: 1))
         frame.roughness = .init(floatLiteral: 0.4)
 
-        // ciepłe światło w środku — o zmierzchu to ono sprzedaje dom
+        // SZYBY PRZEŹROCZYSTE: widać przez nie wnętrze, a nie lustrzaną taflę.
+        // Lekki chłód i odbicie zostają — szyba ma być szkłem, nie dziurą.
         var warmGlass = PhysicallyBasedMaterial()
-        warmGlass.baseColor = .init(tint: PlatformColor(red: 0.85, green: 0.72, blue: 0.50, alpha: 1))
-        warmGlass.emissiveColor = .init(color: PlatformColor(red: 1.0, green: 0.86, blue: 0.62, alpha: 1))
-        warmGlass.emissiveIntensity = 0.85
-        warmGlass.roughness = .init(floatLiteral: 0.08)
-        warmGlass.metallic = .init(floatLiteral: 0.1)
+        warmGlass.baseColor = .init(tint: PlatformColor(red: 0.80, green: 0.88, blue: 0.92, alpha: 0.15))
+        warmGlass.blending = .transparent(opacity: .init(floatLiteral: 0.16))
+        warmGlass.roughness = .init(floatLiteral: 0.04)
+        warmGlass.metallic = .init(floatLiteral: 0.05)
 
         var wood = PhysicallyBasedMaterial()
-        wood.baseColor = .init(tint: PlatformColor(red: 0.62, green: 0.44, blue: 0.28, alpha: 1))
+        if let texture = EnvironmentArt.photoTexture("wood_diff") {
+            wood.baseColor = .init(tint: PlatformColor(white: 0.95, alpha: 1), texture: .init(texture))
+            wood.textureCoordinateTransform = .init(offset: .zero, scale: SIMD2<Float>(1, 2))
+        } else {
+            wood.baseColor = .init(tint: PlatformColor(red: 0.62, green: 0.44, blue: 0.28, alpha: 1))
+        }
         wood.roughness = .init(floatLiteral: 0.8)
 
         var concrete = PhysicallyBasedMaterial()
@@ -142,12 +147,27 @@ public enum VillaBuilder {
             mullions: Int,
             material: PhysicallyBasedMaterial
         ) {
-            let backing = ModelEntity(
-                mesh: .generateBox(width: width + 0.14, height: height + 0.14, depth: 0.06, cornerRadius: 0.01),
+            // RAMA, nie płyta: wcześniej w tym miejscu była pełna ciemna płyta,
+            // która zasłaniała wnętrze — szyba pokazywała „czarną dziurę".
+            let bar: Float = 0.07
+            let horizontal = ModelEntity(
+                mesh: .generateBox(width: width + bar * 2, height: bar, depth: 0.10),
                 materials: [frame]
             )
-            backing.position = center
-            root.addChild(backing)
+            for side in [Float(-1), Float(1)] {
+                let copy = horizontal.clone(recursive: true)
+                copy.position = [center.x, center.y + side * (height / 2 + bar / 2), center.z]
+                root.addChild(copy)
+            }
+            let vertical = ModelEntity(
+                mesh: .generateBox(width: bar, height: height, depth: 0.10),
+                materials: [frame]
+            )
+            for side in [Float(-1), Float(1)] {
+                let copy = vertical.clone(recursive: true)
+                copy.position = [center.x + side * (width / 2 + bar / 2), center.y, center.z]
+                root.addChild(copy)
+            }
 
             let pane = ModelEntity(
                 mesh: .generateBox(width: width, height: height, depth: 0.08, cornerRadius: 0.005),
@@ -192,6 +212,65 @@ public enum VillaBuilder {
         )
         upperPanel.position = [w * 0.14, h + upperH * 0.5, d * 0.04 + upperD / 2 + 0.22]
         root.addChild(upperPanel)
+
+        // MARK: 4b) wnętrze widoczne przez szyby
+        var interiorFloor = PhysicallyBasedMaterial()
+        if let wood = EnvironmentArt.photoTexture("wood_diff") {
+            interiorFloor.baseColor = .init(tint: PlatformColor(white: 0.92, alpha: 1), texture: .init(wood))
+        } else {
+            interiorFloor.baseColor = .init(tint: PlatformColor(red: 0.62, green: 0.50, blue: 0.36, alpha: 1))
+        }
+        interiorFloor.roughness = .init(floatLiteral: 0.6)
+
+        let floorInner = ModelEntity(
+            mesh: MeshFactory.texturedBox(width: w - 0.5, height: 0.04, depth: d - 0.5, tile: 2)
+                ?? .generateBox(width: w - 0.5, height: 0.04, depth: d - 0.5),
+            materials: [interiorFloor]
+        )
+        floorInner.position = [0, 0.02, 0]
+        root.addChild(floorInner)
+
+        // ściana tylna i wyspa kuchenna — dają głębię za szybą
+        let backWall = ModelEntity(
+            mesh: .generateBox(width: w - 0.6, height: h * 0.92, depth: 0.12),
+            materials: [white]
+        )
+        backWall.position = [0, h * 0.46, -d / 2 + 0.2]
+        root.addChild(backWall)
+
+        var islandMaterial = PhysicallyBasedMaterial()
+        islandMaterial.baseColor = .init(tint: PlatformColor(red: 0.90, green: 0.89, blue: 0.87, alpha: 1))
+        islandMaterial.roughness = .init(floatLiteral: 0.35)
+        let island = ModelEntity(
+            mesh: .generateBox(width: min(4.2, w * 0.5), height: 0.92, depth: 0.8, cornerRadius: 0.03),
+            materials: [islandMaterial]
+        )
+        island.position = [0, 0.46, -d * 0.12]
+        island.name = "kitchen-island"
+        root.addChild(island)
+
+        // ciepła "poświata" wnętrza: bez niej szyba pokazuje ciemną dziurę
+        var glowMaterial = PhysicallyBasedMaterial()
+        glowMaterial.baseColor = .init(tint: PlatformColor(red: 0.55, green: 0.45, blue: 0.34, alpha: 1))
+        glowMaterial.emissiveColor = .init(color: PlatformColor(red: 0.95, green: 0.78, blue: 0.55, alpha: 1))
+        glowMaterial.emissiveIntensity = 0.45
+        glowMaterial.roughness = .init(floatLiteral: 0.9)
+        let glowPanel = ModelEntity(
+            mesh: .generateBox(width: w * 0.92, height: h * 0.66, depth: 0.06),
+            materials: [glowMaterial]
+        )
+        glowPanel.position = [0, h * 0.40, -d / 2 + 0.45]
+        glowPanel.name = "interior-glow"
+        root.addChild(glowPanel)
+
+        // ciepłe światło wnętrza (punktowe kule pod stropem)
+        for i in 0..<4 {
+            var lamp = UnlitMaterial(color: PlatformColor(red: 1.0, green: 0.88, blue: 0.68, alpha: 1))
+            lamp.faceCulling = .none
+            let bulb = ModelEntity(mesh: .generateSphere(radius: 0.10), materials: [lamp])
+            bulb.position = [-w * 0.3 + Float(i) * (w * 0.2), h * 0.82, 0]
+            root.addChild(bulb)
+        }
 
         // MARK: 5) drewniane lamele przy wejściu
         let slatCount = 14
@@ -277,17 +356,31 @@ public enum VillaBuilder {
             }
         }
 
-        // kilka niskich krzewów przy basenie (gdyby modeli nie było, scena nie jest pusta)
-        let bushSpots: [SIMD3<Float>] = [
-            SIMD3(-poolW / 2 - 1.4, 0.30, poolZ - poolD / 2 + 0.6),
-            SIMD3(poolW / 2 + 1.6, 0.30, poolZ - poolD / 2 + 0.7),
-        ]
+        // więcej zieleni: krzewy wzdłuż tarasu i basenu, różne rozmiary
+        var bushSpots: [SIMD3<Float>] = []
+        for i in 0..<9 {
+            let t = Float(i) / 8
+            bushSpots.append(SIMD3(-w * 0.42 + t * w * 0.84, 0.22 + Float(i % 3) * 0.06, facadeZ + 0.55))
+        }
+        for i in 0..<5 {
+            let t = Float(i) / 4
+            bushSpots.append(SIMD3(-poolW / 2 - 0.9 + t * 0.4, 0.24, poolZ - poolD / 2 + 0.5 + t * poolD))
+            bushSpots.append(SIMD3(poolW / 2 + 0.9, 0.24, poolZ - poolD / 2 + 0.5 + t * poolD))
+        }
         for (i, spot) in bushSpots.enumerated() {
-            let bush = ModelEntity(mesh: .generateSphere(radius: 0.45), materials: [planting])
-            bush.scale = [1.3, 0.75, 1.3]
-            bush.position = spot
-            bush.name = "bush-\(i)"
-            root.addChild(bush)
+            // najpierw prawdziwy model rośliny, kula tylko jako zapas
+            if let plant = ModelLibrary.entity(named: "TerracePlant", targetSize: 0.75) {
+                plant.position = spot
+                plant.name = "bush-\(i)"
+                root.addChild(plant)
+            } else {
+                let radius = 0.34 + Float(i % 4) * 0.07
+                let bush = ModelEntity(mesh: .generateSphere(radius: radius), materials: [planting])
+                bush.scale = [1.35, 0.72, 1.35]
+                bush.position = spot
+                bush.name = "bush-\(i)"
+                root.addChild(bush)
+            }
         }
 
         // MARK: 9) oświetlenie elewacji (małe punkty nad tarasem)

@@ -190,10 +190,10 @@ public enum EnvironmentArt {
         let size = 256
         guard let image = makeImage(width: size, height: size, draw: { ctx in
             ctx.clear(CGRect(x: 0, y: 0, width: size, height: size))
-            for _ in 0..<26 {
+            for _ in 0..<48 {
                 let cx = CGFloat.random(in: CGFloat(size) * 0.2...CGFloat(size) * 0.8)
                 let cy = CGFloat.random(in: CGFloat(size) * 0.3...CGFloat(size) * 0.7)
-                let r = CGFloat.random(in: CGFloat(size) * 0.10...CGFloat(size) * 0.24)
+                let r = CGFloat.random(in: CGFloat(size) * 0.06...CGFloat(size) * 0.17)
                 let a = CGFloat.random(in: 0.35...0.8)
                 guard let blob = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
                     CGColor(red: 1, green: 1, blue: 1, alpha: a),
@@ -274,8 +274,8 @@ public enum EnvironmentArt {
             for _ in 0..<220 {
                 let angle = CGFloat.random(in: 0...6.28)
                 let len = CGFloat.random(in: CGFloat(size) * 0.18...CGFloat(size) * 0.48)
-                let g = CGFloat.random(in: 0.55...1.0)
-                ctx.setStrokeColor(CGColor(red: 0.12 * g, green: 0.30 * g, blue: 0.16 * g, alpha: 1))
+                let g = CGFloat.random(in: 0.70...1.0)
+                ctx.setStrokeColor(CGColor(red: 0.16 * g, green: 0.40 * g, blue: 0.20 * g, alpha: 1))
                 ctx.setLineWidth(CGFloat.random(in: 1.2...2.4))
                 ctx.move(to: CGPoint(x: cx + cos(angle) * 6, y: cy + sin(angle) * 6))
                 ctx.addLine(to: CGPoint(x: cx + cos(angle) * len, y: cy + sin(angle) * len))
@@ -356,12 +356,24 @@ public enum EnvironmentArt {
     /// Panorama z pliku zdjęciowego, zszyta BEZ SZWU: obraz + jego lustrzane
     /// odbicie. Dzięki temu krawędź tekstury wypada w miejscu, gdzie obraz
     /// i odbicie są identyczne — na walcu nie widać łączenia.
+    /// Wczytanie zdjęcia z bundle — przez ścieżkę pliku, bo `Bundle.url(forResource:)`
+    /// nie znajduje plików wewnątrz referencji folderu na wszystkich systemach.
+    static func loadCGImage(named name: String) -> CGImage? {
+        let path = Bundle.main.path(forResource: name, ofType: "jpg", inDirectory: "Textures")
+            ?? Bundle.main.path(forResource: name, ofType: "jpg")
+        guard let path else { return nil }
+        #if os(iOS)
+        return UIImage(contentsOfFile: path)?.cgImage
+        #else
+        return NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #endif
+    }
+
     public static func panorama(fromImageNamed name: String) -> TextureResource? {
-        let url = Bundle.main.url(forResource: name, withExtension: "jpg", subdirectory: "Textures")
-            ?? Bundle.main.url(forResource: name, withExtension: "jpg")
-        guard let url,
-              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        guard let image = loadCGImage(named: name) else {
+            print("[env] panorama: nie wczytano pliku \(name).jpg")
+            return nil
+        }
 
         // Przycinamy niebo ze zdjęcia: nasze niebo rysuje skybox, a jeśli
         // panorama wnosi własne chmury, na horyzoncie widać „drugie niebo".
@@ -370,29 +382,33 @@ public enum EnvironmentArt {
                                                 width: CGFloat(image.width),
                                                 height: CGFloat(image.height) - cropTop)) ?? image
 
-        let w = cropped.width
-        let h = cropped.height
+        // SKALA: każda kopia 2048 px szerokości. Większa tekstura (8k x 2.8k)
+        // przekracza limit i RealityKit jej nie wczyta — panorama wtedy
+        // w ogóle się nie rysuje.
+        let copyWidth = 2048
+        let copyHeight = max(256, Int(Double(copyWidth) * Double(cropped.height) / Double(cropped.width)))
         guard let ctx = CGContext(
-            data: nil, width: w * 2, height: h,
+            data: nil, width: copyWidth * 2, height: copyHeight,
             bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
 
-        // ORIENTACJA: CGImage rysujemy wprost — RealityKit mapuje teksturę tak,
-        // że wiersz zerowy obrazu odpowiada dołowi walca, co daje poprawny
-        // horyzont. Odwracanie w pionie dawało pejzaż do góry nogami.
-        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: w, height: h))
+        // ORIENTACJA: rysujemy wprost — RealityKit mapuje teksturę tak, że
+        // wiersz zerowy obrazu odpowiada dołowi walca (horyzont wypada nisko).
+        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: copyWidth, height: copyHeight))
 
         // druga kopia: lustrzane odbicie w poziomie (zszycie bez szwu)
         ctx.saveGState()
-        ctx.translateBy(x: CGFloat(w * 2), y: 0)
+        ctx.translateBy(x: CGFloat(copyWidth * 2), y: 0)
         ctx.scaleBy(x: -1, y: 1)
-        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: copyWidth, height: copyHeight))
         ctx.restoreGState()
 
         guard let panorama = ctx.makeImage() else { return nil }
-        return try? TextureResource.generate(from: panorama, options: .init(semantic: .color))
+        let texture = try? TextureResource.generate(from: panorama, options: .init(semantic: .color))
+        print("[env] panorama: \(copyWidth * 2)x\(copyHeight), tekstura:", texture != nil)
+        return texture
     }
 
     /// Mgła: poziomy gradient bieli — kładziony na pasmach i w dolinach.
@@ -419,10 +435,10 @@ public enum EnvironmentArt {
             let colorSpace = CGColorSpaceCreateDeviceRGB()
             let colors = [
                 // połonina: mocny błękit u góry, biel przy horyzoncie
-                CGColor(red: 0.20, green: 0.42, blue: 0.72, alpha: 1),
-                CGColor(red: 0.40, green: 0.62, blue: 0.85, alpha: 1),
-                CGColor(red: 0.72, green: 0.84, blue: 0.92, alpha: 1),
-                CGColor(red: 0.91, green: 0.93, blue: 0.92, alpha: 1),
+                CGColor(red: 0.16, green: 0.38, blue: 0.70, alpha: 1),
+                CGColor(red: 0.34, green: 0.58, blue: 0.84, alpha: 1),
+                CGColor(red: 0.66, green: 0.80, blue: 0.92, alpha: 1),
+                CGColor(red: 0.90, green: 0.93, blue: 0.94, alpha: 1),
                 CGColor(red: 0.42, green: 0.44, blue: 0.38, alpha: 1),
             ] as CFArray
             if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 0.34, 0.52, 0.62, 1]) {

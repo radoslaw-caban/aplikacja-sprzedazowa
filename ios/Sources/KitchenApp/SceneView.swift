@@ -39,7 +39,11 @@ struct SceneView: View {
                 content.environment = .skybox(sky)
             }
             #if os(iOS)
-            content.renderingEffects.depthOfField = interiorView ? .disabled : .enabled
+            // Efekty fotograficzne dostępne natywnie: rozmycie głębi i motion blur.
+            // Aberracji chromatycznej i lens flar RealityKit nie ma — to overlay
+            // albo własny łańcuch Metal (patrz dokumentacja w repo).
+            content.renderingEffects.depthOfField = .enabled
+            content.renderingEffects.motionBlur = .enabled
             #endif
             content.add(SceneBuilder.sunlight())
             content.add(SceneBuilder.buildRoom(room, walls: scan == nil))

@@ -19,7 +19,7 @@ public enum EnvironmentBuilder {
         public var fogBanks: Int = 40           // mgła w dolinach
         public var mountains: Int = 26
         public var birds: Int = 6
-        public var clouds: Int = 28
+        public var clouds: Int = 34
         public var seed: UInt64 = 20261111
         public init() {}
     }
@@ -55,14 +55,13 @@ public enum EnvironmentBuilder {
         // a między nimi mgła w dolinach. Kolejność = kolejność malowania pleneru.
         // Tło: PRAWDZIWE zdjęcie Bieszczad na walcu, zszyte bez szwu
         // (obraz + odbicie lustrzane), z pasami mgły przed nim.
-        root.addChild(photoBackdrop(name: "bieszczady",
-                                    radius: options.radius * 4.4,
-                                    // pasmo przesunięte w dół: łąka ze zdjęcia
-                                    // ma wypaść POD horyzontem, a grzbiety nad nim
-                                    bottom: -70, top: 120))
-        // mgła dokładnie na styku panoramy z niebem — zaszywa górną krawędź
-        root.addChild(fogRings(radius: options.radius * 4.0, count: 26, height: 34, opacity: 0.55))
-        root.addChild(fogRings(radius: options.radius * 5.4, count: 24, height: 48, opacity: 0.42))
+        // Zdjęcie jako płaska karta wyglądało jak wklejka (widać krawędzie
+        // i perspektywę). Wracamy do malowanego tła; pełne wykorzystanie
+        // zdjęcia wymaga panoramy 360° (equirect) — to osobny krok.
+        // mgła PRZED panoramą, ale niska i delikatna — wcześniej stała tuż
+        // przed zdjęciem i zalewała je na biało
+        root.addChild(fogRings(radius: options.radius * 2.0, count: 24, height: 16, opacity: 0.22))
+        root.addChild(fogRings(radius: options.radius * 2.8, count: 22, height: 22, opacity: 0.18))
         root.addChild(fogRings(radius: options.radius * 4.2, count: 22, height: 26, opacity: 0.30))
         root.addChild(fogBanks(options: options, rng: &rng))
         root.addChild(clouds(options: options, rng: &rng))
@@ -125,6 +124,21 @@ public enum EnvironmentBuilder {
         return root
     }
 
+    /// Wysokość terenu (m). Płaski plac wokół domu (34 m), dalej nieregularne
+    /// pagórki — suma trzech sinusów o różnych okresach daje teren „krzywy",
+    /// ale bez losowego szumu (ten sam krajobraz przy każdym uruchomieniu).
+    /// Tej samej funkcji używają drzewa i trawa, żeby nic nie wisiało w powietrzu.
+    public static func terrainHeight(_ x: Float, _ z: Float) -> Float {
+        let distance = (x * x + z * z).squareRoot()
+        let flatUntil: Float = 34
+        guard distance > flatUntil else { return 0 }
+        let ramp = Swift.min(1, (distance - flatUntil) / 55)
+        let h1 = sin(x * 0.020) * cos(z * 0.016) * 3.2
+        let h2 = sin(x * 0.058 + 1.7) * cos(z * 0.045 + 0.6) * 1.15
+        let h3 = sin(x * 0.125 + 3.1) * sin(z * 0.105 + 2.2) * 0.45
+        return (h1 + h2 + h3) * ramp
+    }
+
     static func ground(radius: Float) -> Entity {
         var material = PhysicallyBasedMaterial()
         if let grass = EnvironmentArt.grass() {
@@ -141,15 +155,45 @@ public enum EnvironmentBuilder {
             material.normal = .init(texture: .init(normal))
         }
 
-        // UV w metrach: kafelka 4 × 4 m, więc trawa nie jest rozmazana przy horyzoncie
+        // Siatka terenu z wysokościami: płaski plac pod domem, dalej pagórki.
+        // UV w metrach — trawa nie jest rozmazana.
         let tile: Float = 6
-        let r = radius
+        let cells = 120
+        let step = radius * 2 / Float(cells)
+
+        var positions: [SIMD3<Float>] = []
+        var normals: [SIMD3<Float>] = []
+        var uvs: [SIMD2<Float>] = []
+        var indices: [UInt32] = []
+
+        for iz in 0...cells {
+            for ix in 0...cells {
+                let x = -radius + Float(ix) * step
+                let z = -radius + Float(iz) * step
+                let y = terrainHeight(x, z)
+                positions.append(SIMD3(x, y, z))
+                // normalna z różnic skończonych
+                let dx = terrainHeight(x + 1, z) - terrainHeight(x - 1, z)
+                let dz = terrainHeight(x, z + 1) - terrainHeight(x, z - 1)
+                normals.append(normalize(SIMD3(-dx, 2, -dz)))
+                uvs.append(SIMD2(x / tile, z / tile))
+            }
+        }
+        for iz in 0..<cells {
+            for ix in 0..<cells {
+                let i0 = UInt32(iz * (cells + 1) + ix)
+                let i1 = i0 + 1
+                let i2 = UInt32((iz + 1) * (cells + 1) + ix)
+                let i3 = i2 + 1
+                indices += [i0, i2, i1, i1, i2, i3]
+            }
+        }
+
         var desc = MeshDescriptor(name: "ground")
-        desc.positions = MeshBuffer([SIMD3<Float>(-r, 0, -r), SIMD3(r, 0, -r), SIMD3(r, 0, r), SIMD3(-r, 0, r)])
-        desc.normals = MeshBuffer([SIMD3<Float>(0, 1, 0), SIMD3(0, 1, 0), SIMD3(0, 1, 0), SIMD3(0, 1, 0)])
-        let u = r * 2 / tile
-        desc.textureCoordinates = MeshBuffer([SIMD2<Float>(0, 0), SIMD2(u, 0), SIMD2(u, u), SIMD2(0, u)])
-        desc.primitives = .triangles([0, 2, 1, 0, 3, 2])
+        desc.positions = MeshBuffer(positions)
+        desc.normals = MeshBuffer(normals)
+        desc.textureCoordinates = MeshBuffer(uvs)
+        desc.primitives = .triangles(indices)
 
         if let mesh = try? MeshResource.generate(from: [desc]) {
             let entity = ModelEntity(mesh: mesh, materials: [material])
@@ -350,51 +394,41 @@ public enum EnvironmentBuilder {
         return root
     }
 
-    /// Tło z prawdziwego zdjęcia: panorama na walcu, za pasem mgły.
+    /// Tło z prawdziwego zdjęcia: WYCINEK panoramy (łuk), nie pełny walec.
     ///
-    /// Zdjęcie jest zszyte z odbiciem lustrzanym, więc na walcu nie widać
-    /// łączenia. Wysokość pasma dobrana tak, żeby horyzont zdjęcia wypadał
-    /// na wysokości horyzontu sceny — inaczej „góry" wiszą w powietrzu.
-    static func photoBackdrop(name: String, radius: Float, bottom: Float, top: Float) -> Entity {
+    /// Dlaczego łuk: zdjęcie ma pole widzenia ~90°, a owinięte na 360° rozciąga
+    /// się 4-5 razy i wygląda jak morze. Łuk 150° za domem daje naturalne
+    /// proporcje grzbietów.
+    static func photoBackdrop(
+        name: String,
+        radius: Float,
+        bottom: Float,
+        top: Float,
+        arcDegrees: Float = 150,
+        centerAzimuthDegrees: Float = 180
+    ) -> Entity {
         let root = Entity()
         root.name = "photo-backdrop"
-        guard let texture = EnvironmentArt.panorama(fromImageNamed: name) else { return root }
 
-        let segments = 128
-        var positions: [SIMD3<Float>] = []
-        var normals: [SIMD3<Float>] = []
-        var uvs: [SIMD2<Float>] = []
-        var indices: [UInt32] = []
-
-        for i in 0..<segments {
-            let a0 = Float(i) / Float(segments) * .pi * 2
-            let a1 = Float(i + 1) / Float(segments) * .pi * 2
-            let x0 = cos(a0) * radius, z0 = sin(a0) * radius
-            let x1 = cos(a1) * radius, z1 = sin(a1) * radius
-            let base = UInt32(positions.count)
-            positions += [
-                SIMD3(x0, bottom, z0), SIMD3(x1, bottom, z1),
-                SIMD3(x1, top, z1), SIMD3(x0, top, z0),
-            ]
-            let inward = normalize(SIMD3<Float>(-(x0 + x1) / 2, 0, -(z0 + z1) / 2))
-            normals += [inward, inward, inward, inward]
-            let u0 = Float(i) / Float(segments)
-            let u1 = Float(i + 1) / Float(segments)
-            uvs += [SIMD2(u0, 0), SIMD2(u1, 0), SIMD2(u1, 1), SIMD2(u0, 1)]
-            indices += [base, base + 1, base + 2, base, base + 2, base + 3]
-        }
-
-        var descriptor = MeshDescriptor(name: "photoBackdrop")
-        descriptor.positions = MeshBuffer(positions)
-        descriptor.normals = MeshBuffer(normals)
-        descriptor.textureCoordinates = MeshBuffer(uvs)
-        descriptor.primitives = .triangles(indices)
-        guard let mesh = try? MeshResource.generate(from: [descriptor]) else { return root }
+        // BILLBOARD, nie walec: zwykła płaszczyzna z wbudowanej siatki.
+        // Własna siatka łuku nie renderowała się wcale (TextureResource i mesh
+        // były w porządku — problem leżał w geometrii), a płaszczyzna działa.
+        let aspect: Float = 2.6
+        let height = top - bottom
+        let width = height * aspect
+        let plane = MeshResource.generatePlane(width: width, height: height)
 
         var material = UnlitMaterial()
-        material.color = .init(tint: .white, texture: .init(texture))
+        if let texture = EnvironmentArt.panorama(fromImageNamed: name) {
+            material.color = .init(tint: .white, texture: .init(texture))
+        } else {
+            material.color = .init(tint: PlatformColor(red: 0.8, green: 0.15, blue: 0.6, alpha: 1))
+        }
         material.faceCulling = .none
-        let entity = ModelEntity(mesh: mesh, materials: [material])
+
+        let entity = ModelEntity(mesh: plane, materials: [material])
+        entity.position = [0, (bottom + top) / 2, -radius]
+        // płaszczyzna domyślnie patrzy w +Z; kamera jest po +Z, więc nie obracamy
         entity.name = "panorama"
         root.addChild(entity)
         return root
@@ -497,7 +531,7 @@ public enum EnvironmentBuilder {
             let entity = ModelEntity(mesh: patch.mesh, materials: [patch.material])
             entity.scale = .one * rng.range(0.85, 1.45)
             entity.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
-            entity.position = [x, 0, z]
+            entity.position = [x, terrainHeight(x, z), z]
             entity.name = "grass-\(placed)"
             root.addChild(entity)
             placed += 1
@@ -527,11 +561,18 @@ public enum EnvironmentBuilder {
             // nie sadzimy na podjeździe i w korytarzu kamery zewnętrznej
             if z > 0 && abs(x) < 26 { continue }
 
+            // KORYTARZ WIDOKOWY: za domem (-Z) nie sadzimy lasu do 260 m,
+            // żeby z ogrodu było widać grzbiety Bieszczad ze zdjęcia.
+            let sawView = 3 * Float.pi / 2
+            var dAngle = abs(angle - sawView)
+            if dAngle > Float.pi { dAngle = 2 * Float.pi - dAngle }
+            if distance < 260 && dAngle < 0.52 { continue }   // ±30°
+
             // Bliżej domu stawiamy PRAWDZIWE modele z paczki (jakość, jaką widać
             // na zdjęciach), dalej proceduralne — 900 modeli GLB zjadłoby pamięć.
             let near = distance < houseRadius + 60
             if near, let model = ModelLibrary.entity(named: "IslandTree", targetSize: rng.range(5.5, 9.5)) {
-                model.position = [x, 0, z]
+                model.position = [x, terrainHeight(x, z), z]
                 model.orientation = simd_quatf(angle: rng.range(0, .pi * 2), axis: [0, 1, 0])
                 model.name = "tree-model-\(placed)"
                 root.addChild(model)
@@ -540,7 +581,9 @@ public enum EnvironmentBuilder {
             }
 
             let variant = variants[Int(rng.next() * Float(variants.count)) % variants.count]
-            let height = rng.range(9.0, 26.0)
+            // za domem drzewa DUŻO większe — mają tworzyć ścianę lasu w tle
+            let behind = z < 0
+            let height = behind ? rng.range(14.0, 34.0) : rng.range(7.0, 20.0)
             let tree = TreeFactory.instance(
                 variant,
                 height: height,
@@ -548,7 +591,7 @@ public enum EnvironmentBuilder {
                 squash: rng.range(0.80, 1.20),
                 tilt: rng.signed(0.10)
             )
-            tree.position = [x, 0, z]
+            tree.position = [x, terrainHeight(x, z), z]
             tree.name = "tree-\(placed)"
             root.addChild(tree)
             placed += 1
@@ -633,7 +676,7 @@ public enum EnvironmentBuilder {
         let width: Float = 7
 
         var material = PhysicallyBasedMaterial()
-        if let asphalt = EnvironmentArt.asphalt() {
+        if let asphalt = EnvironmentArt.photoTexture("asphalt_diff") ?? EnvironmentArt.asphalt() {
             material.baseColor = .init(tint: .white, texture: .init(asphalt))
         } else {
             material.baseColor = .init(tint: PlatformColor(red: 0.22, green: 0.22, blue: 0.23, alpha: 1))
@@ -679,7 +722,7 @@ public enum EnvironmentBuilder {
         let length = roadZ - halfDepth - 3.6     // do krawędzi jezdni
 
         var material = PhysicallyBasedMaterial()
-        if let cobble = EnvironmentArt.cobble() {
+        if let cobble = EnvironmentArt.photoTexture("paving_diff") ?? EnvironmentArt.cobble() {
             material.baseColor = .init(tint: .white, texture: .init(cobble))
         } else {
             material.baseColor = .init(tint: PlatformColor(red: 0.44, green: 0.43, blue: 0.41, alpha: 1))
@@ -840,7 +883,7 @@ public enum EnvironmentBuilder {
 
         var material = UnlitMaterial()
         material.color = .init(tint: .white, texture: .init(texture))
-        material.blending = .transparent(opacity: .init(floatLiteral: 0.55))
+        material.blending = .transparent(opacity: .init(floatLiteral: 0.42))
         material.faceCulling = .none
 
         let mesh = MeshFactory.ground(size: 1, tile: 1) ?? .generatePlane(width: 1, depth: 1)
