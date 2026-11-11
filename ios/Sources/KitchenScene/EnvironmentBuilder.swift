@@ -270,6 +270,16 @@ public enum EnvironmentBuilder {
 
     /// Auto stojące na podjeździe (proste bryły, czytelne z odległości).
     static func car(position: SIMD3<Float>) -> Entity {
+        // prawdziwy model (CC BY 4.0), z fallbackiem na bryły
+        if let model = ModelLibrary.entity(named: "ToyCar", targetSize: 4.4), !model.name.contains("__skip") {
+            let root = Entity()
+            root.name = "car"
+            model.name = "car-body"
+            // model wczytany; jeśli ma artefakty (płaszczyzny), łatwiej poprawić później
+            root.addChild(model)
+            root.position = position
+            return root
+        }
         let root = Entity()
         root.name = "car"
 
@@ -327,6 +337,28 @@ public enum EnvironmentBuilder {
         let root = Entity()
         root.name = "birds"
         for i in 0..<options.birds {
+            if let model = ModelLibrary.entity(named: i % 2 == 0 ? "Stork" : "Flamingo", targetSize: 1.1) {
+                let bird = Entity()
+                bird.addChild(model)
+                let radius = rng.range(22, 55)
+                let height = rng.range(14, 26)
+                let startAngle = rng.range(0, .pi * 2)
+                bird.position = [cos(startAngle) * radius, height, sin(startAngle) * radius]
+                bird.scale = .one * rng.range(0.9, 1.6)
+                bird.name = "bird-\(i)"
+                root.addChild(bird)
+
+                Task { @MainActor in
+                    var angle = startAngle
+                    while !Task.isCancelled {
+                        angle += .pi / 4
+                        let next = SIMD3<Float>(cos(angle) * radius, height, sin(angle) * radius)
+                        try? await Task.sleep(nanoseconds: 10_000_000)
+                        await bird.move(to: Transform(translation: next), relativeTo: bird.parent, duration: 3.5, timingFunction: .linear)
+                    }
+                }
+                continue
+            }
             let bird = Entity()
             let bodyMaterial = SimpleMaterial(color: .init(red: 0.12, green: 0.12, blue: 0.14, alpha: 1), isMetallic: false)
 

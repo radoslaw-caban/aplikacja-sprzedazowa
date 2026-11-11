@@ -73,10 +73,10 @@ public enum SurfaceMeshBuilder {
         descriptor.indexCapacity = indices.count
         descriptor.vertexAttributes = [
             .init(semantic: .position, format: .float3, layoutIndex: 0, offset: 0),
-            .init(semantic: .normal, format: .float3, layoutIndex: 0, offset: MemoryLayout<SIMD3<Float>>.stride),
+            .init(semantic: .normal, format: .float3, layoutIndex: 0, offset: GLBLayout.vec3),
         ]
         descriptor.vertexLayouts = [
-            .init(bufferIndex: 0, bufferStride: MemoryLayout<SIMD3<Float>>.stride * 2)
+            .init(bufferIndex: 0, bufferStride: GLBLayout.vec3 * 2)
         ]
 
         let mesh = try LowLevelMesh(descriptor: descriptor)

@@ -1,4 +1,7 @@
 import Foundation
+
+// bez buforowania: przy crashu widzimy, gdzie stanęło
+setvbuf(stdout, nil, _IONBF, 0)
 import KitchenCore
 import KitchenScene
 
@@ -253,6 +256,175 @@ func runChecks() {
             #else
             r.check("surface nets < 4 s", seconds < 4, String(format: "= %.2f s", seconds))
             #endif
+        }
+    }
+
+    print("\nModele GLB (biblioteka)")
+    for model in ModelLibrary.catalog {
+        guard let dir = ModelLibrary.modelsDirectory() else {
+            r.check("katalog modeli", false, "brak Resources/Models")
+            break
+        }
+        let url = dir.appendingPathComponent("\(model.name).glb")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            r.check("\(model.name): plik jest", false)
+            continue
+        }
+        let started = Date()
+        print("    [glb] wczytuję \(model.name)…")
+        do {
+            let loaded = try GLBLoader.load(url: url)
+            print("    [glb] wczytane: \(loaded.meshCount) siatek")
+            print("    [glb] liczę obrys…")
+            let bounds = loaded.entity.visualBounds(relativeTo: nil)
+            let seconds = Date().timeIntervalSince(started)
+            let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            let kb = Double(bytes) / 1000.0
+            let ex = bounds.extents.x, ey = bounds.extents.y, ez = bounds.extents.z
+            print(String(format: "    %@: %d siatek, obrys %.2f × %.2f × %.2f m, %.0f kB, %.2f s",
+                         model.name, loaded.meshCount, ex, ey, ez, kb, seconds))
+            r.check("\(model.name): siatki wczytane", loaded.meshCount > 0)
+            r.check("\(model.name): obrys > 0", bounds.extents.y > 0.001)
+        } catch {
+            r.check("\(model.name): parsowanie", false, "\(error)")
+        }
+    }
+
+    // ---- Skan LiDAR: próbkowanie siatki, klasyfikacja, zapis PLY ----
+    // Cała ta logika jest bez ARKit, więc sprawdzamy ją bez iPada.
+    print("\nSkan LiDAR — próbkowanie siatki")
+
+    func quad(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ c: SIMD3<Float>, _ d: SIMD3<Float>,
+              _ color: SIMD3<UInt8>) -> [ScanTriangle] {
+        [ScanTriangle(a: a, b: b, c: c, color: color),
+         ScanTriangle(a: a, b: c, c: d, color: color)]
+    }
+
+    // jeden trójkąt 1×1 m (0.5 m²) przy kroku 2 cm → ~1250 komórek
+    do {
+        let tri = [ScanTriangle(a: SIMD3(0, 0, 0), b: SIMD3(1, 0, 0), c: SIMD3(0, 1, 0),
+                                color: SIMD3(10, 20, 30))]
+        let cloud = MeshSampler.sample(triangles: tri, step: 0.02)
+        r.check("trójkąt 0.5 m²: 1250–1450 pkt", cloud.count >= 1250 && cloud.count <= 1450, "= \(cloud.count)")
+        r.check("trójkąt: kolor zachowany",
+                cloud.colors?.allSatisfy { $0 == SIMD3(10, 20, 30) } == true)
+        r.check("trójkąt: punkty w płaszczyźnie z=0",
+                cloud.positions.allSatisfy { abs($0.z) < 1e-6 })
+    }
+
+    // pomieszczenie 4 × 2.6 × 3 m, pełne 6 ścian
+    do {
+        var tris: [ScanTriangle] = []
+        let floor = SurfaceClassifier.floorColor
+        let wall = SurfaceClassifier.wallColor
+        let ceil = SurfaceClassifier.ceilingColor
+        tris += quad(SIMD3(-2, 0, -1.5), SIMD3(2, 0, -1.5), SIMD3(2, 0, 1.5), SIMD3(-2, 0, 1.5), floor)
+        tris += quad(SIMD3(-2, 2.6, -1.5), SIMD3(-2, 2.6, 1.5), SIMD3(2, 2.6, 1.5), SIMD3(2, 2.6, -1.5), ceil)
+        tris += quad(SIMD3(-2, 0, -1.5), SIMD3(2, 0, -1.5), SIMD3(2, 2.6, -1.5), SIMD3(-2, 2.6, -1.5), wall)
+        tris += quad(SIMD3(-2, 0, 1.5), SIMD3(-2, 2.6, 1.5), SIMD3(2, 2.6, 1.5), SIMD3(2, 0, 1.5), wall)
+        tris += quad(SIMD3(-2, 0, -1.5), SIMD3(-2, 0, 1.5), SIMD3(-2, 2.6, 1.5), SIMD3(-2, 2.6, -1.5), wall)
+        tris += quad(SIMD3(2, 0, -1.5), SIMD3(2, 2.6, -1.5), SIMD3(2, 2.6, 1.5), SIMD3(2, 0, 1.5), wall)
+
+        let floorArea: Float = 4 * 3
+        let wallN: Float = 4 * 2.6
+        let wallW: Float = 3 * 2.6
+        let area: Float = 2 * floorArea + 2 * wallN + 2 * wallW   // 60.4 m²
+        let expected = Int(area / 0.0004)                        // krok 2 cm
+        let t0 = Date()
+        let cloud = MeshSampler.sample(triangles: tris, step: 0.02)
+        let dt = Date().timeIntervalSince(t0)
+        r.check("pokój: ~\(expected) pkt (±15%)",
+                abs(cloud.count - expected) < expected / 7, "= \(cloud.count)")
+        r.check("pokój: próbkowanie < 3 s", dt < 3, String(format: "%.2f s", dt))
+        let s = cloud.bounds.max - cloud.bounds.min
+        r.check("pokój: obrys 4×2.6×3 m",
+                abs(s.x - 4) < 0.06 && abs(s.y - 2.6) < 0.06 && abs(s.z - 3) < 0.06,
+                String(format: "%.2f×%.2f×%.2f", s.x, s.y, s.z))
+        // w metrach CloudCompare rozpozna jednostkę jako metry
+        r.check("pokój: jednostka rozpoznana jako metry", cloud.unitScaleToMeters == 1)
+    }
+
+    // determinizm i deduplikacja
+    do {
+        let tris = quad(SIMD3(0, 0, 0), SIMD3(1, 0, 0), SIMD3(1, 1, 0), SIMD3(0, 1, 0), SIMD3(1, 2, 3))
+        let a = MeshSampler.sample(triangles: tris, step: 0.05)
+        let b = MeshSampler.sample(triangles: tris, step: 0.05)
+        r.check("determinizm: powtórzenie daje tę samą chmurę",
+                a.count == b.count && a.positions == b.positions, "\(a.count) vs \(b.count)")
+        let single = MeshSampler.sample(triangles: tris, step: 0.05)
+        let doubled = MeshSampler.sample(triangles: tris + tris, step: 0.05)
+        r.check("dedup: nachodzące trójkąty nie dublują", doubled.count == single.count,
+                "\(single.count) → \(doubled.count)")
+    }
+
+    // odporność na artefakty ARKit (zerwany tracking generuje gigantyczne trójkąty)
+    do {
+        let bad = [
+            ScanTriangle(a: SIMD3(0, 0, 0), b: SIMD3(0, 0, 0), c: SIMD3(0, 0, 0), color: SIMD3(1, 1, 1)),
+            ScanTriangle(a: SIMD3(.nan, 0, 0), b: SIMD3(1, 0, 0), c: SIMD3(0, 1, 0), color: SIMD3(1, 1, 1)),
+            ScanTriangle(a: SIMD3(0, 0, 0), b: SIMD3(1e9, 0, 0), c: SIMD3(0, 1e9, 0), color: SIMD3(1, 1, 1)),
+        ]
+        let cloud = MeshSampler.sample(triangles: bad, step: 0.02)
+        r.check("artefakty: brak NaN w wyniku",
+                cloud.positions.allSatisfy { $0.x.isFinite && $0.y.isFinite && $0.z.isFinite })
+        r.check("artefakty: gigantyczny trójkąt nie wywala eksportu", cloud.count < 1_000_000, "= \(cloud.count)")
+    }
+
+    // limit punktów
+    do {
+        var tris: [ScanTriangle] = []
+        for i in 0..<200 {
+            let o = Float(i)
+            tris += quad(SIMD3(o, 0, 0), SIMD3(o + 1, 0, 0), SIMD3(o + 1, 1, 0), SIMD3(o, 1, 0), SIMD3(1, 1, 1))
+        }
+        let cloud = MeshSampler.sample(triangles: tris, step: 0.01, maxPoints: 5000)
+        r.check("limit: maxPoints respektowany", cloud.count <= 5000, "= \(cloud.count)")
+    }
+
+    // klasyfikacja powierzchni
+    print("\nSkan LiDAR — klasyfikacja powierzchni")
+    do {
+        let up = SIMD3<Float>(0, 1, 0), down = SIMD3<Float>(0, -1, 0), side = SIMD3<Float>(1, 0, 0)
+        r.check("nisko = podłoga",
+                SurfaceClassifier.color(normal: up, centroidY: 0.2, ceilingY: 2.6) == SurfaceClassifier.floorColor)
+        r.check("wysoko = sufit (znak normalnej nieistotny)",
+                SurfaceClassifier.color(normal: down, centroidY: 2.5, ceilingY: 2.6) == SurfaceClassifier.ceilingColor
+                && SurfaceClassifier.color(normal: up, centroidY: 2.5, ceilingY: 2.6) == SurfaceClassifier.ceilingColor)
+        r.check("pionowa = ściana",
+                SurfaceClassifier.color(normal: side, centroidY: 1.2, ceilingY: 2.6) == SurfaceClassifier.wallColor)
+        r.check("blat 0.9 m ≠ sufit",
+                SurfaceClassifier.color(normal: up, centroidY: 0.9, ceilingY: 2.6) == SurfaceClassifier.floorColor)
+        r.check("normalna zdegenerowanego = nil",
+                MeshSampler.normal(SIMD3(0, 0, 0), SIMD3(0, 0, 0), SIMD3(0, 0, 0)) == nil)
+    }
+
+    // zapis PLY i odczyt tym samym parserem (pełny obieg)
+    print("\nSkan LiDAR — zapis i odczyt PLY")
+    do {
+        var tris: [ScanTriangle] = []
+        tris += quad(SIMD3(-2, 0, -1.5), SIMD3(2, 0, -1.5), SIMD3(2, 0, 1.5), SIMD3(-2, 0, 1.5), SIMD3(150, 115, 85))
+        let cloud = MeshSampler.sample(triangles: tris, step: 0.05)
+        let data = ScanPLYWriter.data(for: cloud)
+        r.check("PLY: niepusty", data.count > 0)
+
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("check-skan.ply")
+        r.check("podsumowanie skanu ma sens",
+                ScanOutcome.summary(cloud).contains("pkt") && ScanOutcome.summary(cloud).contains("mm"),
+                ScanOutcome.summary(cloud))
+        do {
+            try data.write(to: url)
+            let back = try PLYParser.parse(contentsOf: url)
+            r.check("PLY: obieg zamknięty — tyle samo punktów",
+                    back.count == cloud.count, "\(cloud.count) → \(back.count)")
+            r.check("PLY: kolory zachowane", back.colors?.first == SIMD3(150, 115, 85))
+            let s = back.bounds.max - back.bounds.min
+            r.check("PLY: obrys zachowany (4×3 m)",
+                    abs(s.x - 4) < 0.06 && abs(s.z - 3) < 0.06,
+                    String(format: "%.2f×%.2f", s.x, s.z))
+            r.check("PLY: jednostka nadal metry", back.unitScaleToMeters == 1)
+            try? FileManager.default.removeItem(at: url)
+        } catch {
+            r.check("PLY: obieg zamknięty", false, "\(error)")
         }
     }
 

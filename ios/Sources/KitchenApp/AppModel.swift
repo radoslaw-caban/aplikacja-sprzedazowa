@@ -13,6 +13,12 @@ final class AppModel {
     /// indeks przeglądanego dokumentu (nil = pokazujemy scenę 3D)
     var documentIndex: Int?
     var status: String?
+    /// skan pomieszczenia wczytany do sceny (metry) — nil = brak skanu
+    var scan: PointCloud?
+    /// transformacja skanu do układu projektu
+    var scanTransform = ScanTransform()
+    /// nazwa pliku skanu wczytanego do sceny
+    var scanName: String?
 
     let store: ProjectStore
 
@@ -150,6 +156,58 @@ final class AppModel {
 
     func fileURL(for document: ClientDocument) -> URL {
         store.url(for: document, in: current)
+    }
+
+    // MARK: - skan pomieszczenia
+
+    /// Dodaje skan z LiDAR-u: zapisuje PLY w projekcie i wczytuje do sceny.
+    ///
+    /// Chmura z ARKit jest w metrach, a `PointCloud` oczekuje współrzędnych
+    /// w metrach (parser PLY skaluje mm→m przez `unitScaleToMeters`).
+    /// Wczytujemy więc bez konwersji i oznaczamy transformacją domyślną.
+    @discardableResult
+    func addScan(_ cloud: PointCloud) -> Bool {
+        guard projects.indices.contains(currentIndex) else { return false }
+        do {
+            let (doc, updated) = try store.writeScan(cloud, into: projects[currentIndex])
+            projects[currentIndex] = updated
+            scan = cloud
+            scanName = doc.fileName
+            scanTransform = ScanTransform()
+            documentIndex = nil
+            status = "Skan dodany · \(ScanOutcome.summary(cloud))"
+            persist()
+            return true
+        } catch {
+            status = "Nie udało się zapisać skanu: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Wczytuje skan z dokumentu projektu (PLY) do sceny.
+    func loadScan(from document: ClientDocument) {
+        let url = store.url(for: document, in: current)
+        do {
+            let cloud = try PLYParser.parse(contentsOf: url)
+            scan = cloud
+            scanName = document.fileName
+            scanTransform = ScanTransform()
+            status = "Skan wczytany · \(ScanOutcome.summary(cloud))"
+        } catch {
+            status = "Nie udało się wczytać skanu: \(error.localizedDescription)"
+        }
+    }
+
+    /// Usuwa skan ze sceny (plik zostaje w projekcie).
+    func clearScan() {
+        scan = nil
+        scanName = nil
+        scanTransform = ScanTransform()
+    }
+
+    /// Skan przypisany do bieżącego projektu (pierwszy dokument typu .skan).
+    var scanDocument: ClientDocument? {
+        documents.first { $0.kind == .skan }
     }
 
     // MARK: - zapis

@@ -145,6 +145,34 @@ public struct ProjectStore: Sendable {
         directory(for: project).appendingPathComponent(document.fileName)
     }
 
+    /// Zapisuje chmurę punktów jako PLY w katalogu projektu i zwraca wpis dokumentu.
+    ///
+    /// Skan trafia do projektu jako zwykły dokument — dzięki temu jest widoczny
+    /// na liście plików klienta, przetrwa restart aplikacji i można go wysłać
+    /// mailem tak samo jak umowę czy zdjęcie.
+    public func writeScan(_ cloud: PointCloud, into project: Project, at date: Date = Date()) throws -> (ClientDocument, Project) {
+        try ensureDirectories()
+        let dir = directory(for: project)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let fileName = ScanPLYWriter.fileName(at: date)
+        let target = dir.appendingPathComponent(fileName)
+        try ScanPLYWriter.write(cloud, to: target)
+
+        let size = (try? FileManager.default.attributesOfItem(atPath: target.path)[.size] as? Int) ?? 0
+        let doc = ClientDocument(
+            name: "Skan pomieszczenia",
+            kind: .skan,
+            fileName: fileName,
+            sizeBytes: size,
+            addedAt: date
+        )
+        var updated = project
+        updated.documents.append(doc)
+        updated.updatedAt = date
+        return (doc, updated)
+    }
+
     /// Kopiuje plik do katalogu projektu i zwraca wpis na liście dokumentów.
     public func importDocument(from source: URL, into project: Project) throws -> (ClientDocument, Project) {
         try ensureDirectories()

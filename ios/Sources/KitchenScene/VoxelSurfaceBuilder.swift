@@ -197,7 +197,7 @@ public enum VoxelSurfaceBuilder {
             .init(semantic: .position, format: .float3, layoutIndex: 0, offset: 0)
         ]
         descriptor.vertexLayouts = [
-            .init(bufferIndex: 0, bufferStride: MemoryLayout<SIMD3<Float>>.stride)
+            .init(bufferIndex: 0, bufferStride: GLBLayout.vec3)
         ]
 
         let mesh = try LowLevelMesh(descriptor: descriptor)

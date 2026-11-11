@@ -27,6 +27,7 @@ struct ContentView: View {
 
     @State private var showDocuments = false
     @State private var interiorView = true
+    @State private var showScan = false
 
     var body: some View {
         NavigationSplitView {
@@ -36,6 +37,17 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showDocuments) {
             DocumentsSheet(model: model)
+        }
+        .sheet(isPresented: $showScan) {
+            #if os(iOS)
+            RoomScanSheet(projectName: model.current.name) { cloud in
+                showScan = false
+                if let cloud { model.addScan(cloud) }
+            }
+            #else
+            Text("Skanowanie LiDAR jest dostępne tylko na iPadzie.")
+                .padding(40)
+            #endif
         }
         .task {
             if UserDefaults.standard.bool(forKey: "showDocuments") { showDocuments = true }
@@ -103,6 +115,19 @@ struct ContentView: View {
             Section("Biblioteka · stojące") {
                 ForEach(Library.tall) { t in Button { add(t) } label: { templateRow(t) } }
             }
+            Section("Skan pomieszczenia") {
+                Button { showScan = true } label: {
+                    Label("Skanuj LiDAR-em", systemImage: "sensor.tag.radiowaves.forward")
+                }
+                .disabled(!RoomScanSession.isSupported)
+                if let doc = model.scanDocument {
+                    Button { model.loadScan(from: doc) } label: {
+                        Label("Wczytaj: \(doc.name)", systemImage: "cube.transparent")
+                            .lineLimit(1)
+                    }
+                }
+            }
+
             Section("Dokumenty klienta") {
                 ForEach(Array(model.documents.enumerated()), id: \.element.id) { index, doc in
                     Button { model.openDocument(index) } label: {
@@ -149,7 +174,13 @@ struct ContentView: View {
                 documentViewer(doc)
             } else {
                 ZStack(alignment: .topLeading) {
-                    SceneView(cabinets: model.current.cabinets, room: model.current.room, interiorView: interiorView)
+                    SceneView(
+                        cabinets: model.current.cabinets,
+                        room: model.current.room,
+                        scan: model.scan,
+                        transform: model.scanTransform,
+                        interiorView: interiorView
+                    )
                     swipeHint
                 }
                 .contentShape(Rectangle())
@@ -236,6 +267,16 @@ struct ContentView: View {
             } label: {
                 Label(interiorView ? "Wnętrze" : "Otoczenie",
                       systemImage: interiorView ? "house" : "tree")
+            }
+            Button { showScan = true } label: {
+                Label("Skanuj", systemImage: "sensor.tag.radiowaves.forward")
+            }
+            .disabled(!RoomScanSession.isSupported)
+            .help(RoomScanSession.isSupported ? "Skan pomieszczenia LiDAR-em" : "Brak LiDAR-u na tym urządzeniu")
+            if model.scan != nil {
+                Button { model.clearScan() } label: {
+                    Label("Usuń skan", systemImage: "xmark.circle")
+                }
             }
             Button { showDocuments = true } label: {
                 Label("Dokumenty", systemImage: "folder")
