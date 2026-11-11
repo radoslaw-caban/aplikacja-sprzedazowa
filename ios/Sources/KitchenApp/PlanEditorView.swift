@@ -54,12 +54,17 @@ struct PlanEditorView: View {
     @State private var panOffset: CGSize = .zero
     @State private var showPresets = false
     @State private var showTakeoff = false
+    @State private var showImport = false
     @State private var settings = AppSettings.load()
 
     // przesuwanie ściany palcem
     @State private var draggingWall: Int?
     @State private var lastDragMM: SIMD2<Double> = .zero
     @State private var lastDrag: CGSize = .zero
+    /// dwa palce na ekranie = przesuwanie kartki (nie rysowanie)
+    @State private var pinching = false
+    /// wyjście do widoku 3D po przeciągnięciu za prawą krawędź
+    var onOpen3D: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,7 +77,7 @@ struct PlanEditorView: View {
                     NotebookCanvas(plan: plan, fit: fit, selected: selectedWall, preview: previewRect,
                                    zoom: zoom, showPencil: settings.showPencil && zoom < 0.85)
                         .contentShape(Rectangle())
-                        .gesture(drawGesture(fit: fit))
+                        .gesture(drawGesture(fit: fit, size: geo.size))
                         .simultaneousGesture(zoomGesture)
                         .onTapGesture { location in
                             guard mode == .lines else { return }
@@ -106,6 +111,15 @@ struct PlanEditorView: View {
         }
         .sheet(isPresented: $showTakeoff) {
             TakeoffSheet(plan: plan, settings: settings)
+        }
+        .sheet(isPresented: $showImport) {
+            PlanImportSheet { imported in
+                plan = imported
+                selectedWall = nil
+                zoom = 1
+                panOffset = .zero
+                syncFields(from: plan)
+            }
         }
         .onChange(of: plan) { _, new in
             syncFields(from: new)
@@ -160,6 +174,13 @@ struct PlanEditorView: View {
                 showPresets = true
             } label: {
                 Label("Plany", systemImage: "square.grid.2x2")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            Button {
+                showImport = true
+            } label: {
+                Label("Import", systemImage: "square.and.arrow.down")
                     .font(.caption)
             }
             .buttonStyle(.bordered)
@@ -359,9 +380,17 @@ struct PlanEditorView: View {
     /// 1) złapanie ściany → przesuwanie prostopadłe (plan się rozszerza/zwęża),
     /// 2) tryb prostokąta → rysowanie nowego obrysu,
     /// 3) przy zbliżeniu → przesuwanie kartki.
-    private func drawGesture(fit: PlanFit) -> some Gesture {
+    private func drawGesture(fit: PlanFit, size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 3)
             .onChanged { value in
+                // 0) dwa palce na ekranie (szczypanie) → przesuwamy kartkę, nie rysujemy
+                if pinching {
+                    panOffset.width += value.translation.width - lastDrag.width
+                    panOffset.height += value.translation.height - lastDrag.height
+                    lastDrag = value.translation
+                    return
+                }
+
                 // 1) ściana pod palcem?
                 if draggingWall == nil, dragStart == nil {
                     let start = fit.planPoint(fromScreen: value.startLocation)
@@ -404,6 +433,15 @@ struct PlanEditorView: View {
                 dragCurrent = fit.planPoint(fromScreen: value.location)
             }
             .onEnded { value in
+                // przeciągnięcie poza prawą krawędź kartki = przejście do 3D
+                if value.startLocation.x > size.width * 0.62,
+                   value.translation.width > 90,
+                   abs(value.translation.height) < 160,
+                   draggingWall == nil {
+                    onOpen3D?()
+                    return
+                }
+
                 if draggingWall != nil {
                     draggingWall = nil
                     lastDragMM = .zero
@@ -433,12 +471,17 @@ struct PlanEditorView: View {
             }
     }
 
-    /// Szczypanie: mnożnik wykładniczy, ograniczony — bez „latania" widoku.
+    /// Szczypanie: palce **na zewnątrz = przybliżenie**, do środka = oddalenie.
+    /// (wcześniej było odwrotnie — stąd wrażenie, że zoom „działa na opak")
     private var zoomGesture: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                let step = pow(Double(value.magnification), settings.zoomSensitivity)
-                zoom = min(4.0, max(0.45, zoom * CGFloat(1 / max(0.25, step))))
+                pinching = true
+                let step = pow(Double(max(0.2, value.magnification)), settings.zoomSensitivity)
+                zoom = min(4.0, max(0.45, zoom * CGFloat(step)))
+            }
+            .onEnded { _ in
+                pinching = false
             }
     }
 
@@ -628,7 +671,7 @@ struct PlanFit {
         let b = plan.bounds
         let spanX = Swift.max(1000, b.max.x - b.min.x)
         let spanY = Swift.max(1000, b.max.y - b.min.y)
-        let padding: Double = 90
+        let padding: Double = 140
         let sx = (Double(size.width) - padding * 2) / spanX
         let sy = (Double(size.height) - padding * 2) / spanY
         let base = Swift.max(0.0002, Swift.min(sx, sy))

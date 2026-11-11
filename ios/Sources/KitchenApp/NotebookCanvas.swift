@@ -21,6 +21,7 @@ struct NotebookCanvas: View {
             drawPlan(ctx: &ctx, size: size)
             drawDimensions(ctx: &ctx)
             drawPreview(ctx: &ctx)
+            drawAnnotations(ctx: &ctx, size: size)
             if showPencil { drawPencil(ctx: &ctx, size: size) }
         }
         .background(Color(red: 0.16, green: 0.15, blue: 0.13))
@@ -43,11 +44,9 @@ struct NotebookCanvas: View {
     /// niezależnie od zbliżenia — dlatego liczymy jej prostokąt z `plan.bounds`
     /// przeskalowanego marginesem.
     private var paperRect: CGRect {
-        let b = plan.bounds
-        let marginMM: Double = Swift.max(600, Swift.max(b.max.x - b.min.x, b.max.y - b.min.y) * 0.16)
-        let a = fit.screenPoint(SIMD2(b.min.x - marginMM, b.min.y - marginMM))
-        let c = fit.screenPoint(SIMD2(b.max.x + marginMM, b.max.y + marginMM))
-        return CGRect(x: a.x, y: a.y, width: c.x - a.x, height: c.y - a.y)
+        // kartka zajmuje widoczny obszar z wcięciem — tytuł, róża i podziałka
+        // muszą być zawsze w kadrze, niezależnie od wielkości planu
+        CGRect(origin: .zero, size: fit.size).insetBy(dx: 16, dy: 16)
     }
 
     private func drawPaper(ctx: inout GraphicsContext, size: CGSize) {
@@ -204,6 +203,72 @@ struct NotebookCanvas: View {
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
                     .foregroundColor(ink),
                  at: CGPoint(x: depthX + 18, y: (topY + bottomY) / 2), anchor: .center)
+    }
+
+    /// Opisy jak na prawdziwym planie: tytuł, nazwa pomieszczenia z polem,
+    /// róża kierunków i podziałka.
+    private func drawAnnotations(ctx: inout GraphicsContext, size: CGSize) {
+        let ink = Color(red: 0.26, green: 0.24, blue: 0.22)
+        let rect = paperRect
+
+        // tytuł arkusza
+        ctx.draw(
+            Text("PLAN PIĘTRA")
+                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                .foregroundColor(ink),
+            at: CGPoint(x: rect.minX + 64, y: rect.minY + 30), anchor: .leading
+        )
+        let b = plan.bounds
+        let area = Units.m2Area(plan.areaM2 * 1_000_000)
+        ctx.draw(
+            Text("pow. \(area) · wys. \(Units.mm(plan.height)) mm · ściany \(Units.mm(plan.thickness)) mm")
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .foregroundColor(ink.opacity(0.75)),
+            at: CGPoint(x: rect.minX + 64, y: rect.minY + 48), anchor: .leading
+        )
+
+        // nazwa pomieszczenia na środku obrysu
+        let center = fit.screenPoint(SIMD2((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2))
+        ctx.draw(
+            Text("POMIESZCZENIE")
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .foregroundColor(ink.opacity(0.55)),
+            at: CGPoint(x: center.x, y: center.y - 10), anchor: .center
+        )
+        ctx.draw(
+            Text(Units.m2Area(plan.areaM2 * 1_000_000))
+                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                .foregroundColor(ink.opacity(0.55)),
+            at: CGPoint(x: center.x, y: center.y + 8), anchor: .center
+        )
+
+        // róża kierunków (N do góry) w prawym górnym narożniku kartki
+        let north = CGPoint(x: rect.maxX - 46, y: rect.minY + 44)
+        var arrow = Path()
+        arrow.move(to: CGPoint(x: north.x, y: north.y - 16))
+        arrow.addLine(to: CGPoint(x: north.x - 7, y: north.y + 10))
+        arrow.addLine(to: CGPoint(x: north.x, y: north.y + 4))
+        arrow.addLine(to: CGPoint(x: north.x + 7, y: north.y + 10))
+        arrow.closeSubpath()
+        ctx.fill(arrow, with: .color(ink.opacity(0.75)))
+        ctx.draw(Text("N").font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(ink), at: CGPoint(x: north.x, y: north.y + 22), anchor: .center)
+
+        // podziałka: 1 m w skali rysunku
+        let meter = fit.scale * 1000
+        let base = CGPoint(x: rect.minX + 64, y: rect.maxY - 34)
+        var scaleBar = Path()
+        scaleBar.move(to: base)
+        scaleBar.addLine(to: CGPoint(x: base.x + meter, y: base.y))
+        scaleBar.move(to: CGPoint(x: base.x, y: base.y - 5))
+        scaleBar.addLine(to: CGPoint(x: base.x, y: base.y + 5))
+        scaleBar.move(to: CGPoint(x: base.x + meter, y: base.y - 5))
+        scaleBar.addLine(to: CGPoint(x: base.x + meter, y: base.y + 5))
+        ctx.stroke(scaleBar, with: .color(ink.opacity(0.7)), lineWidth: 1)
+        ctx.draw(Text("1 m").font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .foregroundColor(ink.opacity(0.7)),
+                 at: CGPoint(x: base.x + meter / 2, y: base.y + 14), anchor: .center)
+        _ = size
     }
 
     private func drawPreview(ctx: inout GraphicsContext) {

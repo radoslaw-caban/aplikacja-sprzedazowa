@@ -7,6 +7,42 @@ import simd
 /// typ dzieje się w warstwie iOS. Dzięki temu cała matematyka (rzutowanie,
 /// fuzja wokselowa, wyliczanie niepewności) jest testowalna na macOS.
 public struct DepthFrame: Sendable {
+
+    /// Pozycje 3D wszystkich pikseli mapy głębi w układzie ŚWIATA (metry).
+    ///
+    /// Potrzebne do budowy planu w trakcie skanowania: kontur liczy się
+    /// z rzeczywistych punktów ścian, a nie z siatki ARKit (która jest
+    /// wygładzona i ma komórki 5–10 cm).
+    ///
+    /// - Parameters:
+    ///   - minDepth: bliżej niż to odrzucamy (LiDAR gubi ostrość < 25 cm)
+    ///   - maxDepth: dalej niż to odrzucamy (poza zasięgiem sensownej dokładności)
+    ///   - minConfidence: 0 = wszystko, 1 = średnia i wysoka, 2 = tylko wysoka
+    /// - Returns: pozycje w metrach, w układzie świata ARKit
+    public func positions(minDepth: Float = 0.25, maxDepth: Float = 5.0,
+                          minConfidence: UInt8 = 1) -> [SIMD3<Float>] {
+        guard width > 0, height > 0, depths.count >= width * height,
+              fx > 0, fy > 0 else { return [] }
+        let hasConfidence = confidence.count >= width * height
+        var out: [SIMD3<Float>] = []
+        out.reserveCapacity(width * height / 2)
+
+        for v in 0..<height {
+            for u in 0..<width {
+                let i = v * width + u
+                let d = depths[i]
+                guard d.isFinite, d >= minDepth, d <= maxDepth else { continue }
+                if hasConfidence, confidence[i] < minConfidence { continue }
+                // promień w układzie kamery: x w prawo, y w dół, z do przodu
+                let x = (Float(u) - cx) / fx * d
+                let y = (Float(v) - cy) / fy * d
+                let local = SIMD4<Float>(x, y, d, 1)
+                let world = cameraTransform * local
+                out.append(SIMD3(world.x, world.y, world.z))
+            }
+        }
+        return out
+    }
     /// Głębokość w metrach, wiersz po wierszu (szerokość × wysokość).
     public var depths: [Float]
     /// Poziom ufności ARKit per piksel (0 = low, 1 = medium, 2 = high).
@@ -16,6 +52,7 @@ public struct DepthFrame: Sendable {
 
     /// Macierz kamery (świat ← kamera) w chwili klatki.
     public var cameraTransform: simd_float4x4
+    /// Czy `depths`/`confidence` zawierają dane (pole wygodne dla wołających).
     /// Ogniskowa i punkt główny dla rozdzielczości MAPY GŁĘBI (nie obrazu).
     public var fx: Float
     public var fy: Float

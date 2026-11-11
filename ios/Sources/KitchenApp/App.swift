@@ -84,6 +84,9 @@ struct ContentView: View {
                 },
                 onFillWall: { wallIndex in
                     fillWall(wallIndex)
+                },
+                onOpen3D: {
+                    showPlan = false
                 }
             )
             #if os(iOS)

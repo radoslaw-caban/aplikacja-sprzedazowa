@@ -13,6 +13,8 @@ import SceneKit
 struct RoomScanPreview: UIViewRepresentable {
     let session: ARSession
     var showMesh: Bool = true
+    /// Kontur pomieszczenia rozpoznany na żywo (plan, XZ w metrach).
+    var outline: [SIMD2<Float>] = []
 
     func makeUIView(context: Context) -> ARSCNView {
         let view = ARSCNView(frame: .zero)
@@ -35,6 +37,9 @@ struct RoomScanPreview: UIViewRepresentable {
         for (_, node) in context.coordinator.meshNodes {
             node.isHidden = !showMesh
         }
+        // kontur rysujemy na wysokości oczu, żeby był widoczny w podglądzie:
+        // geometria jest w planie (y = 0), a kamera patrzy poziomo
+        context.coordinator.updateOutline(outline, in: uiView)
     }
 
     func makeCoordinator() -> MeshCoordinator {
@@ -55,9 +60,52 @@ struct RoomScanPreview: UIViewRepresentable {
 final class MeshCoordinator: NSObject, ARSCNViewDelegate {
     var showMesh: Bool
     private(set) var meshNodes: [UUID: SCNNode] = [:]
+    /// node z konturem (jeden, przebudowywany przy zmianie)
+    private var outlineNode: SCNNode?
 
     init(showMesh: Bool) {
         self.showMesh = showMesh
+    }
+
+    /// Rysuje kontur pomieszczenia jako zamkniętą linię.
+    ///
+    /// Kontur jest w planie (y = 0), ale na podłodze byłby niewidoczny, bo
+    /// kamera patrzy poziomo. Podnosimy go do 1,0 m — na wysokość pasa, gdzie
+    /// użytkownik i tak prowadzi iPada, więc linie są widoczne na tle ścian.
+    func updateOutline(_ outline: [SIMD2<Float>], in view: ARSCNView) {
+        outlineNode?.removeFromParentNode()
+        outlineNode = nil
+        guard outline.count >= 3 else { return }
+
+        let level: Float = 1.0
+        var verts: [SCNVector3] = outline.map {
+            SCNVector3($0.x, level, $0.y)
+        }
+        // zamknij pętlę
+        if let first = verts.first { verts.append(first) }
+
+        let source = SCNGeometrySource(vertices: verts)
+        var indices: [Int32] = []
+        for i in 0..<(verts.count - 1) {
+            indices.append(Int32(i))
+            indices.append(Int32(i + 1))
+        }
+        let element = SCNGeometryElement(indices: indices, primitiveType: .line)
+        let geometry = SCNGeometry(sources: [source], elements: [element])
+
+        let material = SCNMaterial()
+        material.lightingModel = .constant
+        material.diffuse.contents = UIColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
+        material.isDoubleSided = true
+        geometry.materials = [material]
+
+        let node = SCNNode(geometry: geometry)
+        node.name = "room-outline"
+        // linie zawsze na wierzchu — inaczej chowają się w siatce
+        node.renderingOrder = 100
+        material.readsFromDepthBuffer = false
+        view.scene.rootNode.addChildNode(node)
+        outlineNode = node
     }
 
     func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {

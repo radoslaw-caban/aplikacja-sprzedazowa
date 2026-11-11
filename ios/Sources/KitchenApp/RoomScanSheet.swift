@@ -22,13 +22,16 @@ struct RoomScanSheet: View {
         NavigationStack {
             ZStack {
                 if scan.isAvailable {
-                    RoomScanPreview(session: scan.session)
+                    RoomScanPreview(session: scan.session,
+                                    showMesh: scan.mode == .full,
+                                    outline: scan.liveOutline)
                         .ignoresSafeArea()
                 } else {
                     unavailableView
                 }
 
                 VStack(spacing: 0) {
+                    modeBar
                     statsBar
                     Spacer()
                     controls
@@ -49,12 +52,61 @@ struct RoomScanSheet: View {
         .onDisappear { scan.stop() }
     }
 
+    // MARK: - pasek trybu i latarki
+
+    /// Przełącznik trybu skanowania + latarka.
+    ///
+    /// Tryb „Krawędzie i narożniki" to osobny sposób zbierania: zamiast pokazywać
+    /// pełną siatkę, liczymy na bieżąco obrys pomieszczenia i rysujemy go jako
+    /// żółtą linię. Dzięki temu od razu widać, czy obrys się domknął i które
+    /// ściany zostały pominięte — bez czekania do końca skanu.
+    private var modeBar: some View {
+        VStack(spacing: 8) {
+            Picker("Tryb", selection: $scan.mode) {
+                ForEach(RoomScanSession.ScanMode.allCases, id: \.self) { m in
+                    Text(m.title).tag(m)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            HStack(spacing: 10) {
+                Text(scan.mode.hint)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if scan.hasTorch {
+                    Button {
+                        scan.toggleTorch()
+                    } label: {
+                        Image(systemName: scan.torchOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .padding(.horizontal, 11).padding(.vertical, 7)
+                            .background(scan.torchOn ? Color.yellow.opacity(0.85) : Color.white.opacity(0.18),
+                                        in: Capsule())
+                            .foregroundStyle(scan.torchOn ? .black : .white)
+                    }
+                    .accessibilityLabel(scan.torchOn ? "Wyłącz latarkę" : "Włącz latarkę")
+                }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal, 12).padding(.top, 8)
+    }
+
     // MARK: - pasek statystyk
 
     private var statsBar: some View {
         HStack(spacing: 14) {
-            stat("pkt ~", scan.estimatedPoints.formatted(.number.grouping(.automatic)))
-            stat("powierzchnia", scan.coverageText)
+            if scan.mode == .edges {
+                stat("kontur", scan.outlineAreaText)
+                stat("punkty planu", scan.planPoints.formatted(.number.grouping(.automatic)))
+                stat("wymiary", scan.boundsText)
+            } else {
+                stat("pkt ~", scan.estimatedPoints.formatted(.number.grouping(.automatic)))
+                stat("powierzchnia", scan.coverageText)
+            }
             if scan.precisionText != "—" {
                 stat("dokładność σ", scan.precisionText)
             }

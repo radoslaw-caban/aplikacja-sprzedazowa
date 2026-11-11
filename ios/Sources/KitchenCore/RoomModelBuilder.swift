@@ -3,25 +3,33 @@ import simd
 
 /// Detekcja modelu pomieszczenia z chmury punktów.
 ///
-/// METODA (i dlaczego nie inne — sprawdzone na testach):
-///  - **obrys z bounding boxa** obejmuje meble i punkty odstające: w tym
-///    projekcie dawał 10,35 × 9,02 m przy realnej podłodze 8,94 × 6,22 m,
-///  - **profil promieniowy od środka** (odległość ściany w funkcji kąta) nie
-///    działa: dla ściany promień nie jest kawałkami liniowy, więc uproszczenie
-///    konturu łapie fałszywe załamania — prostokąt 4×3 m rozpadł się na
-///    8 narożników o bokach 0,35 / 0,48 / 1,31 / 1,48 m,
-///  - **PCA lokalnych normalnych → linie → przecięcia** (ta implementacja):
-///    1. dzielimy pas przy podłodze na komórki 10 cm i w każdej liczymy
-///       kierunek PCA — na ścianie punkty układają się wzdłuż ściany,
-///    2. histogram (kąt, przesunięcie) z tych komórek daje linie ścian,
-///    3. każdą linię dopasowujemy ponownie do WSZYSTKICH punktów w pasie
-///       (najmniejsze kwadraty), więc dokładność nie zależy od siatki komórek,
-///    4. narożniki = przecięcia linii o RÓŻNYCH kierunkach, których przecięcie
-///       leży w zakresie obu odcinków. Pary równoległe odpadają same — dlatego
-///       Hough z przecięć „sąsiednich pików kątowych" gubił narożniki,
-///    5. narożniki łączymy w kontur przez graf (wspólna linia) i przechodzimy
-///       cykl — to działa też dla pomieszczeń niewypukłych (L, T), gdzie
-///       sortowanie kątowe względem środka daje zły porządek.
+/// METODA (i dlaczego nie inne — każda odrzucona na podstawie pomiarów):
+///
+///  - **obrys z bounding boxa** — obejmuje meble i punkty odstające: dawał
+///    10,35 × 9,02 m przy realnej podłodze 8,94 × 6,22 m.
+///  - **profil promieniowy od środka** (odległość ściany w funkcji kąta) —
+///    dla ściany promień nie jest kawałkami liniowy, więc uproszczenie konturu
+///    łapie fałszywe załamania: prostokąt 4×3 m rozpadł się na 8 narożników.
+///  - **Hough / histogram (kąt normalnej, przesunięcie)** — wymaga spójnego
+///    zwrotu normalnej. PCA zwraca zwrot losowo, więc ta sama ściana trafiała
+///    do dwóch koszy, a naprzeciwległe ściany bywały scalane (zmierzone:
+///    4 ściany → 2 lub 3). Da się to łatać, ale każda łata psuła inny
+///    przypadek — to nie jest metoda, którą chce się utrzymywać.
+///  - **siatka zajętości + śledzenie konturu** (ta implementacja) — działa na
+///    zbiorze, nie na parametrach, więc nie ma problemu ze znakami:
+///    1. punkty przy podłodze → siatka 3 cm,
+///    2. komórki zajęte pogrubiamy o jedną komórkę i zalewamy z zewnątrz:
+///       wszystko, czego zalewanie nie dosięgło, to wnętrze pomieszczenia
+///       (dziury w chmurze zostają wypełnione automatycznie),
+///    3. śledzimy kontur brzegu (Moore) i upraszczamy go (Douglas–Peucker) →
+///       przybliżone narożniki,
+///    4. **dopracowanie**: każdą krawędź dopasowujemy do SUROWYCH punktów
+///       w jej pobliżu (najmniejsze kwadraty), a narożniki liczymy jako
+///       przecięcia sąsiednich dopasowanych linii. Bez tego kontur byłby
+///       przesunięty o grubość pogrubienia siatki.
+///
+/// Metoda z kroku 2–4 jest niezależna od kształtu, więc obsługuje też
+/// pomieszczenia niewypukłe (L, T, wnęka na pion).
 ///
 /// Cała matematyka jest czysta (tablice + simd), więc testuje się bez iPada.
 public extension RoomModel {
@@ -43,14 +51,28 @@ public extension RoomModel {
         let ceilingY = detectCeiling(samples: samples, floorY: floorY) ?? (floorY + 2.6)
         let height = Swift.max(1.8, ceilingY - floorY)
 
-        // 3) punkty przy podłodze → kontur w planie
-        let floorBand = samples.filter {
-            $0.position.y >= floorY - 0.03 && $0.position.y <= floorY + options.floorBand
+        // 3) kontur: pasmo pod sufitem (poziom nadproży), nie przy podłodze.
+        //
+        // DLACZEGO NIE PRZY PODŁODZE: drzwi sięgają podłogi, więc ściana jest
+        // przy podłodze PRZERWANA. Zalewanie z zewnątrz wpływa wtedy przez
+        // otwór, wnętrze łączy się z zewnętrzem i kontur się rozrywa —
+        // zmierzone na pokoju 5×4 z drzwiami: 7 narożników i bok 0,37 m.
+        // Nadproże (nad drzwiami i oknami) jest ciągłe, więc pasmo pod sufitem
+        // daje zamknięty obrys. Poniżej, dla porównania, pasmo przy podłodze.
+        let top = ceilingY > floorY ? ceilingY : wallTop(samples: samples, floorY: floorY)
+        var outlinePoints = samples.filter {
+            $0.position.y >= top - 0.4 && $0.position.y <= top - 0.02
         }
-        guard floorBand.count > 200 else { return nil }
+        // gdy skan nie ma sufitu, pasmo nadproży może być zbyt ubogie —
+        // wtedy wracamy do pasma przy podłodze
+        if outlinePoints.count < 80 {
+            outlinePoints = samples.filter {
+                $0.position.y >= floorY - 0.03 && $0.position.y <= floorY + options.floorBand
+            }
+        }
+        guard outlinePoints.count > 80 else { return nil }
 
-        // 4) linie ścian z PCA lokalnych normalnych
-        let plan = floorBand.map { SIMD2($0.position.x, $0.position.z) }
+        let plan = outlinePoints.map { SIMD2($0.position.x, $0.position.z) }
         guard let outline = roomOutline(points: plan, options: options),
               outline.count >= 3 else { return nil }
 
@@ -58,20 +80,18 @@ public extension RoomModel {
             Corner(x: $0.x, z: $0.y, yMin: floorY, yMax: ceilingY, confidence: 1)
         }
 
-        // 5) ściany: każda krawędź konturu + dopasowanie płaszczyzny
+        // 4) ściany: każda krawędź konturu + dopasowanie płaszczyzny
         let walls = fitWalls(corners: corners, samples: samples, options: options)
         guard walls.count >= 3 else { return nil }
 
-        // 6) otwory (okna/drzwi) — po dopasowaniu ścian, bo potrzebują normalnej
+        // 5) otwory (okna/drzwi)
         let openings = detectOpenings(walls: walls, samples: samples, floorY: floorY,
                                       height: height, options: options)
 
-        // 7) pole powierzchni i jakość narożników
         let area = polygonArea(corners)
-        let cornerSigma: Float = options.wallTolerance / 4
 
         return Result(corners: corners, walls: walls, openings: openings,
-                      height: height, area: area, cornerSigma: cornerSigma)
+                      height: height, area: area, cornerSigma: 0.003)
     }
 
     // MARK: - poziomy podłogi i sufitu
@@ -88,11 +108,20 @@ public extension RoomModel {
             let b = Int(((y - lo) / bin).rounded())
             hist[b, default: 0] += 1
         }
-        // podłoga to najgęstszy pik w dolnych 40% wysokości
         let limit = Int((hi - lo) * 0.4 / bin)
         let best = hist.filter { $0.key <= limit }.max { $0.value < $1.value }
         guard let b = best?.key else { return nil }
         return lo + Float(b) * bin
+    }
+
+    /// Górna krawędź ścian, gdy w skanie nie ma sufitu.
+    ///
+    /// Bierzemy 95 percentyl wysokości: pasmo przy samej górnej krawędzi
+    /// mogłoby wypaść poza chmurę, a percentyl zostaje na ścianie.
+    static func wallTop(samples: [Sample], floorY: Float) -> Float {
+        let ys = samples.map(\.position.y).filter { $0.isFinite && $0 > floorY + 1.0 }.sorted()
+        guard !ys.isEmpty else { return floorY + 2.6 }
+        return ys[Swift.min(ys.count - 1, Int(Double(ys.count) * 0.97))]
     }
 
     /// Najgęstszy pik powyżej 1,8 m nad podłogą (sufit).
@@ -108,275 +137,360 @@ public extension RoomModel {
         }
         guard let best = hist.max(by: { $0.value < $1.value }) else { return nil }
         let y = lo + Float(best.key) * bin
-        // sensowna wysokość pomieszczenia: 2,0–4,5 m
         return (y - floorY > 2.0 && y - floorY < 4.5) ? y : nil
     }
 
-    // MARK: - linie ścian
+    // MARK: - kontur pomieszczenia
 
-    /// Linia ściany w planie (metry).
-    struct WallLine: Sendable {
-        /// punkt na linii
-        public var point: SIMD2<Float>
-        /// kierunek jednostkowy (wzdłuż ściany)
-        public var direction: SIMD2<Float>
-        /// zakres wzdłuż ściany (od `point`, w metrach)
-        public var tMin: Float
-        public var tMax: Float
-        /// liczba punktów wspierających
-        public var support: Int
-
-        public init(point: SIMD2<Float>, direction: SIMD2<Float>,
-                    tMin: Float, tMax: Float, support: Int) {
-            self.point = point
-            self.direction = direction
-            self.tMin = tMin
-            self.tMax = tMax
-            self.support = support
-        }
-
-        /// normalna w planie
-        public var normal: SIMD2<Float> { SIMD2(-direction.y, direction.x) }
-        /// przesunięcie normalne od początku układu
-        public var offset: Float { simd_dot(point, normal) }
-        public var length: Float { tMax - tMin }
-        /// kąt w stopniach 0…180
-        public var angleDeg: Double {
-            // zwrot kanoniczny (dir.x ≥ 0) → kąt w [-90°, 90°] → sprowadzony do [0°, 180°)
-            normalizeAngle180(Double(atan2(direction.y, direction.x)) * 180 / .pi)
-        }
-    }
-
-    /// Wyznacza kontur pomieszczenia: linie ścian → narożniki → cykl.
+    /// Kontur pomieszczenia: siatka zajętości → śledzenie brzegu → dopracowanie.
     static func roomOutline(points: [SIMD2<Float>], options: Options) -> [SIMD2<Float>]? {
         guard points.count > 100 else { return nil }
 
-        // 1) linie z histogramu (kąt, przesunięcie) lokalnych normalnych
-        var lines = detectWallLines(points: points, options: options)
-        guard lines.count >= 3 else { return nil }
+        let cell: Float = 0.03
+        let grid = OccupancyGrid(points: points, cell: cell, sealRadius: 1)
+        guard let coarse = grid.outline(sealRadius: 1) else { return nil }
 
-        // 2) scal linie opisujące tę samą ścianę (bliski kąt i przesunięcie)
-        lines = mergeLines(lines, options: options)
+        // uproszczenie: kontur siatki ma schodki 3 cm, więc tolerancja 5 cm
+        var poly = douglasPeucker(coarse, tolerance: 0.05, closed: true)
+        guard poly.count >= 3 else { return nil }
 
-        // 3) narożniki = przecięcia linii o różnych kierunkach, w zakresach
-        guard let corners = intersect(lines: lines, options: options),
-              corners.count >= 3 else { return nil }
-
-        // 4) uporządkuj w kontur (graf: narożniki na wspólnej linii)
-        return orderContour(corners: corners, lines: lines)
+        // dopracowanie na surowych punktach (usuwa obciążenie od pogrubienia siatki)
+        poly = refinePolygon(poly, points: points, tolerance: 0.10, iterations: 2)
+        poly = removeShortEdges(poly, minLength: options.minWallLength)
+        return poly.count >= 3 ? poly : nil
     }
 
-    /// Wykrywa linie ścian jako piki histogramu (kąt, przesunięcie).
+    /// Siatka zajętości w planie z wypełnianiem wnętrza.
     ///
-    /// Pomysł: w komórce 10 cm leżącej na ścianie punkty tworzą odcinek wzdłuż
-    /// ściany, więc PCA takiej komórki daje kierunek ściany. Histogram par
-    /// (kierunek normalnej, przesunięcie normalne) ma ostre piki na ścianach.
-    ///
-    /// Sam histogram nie wystarcza — „cięciwa" przez środek pomieszczenia też
-    /// zbiera wsparcie, bo wpadają w nią punkty podłogi (zmierzone: 750–820
-    /// punktów przy 1175–1900 na prawdziwych ścianach). Dlatego każdy kandydat
-    /// przechodzi test „ściana ma pokój po jednej stronie, pustkę po drugiej".
-    static func detectWallLines(points: [SIMD2<Float>], options: Options) -> [WallLine] {
-        let cell: Float = 0.10
-        var buckets: [SIMD2<Int32>: [SIMD2<Float>]] = [:]
-        for p in points {
-            let key = SIMD2(Int32((p.x / cell).rounded()), Int32((p.y / cell).rounded()))
-            buckets[key, default: []].append(p)
-        }
-
-        // siatka zajętości podłogi (do testu „pusto po jednej stronie")
-        let grid = OccupancyGrid(points: points, cell: 0.05)
-
-        // histogram: kąt normalnej co 2°, przesunięcie co 2 cm
-        let angleBins = 180
-        let offsetBin: Float = 0.02
-        var hist: [SIMD2<Int32>: Int] = [:]
-        var usedCells = 0
-        for (_, pts) in buckets where pts.count >= 5 {
-            guard let theta = pcaAngle(pts) else { continue }
-            // odrzucamy komórki bez kierunku (podłoga w środku pomieszczenia)
-            guard let spread = pcaSpread(pts), spread < 0.25 else { continue }
-            usedCells += 1
-
-            // ta sama kanonizacja co w fitLine — inaczej jedna ściana trafia
-            // do dwóch koszy (normalna + normalna przeciwna)
-            let dir = canonicalDirection(SIMD2<Float>(Float(cos(theta)), Float(sin(theta))))
-            let normal = SIMD2<Float>(-dir.y, dir.x)
-            let cx = pts.reduce(Float(0)) { $0 + $1.x } / Float(pts.count)
-            let cy = pts.reduce(Float(0)) { $0 + $1.y } / Float(pts.count)
-            let d = simd_dot(SIMD2(cx, cy), normal)
-
-            // tolerancyjne zawijanie — patrz normalizeAngle180
-            let angDeg = normalizeAngle180(Double(atan2(normal.y, normal.x)) * 180 / .pi)
-            let aBin = Int32(angDeg.rounded()) % Int32(angleBins)
-            let oBin = Int32((d / offsetBin).rounded())
-            hist[SIMD2(aBin, oBin), default: 0] += pts.count
-        }
-        guard !hist.isEmpty, usedCells >= 3 else { return [] }
-
-        let maxSupport = hist.values.max() ?? 0
-        let threshold = Swift.max(options.minCornerSamples, maxSupport / 6)
-
-        var candidates: [(a: Double, off: Float, support: Int)] = []
-        for (key, support) in hist where support >= threshold {
-            candidates.append((Double(key.x), Float(key.y) * offsetBin, support))
-        }
-        guard !candidates.isEmpty else { return [] }
-        candidates.sort { $0.support > $1.support }
-
-        var peaks: [(a: Double, off: Float)] = []
-        for c in candidates {
-            let tooClose = peaks.contains {
-                angleDiff180($0.a, c.a) < options.mergeAngleDeg && abs($0.off - c.off) < 0.10
-            }
-            if !tooClose { peaks.append((c.a, c.off)) }
-        }
-
-        let debug = ProcessInfo.processInfo.environment["ROOM_DEBUG"] != nil
-        if debug {
-            for pk in peaks {
-                FileHandle.standardError.write(Data(String(format:
-                    "    PIK kąt %6.1f° off %7.3f\n", pk.a, pk.off).utf8))
-            }
-        }
-
-        var lines: [WallLine] = []
-        for peak in peaks {
-            let normal = SIMD2<Float>(Float(cos(peak.a * .pi / 180)), Float(sin(peak.a * .pi / 180)))
-            var inliers: [SIMD2<Float>] = []
-            for p in points where abs(simd_dot(p, normal) - peak.off) <= options.wallTolerance {
-                inliers.append(p)
-            }
-            guard inliers.count >= options.minCornerSamples else { continue }
-            guard var fitted = fitLine(inliers) else { continue }
-
-            // DOPASOWANIE ITERACYJNE: pierwsze pasmo wybieramy normalną z kosza
-            // histogramu (dokładność 1°), a taka normalna obcina końce długiej
-            // ściany — zmierzone: ściana 4 m przekrzywiła się o 0,9°, przez co
-            // zakres skrócił się o 0,87 m i narożnik wypadł poza linię.
-            // Po dopasowaniu normalna jest dokładna, więc wybieramy pasmo ponownie.
-            for _ in 0..<2 {
-                let current = fitted
-                var refined: [SIMD2<Float>] = []
-                for p in points
-                where abs(simd_dot(p - current.point, current.normal)) <= options.wallTolerance {
-                    refined.append(p)
-                }
-                guard refined.count >= options.minCornerSamples,
-                      let next = fitLine(refined) else { break }
-                fitted = next
-            }
-
-            let ok = isBoundaryLine(fitted, grid: grid)
-            if debug {
-                FileHandle.standardError.write(Data(String(format:
-                    "    LINIA kąt %6.1f° off %7.3f wsp %d granica %@\n",
-                    fitted.angleDeg, fitted.offset, inliers.count, ok ? "TAK" : "nie").utf8))
-            }
-            guard ok else { continue }
-            lines.append(fitted)
-        }
-        return lines
-    }
-
-    /// Siatka zajętości w planie — do testów przestrzennych bez O(n²).
+    /// „Wnętrze" to obszar, do którego nie dotarło zalewanie z zewnątrz siatki.
+    /// Dzięki temu dziury w chmurze (ciemny kąt, zasłonięty fragment) zostają
+    /// wypełnione i nie rozrywają konturu.
     struct OccupancyGrid {
         var cell: Float
         var origin: SIMD2<Float>
         var width: Int
         var height: Int
-        var occupied: [Bool]
+        /// komórki z punktami
+        var raw: [Bool]
+        /// komórki z punktami po pogrubieniu (do zamknięcia szczelin w ścianach)
+        var sealed: [Bool]
+        /// wnętrze pomieszczenia (nieosiągalne zalewaniem z zewnątrz)
+        var interior: [Bool]
 
-        init(points: [SIMD2<Float>], cell: Float) {
+        init(points: [SIMD2<Float>], cell: Float, sealRadius: Int) {
+            self.cell = cell
             guard !points.isEmpty else {
-                self.cell = cell; self.origin = .zero
-                self.width = 0; self.height = 0; self.occupied = []
+                origin = .zero; width = 0; height = 0
+                raw = []; sealed = []; interior = []
                 return
             }
             var lo = points[0], hi = points[0]
             for p in points {
                 lo = simd_min(lo, p); hi = simd_max(hi, p)
             }
-            // margines 0,5 m, żeby test „na zewnątrz" miał gdzie pytać
-            self.origin = lo - SIMD2(repeating: 0.5)
-            self.cell = cell
-            let span = hi - lo + SIMD2(repeating: 1.0)
-            self.width = Swift.max(1, Int(span.x / cell) + 1)
-            self.height = Swift.max(1, Int(span.y / cell) + 1)
-            self.occupied = [Bool](repeating: false, count: width * height)
+            // margines na zalewanie z zewnątrz
+            origin = lo - SIMD2(repeating: cell * 4)
+            let span = hi - lo + SIMD2(repeating: cell * 8)
+            width = Swift.max(1, Int(span.x / cell) + 1)
+            height = Swift.max(1, Int(span.y / cell) + 1)
+            raw = [Bool](repeating: false, count: width * height)
+            // inicjalizujemy WSZYSTKIE pola przed użyciem domknięć, bo Swift
+            // nie pozwala użyć `self` dopóki wszystkie właściwości nie są gotowe
+            sealed = raw
+            interior = raw
 
-            for p in points {
+            func index(_ p: SIMD2<Float>) -> (Int, Int) {
                 let g = (p - origin) / cell
-                let ix = Int(g.x.rounded()), iy = Int(g.y.rounded())
-                // zapalamy komórkę i sąsiadów — zamyka dziury w chmurze
-                for dx in -1...1 {
-                    for dy in -1...1 {
-                        let x = ix + dx, y = iy + dy
-                        guard x >= 0, x < width, y >= 0, y < height else { continue }
-                        occupied[y * width + x] = true
+                return (Int(g.x.rounded()), Int(g.y.rounded()))
+            }
+            for p in points {
+                let (ix, iy) = index(p)
+                guard ix >= 0, ix < width, iy >= 0, iy < height else { continue }
+                raw[iy * width + ix] = true
+            }
+
+            // pogrubienie: 3×3 (radius 1) wystarcza, żeby zamknąć szczeliny
+            sealed = raw
+            if sealRadius > 0 {
+                sealed = [Bool](repeating: false, count: width * height)
+                for y in 0..<height {
+                    for x in 0..<width where raw[y * width + x] {
+                        for dy in -sealRadius...sealRadius {
+                            for dx in -sealRadius...sealRadius {
+                                let nx = x + dx, ny = y + dy
+                                guard nx >= 0, nx < width, ny >= 0, ny < height else { continue }
+                                sealed[ny * width + nx] = true
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        func isOccupied(_ world: SIMD2<Float>) -> Bool {
-            guard width > 0 else { return false }
-            let g = (world - origin) / cell
-            let ix = Int(g.x.rounded()), iy = Int(g.y.rounded())
-            guard ix >= 0, ix < width, iy >= 0, iy < height else { return false }
-            return occupied[iy * width + ix]
-        }
-
-        /// Ile komórek jest zajętych w odległościach `from…to` po stronie `side`
-        /// (1 = zgodnie z normalną, -1 = przeciwnie).
-        func occupancy(on side: Float, at point: SIMD2<Float>, normal: SIMD2<Float>,
-                       from: Float = 0.14, to: Float = 0.45) -> Int {
-            var count = 0
-            var d = from
-            while d <= to {
-                if isOccupied(point + normal * (d * side)) { count += 1 }
-                d += 0.05
+            // zalewanie z zewnątrz po komórkach NIEzajętych (4-spójnie, żeby nie
+            // przeciekało po przekątnej przez szczelinę w ścianie)
+            var outside = [Bool](repeating: false, count: width * height)
+            var stack: [(Int, Int)] = []
+            func push(_ x: Int, _ y: Int) {
+                guard x >= 0, x < width, y >= 0, y < height else { return }
+                let i = y * width + x
+                guard !sealed[i], !outside[i] else { return }
+                outside[i] = true
+                stack.append((x, y))
             }
-            return count
+            for x in 0..<width { push(x, 0); push(x, height - 1) }
+            for y in 0..<height { push(0, y); push(width - 1, y) }
+            while let (x, y) = stack.popLast() {
+                push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1)
+            }
+
+            // wnętrze = komórki nie-zajęte i nie-osiągnięte z zewnątrz
+            interior = [Bool](repeating: false, count: width * height)
+            for i in 0..<(width * height) where !sealed[i] && !outside[i] {
+                interior[i] = true
+            }
+        }
+
+        /// Bryła pomieszczenia: wnętrze + punkty (bez pogrubienia — kontur ma
+        /// leżeć na rzeczywistych punktach, nie na pogrubieniu).
+        func solid() -> [Bool] {
+            var s = raw
+            for i in 0..<(width * height) where interior[i] { s[i] = true }
+            return s
+        }
+
+        /// Kontur bryły pomieszczenia w metrach (zamknięty, bez powtórzenia).
+        func outline(sealRadius: Int) -> [SIMD2<Float>]? {
+            let solidMask = solid()
+            let cells = traceBoundary(solid: solidMask, width: width, height: height)
+            guard cells.count >= 8 else { return nil }
+            return cells.map { c in
+                origin + SIMD2(Float(c.x), Float(c.y)) * cell
+            }
         }
     }
 
-    /// Test: czy linia jest granicą pomieszczenia (a nie cięciwą przez środek).
+    /// Śledzenie brzegu (Moore, z kryterium zatrzymania) — zwraca komórki konturu.
+    static func traceBoundary(solid: [Bool], width: Int, height: Int) -> [SIMD2<Int>] {
+        guard width > 0, height > 0 else { return [] }
+
+        // start: pierwsza zajęta komórka w skanie wierszami
+        var start = SIMD2(-1, -1)
+        outer: for y in 0..<height {
+            for x in 0..<width where solid[y * width + x] {
+                start = SIMD2(x, y)
+                break outer
+            }
+        }
+        guard start.x >= 0 else { return [] }
+
+        // sąsiedzi w kolejności zgodnej z ruchem wskazówek zegara (E, NE, N, …)
+        let nbr = [SIMD2(1, 0), SIMD2(1, 1), SIMD2(0, 1), SIMD2(-1, 1),
+                   SIMD2(-1, 0), SIMD2(-1, -1), SIMD2(0, -1), SIMD2(1, -1)]
+
+        func occupied(_ c: SIMD2<Int>) -> Bool {
+            guard c.x >= 0, c.x < width, c.y >= 0, c.y < height else { return false }
+            return solid[c.y * width + c.x]
+        }
+
+        var contour: [SIMD2<Int>] = [start]
+        var current = start
+        var backtrack = SIMD2(start.x - 1, start.y)
+        var steps = 0
+        let limit = Swift.max(64, width * height / 2)
+
+        while steps < limit {
+            steps += 1
+            let delta = SIMD2(backtrack.x - current.x, backtrack.y - current.y)
+            var idx = nbr.firstIndex(of: delta) ?? 0
+            var next: SIMD2<Int>? = nil
+
+            for k in 1...8 {
+                let i = (idx + k) % 8
+                let cand = SIMD2(current.x + nbr[i].x, current.y + nbr[i].y)
+                if occupied(cand) {
+                    next = cand
+                    // cofnięcie: sąsiad przed bieżącym w kolejności przeszukiwania
+                    idx = (i + 7) % 8
+                    backtrack = SIMD2(current.x + nbr[idx].x, current.y + nbr[idx].y)
+                    break
+                }
+            }
+            guard let n = next else { break }
+            // zamknięcie konturu: wróciliśmy do startu
+            if n == start && contour.count > 2 { break }
+            current = n
+            contour.append(n)
+        }
+        return contour
+    }
+
+    /// Dopracowuje wielokąt: krawędzie dopasowuje do surowych punktów, a
+    /// narożniki liczy jako przecięcia sąsiednich dopasowanych linii.
     ///
-    /// Ściana ma punkty po jednej stronie (wnętrze) i pustkę po drugiej.
-    /// Cięciwa przez podłogę ma punkty po obu stronach — dlatego sama liczba
-    /// punktów przy linii nie wystarcza do rozpoznania ściany.
-    static func isBoundaryLine(_ line: WallLine, grid: OccupancyGrid) -> Bool {
-        let steps = 20
-        let normal = line.normal
-        var inside = 0
-        var outside = 0
-        let debug = ProcessInfo.processInfo.environment["ROOM_DEBUG"] != nil
-        for k in 0...steps {
-            let t = line.tMin + (line.tMax - line.tMin) * Float(k) / Float(steps)
-            let p = line.point + line.direction * t
-            let a = grid.occupancy(on: 1, at: p, normal: normal)
-            let b = grid.occupancy(on: -1, at: p, normal: normal)
-            inside += Swift.max(a, b)
-            outside += Swift.min(a, b)
+    /// To jest krok, który usuwa obciążenie od siatki: kontur z siatki jest
+    /// przesunięty o grubość pogrubienia i „schodkowy", a dopasowanie
+    /// najmniejszych kwadratów do prawdziwych punktów daje dokładną pozycję
+    /// ściany. Powtarzamy dwa razy, bo po pierwszym kroku segmenty są już
+    /// blisko ścian, więc zbierają lepsze punkty.
+    static func refinePolygon(_ poly: [SIMD2<Float>], points: [SIMD2<Float>],
+                              tolerance: Float, iterations: Int) -> [SIMD2<Float>] {
+        guard poly.count >= 3 else { return poly }
+        var current = poly
+
+        for _ in 0..<iterations {
+            let n = current.count
+            var lines: [(point: SIMD2<Float>, direction: SIMD2<Float>)] = []
+
+            for i in 0..<n {
+                let a = current[i]
+                let b = current[(i + 1) % n]
+                let length = simd_length(b - a)
+                guard length > 1e-4 else {
+                    lines.append((a, SIMD2(1, 0)))
+                    continue
+                }
+                let unit = (b - a) / length
+
+                // punkty w pobliżu krawędzi, ale nie na jej końcach (żeby nie
+                // złapać punktów ze ściany prostopadłej)
+                var near: [SIMD2<Float>] = []
+                for p in points {
+                    let t = simd_dot(p - a, unit)
+                    guard t >= length * 0.15, t <= length * 0.85 else { continue }
+                    let lateral = abs(simd_dot(p - a, SIMD2(-unit.y, unit.x)))
+                    guard lateral <= tolerance else { continue }
+                    near.append(p)
+                }
+                if near.count >= 20, let fitted = fitLine(near) {
+                    lines.append((fitted.point, fitted.direction))
+                } else {
+                    lines.append((a, unit))
+                }
+            }
+
+            var refined: [SIMD2<Float>] = []
+            for i in 0..<n {
+                let l1 = lines[(i + n - 1) % n]  // krawędź kończąca się w narożniku i
+                let l2 = lines[i]                // krawędź zaczynająca się w narożniku i
+                let det = l1.direction.x * l2.direction.y - l1.direction.y * l2.direction.x
+                if abs(det) > 0.05 {
+                    let ab = l2.point - l1.point
+                    let t = (ab.x * l2.direction.y - ab.y * l2.direction.x) / det
+                    refined.append(l1.point + l1.direction * t)
+                } else {
+                    refined.append(current[i])  // równoległe — zostaw stary narożnik
+                }
+            }
+            current = refined
         }
-        if debug {
-            FileHandle.standardError.write(Data(String(format:
-                "       t %.2f…%.2f p(%.2f,%.2f) dir(%.2f,%.2f) n(%.2f,%.2f) in %d out %d → %@\n",
-                line.tMin, line.tMax, line.point.x, line.point.y,
-                line.direction.x, line.direction.y, normal.x, normal.y,
-                inside, outside,
-                (inside >= steps / 3 && Float(outside) / Float(Swift.max(1, inside)) < 0.15)
-                    ? "TAK" : "nie").utf8))
+        return current
+    }
+
+    /// Uproszczenie linii: Douglas–Peucker.
+    ///
+    /// `closed` = true dla konturu zamkniętego: wtedy dzielimy go na dwa łuki
+    /// i upraszczamy każdy osobno, bo algorytm dla linii nie obsługuje pętli.
+    static func douglasPeucker(_ points: [SIMD2<Float>], tolerance: Float,
+                               closed: Bool) -> [SIMD2<Float>] {
+        guard points.count > 2 else { return points }
+        guard closed else { return douglasPeuckerOpen(points, tolerance: tolerance) }
+
+        // dla pętli: rozbij na dwa łuki (najdalsza para punktów) i złóż
+        var farIndex = 0
+        var farDist: Float = -1
+        for i in 1..<points.count {
+            let d = simd_length(points[i] - points[0])
+            if d > farDist { farDist = d; farIndex = i }
         }
-        // musi być wnętrze po jednej stronie i prawie nic po drugiej
-        guard inside >= steps / 3 else { return false }
-        return Float(outside) / Float(Swift.max(1, inside)) < 0.15
+        let arc1 = Array(points[0...farIndex])
+        let arc2 = Array(points[farIndex...] + [points[0]])
+        let s1 = douglasPeuckerOpen(arc1, tolerance: tolerance)
+        let s2 = douglasPeuckerOpen(arc2, tolerance: tolerance)
+        // s1 kończy się punktem farIndex, s2 zaczyna się nim — łączymy bez dubli
+        var out = s1
+        for p in s2.dropFirst() where !(p == s1.last && out.last == p) {
+            out.append(p)
+        }
+        if out.count > 1, simd_length(out.first! - out.last!) < 1e-6 {
+            out.removeLast()
+        }
+        return out
+    }
+
+    /// Douglas–Peucker dla otwartej linii (iteracyjnie — bez rekurencji).
+    static func douglasPeuckerOpen(_ points: [SIMD2<Float>], tolerance: Float) -> [SIMD2<Float>] {
+        guard points.count > 2 else { return points }
+        var keep = [Bool](repeating: false, count: points.count)
+        keep[0] = true
+        keep[points.count - 1] = true
+        var stack: [(Int, Int)] = [(0, points.count - 1)]
+        while let (lo, hi) = stack.popLast() {
+            guard hi > lo + 1 else { continue }
+            var maxDist: Float = 0
+            var index = lo
+            let a = points[lo], b = points[hi]
+            for i in (lo + 1)..<hi {
+                let d = perpendicularDistance(points[i], a, b)
+                if d > maxDist { maxDist = d; index = i }
+            }
+            if maxDist > tolerance {
+                keep[index] = true
+                stack.append((lo, index))
+                stack.append((index, hi))
+            }
+        }
+        return (0..<points.count).filter { keep[$0] }.map { points[$0] }
+    }
+
+    /// Odległość punktu od odcinka (a–b).
+    static func perpendicularDistance(_ p: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+        let ab = b - a
+        let len = simd_length(ab)
+        guard len > 1e-6 else { return simd_length(p - a) }
+        let t = Swift.max(0, Swift.min(1, simd_dot(p - a, ab) / (len * len)))
+        return simd_length(p - (a + ab * t))
+    }
+
+    /// Usuwa wierzchołki tworzące krawędzie krótsze niż `minLength`.
+    static func removeShortEdges(_ poly: [SIMD2<Float>], minLength: Float) -> [SIMD2<Float>] {
+        guard poly.count > 3 else { return poly }
+        var out = poly
+        var changed = true
+        while changed && out.count > 3 {
+            changed = false
+            for i in 0..<out.count {
+                let a = out[i]
+                let b = out[(i + 1) % out.count]
+                if simd_length(b - a) < minLength {
+                    out.remove(at: i)
+                    changed = true
+                    break
+                }
+            }
+        }
+        return out
+    }
+
+    /// Linia w planie (metry) — wynik dopasowania.
+    struct WallLine: Sendable {
+        public var point: SIMD2<Float>
+        public var direction: SIMD2<Float>
+        public var tMin: Float
+        public var tMax: Float
+
+        public init(point: SIMD2<Float>, direction: SIMD2<Float>,
+                    tMin: Float, tMax: Float) {
+            self.point = point
+            self.direction = direction
+            self.tMin = tMin
+            self.tMax = tMax
+        }
+
+        public var normal: SIMD2<Float> { SIMD2(-direction.y, direction.x) }
+        public var length: Float { tMax - tMin }
     }
 
     /// Dopasowuje linię do zbioru punktów (najmniejsze kwadraty, PCA).
-    ///
-    /// Zwraca kierunek, punkt (centroid) i zakres wzdłuż linii.
     static func fitLine(_ pts: [SIMD2<Float>]) -> WallLine? {
         guard pts.count >= 3 else { return nil }
         let n = Float(pts.count)
@@ -390,9 +504,10 @@ public extension RoomModel {
             sxx += dx * dx; syy += dy * dy; sxy += dx * dy
         }
         let theta = 0.5 * atan2(2 * sxy, sxx - syy)
-        // zwrot kanoniczny — patrz canonicalDirection (bez tego scalały się
-        // naprzeciwległe ściany: zmierzone 4 ściany → 2)
-        let dir = canonicalDirection(SIMD2<Float>(Float(cos(theta)), Float(sin(theta))))
+        // Zwrot jest tu dowolny — wszystkie użycia liczą wielkości niezależne od
+        // znaku (odległości prostopadłe, przecięcia par), więc kanonizacja nie
+        // jest potrzebna i nie wprowadza sprzeczności z histogramem.
+        let dir = SIMD2<Float>(Float(cos(theta)), Float(sin(theta)))
 
         var tMin = Float.greatestFiniteMagnitude
         var tMax = -Float.greatestFiniteMagnitude
@@ -401,212 +516,7 @@ public extension RoomModel {
             tMin = Swift.min(tMin, t)
             tMax = Swift.max(tMax, t)
         }
-        return WallLine(point: centroid, direction: dir,
-                        tMin: tMin, tMax: tMax, support: pts.count)
-    }
-
-    /// Sprowadza kąt do zakresu [0°, 180°) — z tolerancją.
-    ///
-    /// Musi być tolerancyjna: `atan2(ε, -1)` daje 179,99999°, a nie 180°, więc
-    /// naiwne `if d >= 180 { d -= 180 }` NIE zawija takiego kąta. Skutek:
-    /// jedna i ta sama ściana trafia do dwóch koszy histogramu (179,99999° i 0°)
-    /// i pojawia się dwa razy w wyniku.
-    static func normalizeAngle180(_ d: Double) -> Double {
-        var a = d.truncatingRemainder(dividingBy: 180)
-        if a < 0 { a += 180 }
-        if a >= 179.9 { a -= 180 }
-        if a < 0 { a = 0 }
-        return a
-    }
-
-    /// Kanonizuje zwrot kierunku linii: zawsze `dir.x ≥ 0`.
-    ///
-    /// Musi być stosowana WSZĘDZIE, gdzie liczymy linię — i w histogramie, i w
-    /// dopasowaniu. Bez tego jedna ściana trafia do dwóch koszy histogramu
-    /// (normalna i normalna przeciwna), więc ta sama ściana pojawia się dwa
-    /// razy, a naprzeciwległa ściana wypada z detekcji. Zmierzone na prostokącie
-    /// 4×3: 4 ściany → 2 kosze, kontur się nie domykał.
-    static func canonicalDirection(_ dir: SIMD2<Float>) -> SIMD2<Float> {
-        (dir.x < -1e-6 || (abs(dir.x) <= 1e-6 && dir.y < 0)) ? -dir : dir
-    }
-
-    /// Kąt dominujący (radiany) z PCA punktów w planie.
-    static func pcaAngle(_ pts: [SIMD2<Float>]) -> Double? {
-        guard pts.count >= 3 else { return nil }
-        let n = Float(pts.count)
-        let cx = pts.reduce(Float(0)) { $0 + $1.x } / n
-        let cy = pts.reduce(Float(0)) { $0 + $1.y } / n
-        var sxx: Float = 0, syy: Float = 0, sxy: Float = 0
-        for p in pts {
-            let dx = p.x - cx, dy = p.y - cy
-            sxx += dx * dx; syy += dy * dy; sxy += dx * dy
-        }
-        return Double(0.5 * atan2(2 * sxy, sxx - syy))
-    }
-
-    /// Rozrzut punktów wokół kierunku dominującego (pierwiastek stosunku wariancji).
-    ///
-    /// Na ścianie punkty leżą wzdłuż linii → wynik blisko 0.
-    /// Na podłodze są rozrzucone w obu kierunkach → wynik blisko 1.
-    /// To pozwala odsiać komórki, w których PCA nie ma sensownego kierunku.
-    static func pcaSpread(_ pts: [SIMD2<Float>]) -> Float? {
-        guard pts.count >= 3 else { return nil }
-        let n = Float(pts.count)
-        let cx = pts.reduce(Float(0)) { $0 + $1.x } / n
-        let cy = pts.reduce(Float(0)) { $0 + $1.y } / n
-        var sxx: Float = 0, syy: Float = 0, sxy: Float = 0
-        for p in pts {
-            let dx = p.x - cx, dy = p.y - cy
-            sxx += dx * dx; syy += dy * dy; sxy += dx * dy
-        }
-        // wartości własne macierzy kowariancji 2×2 (wzór jawny)
-        let tr = sxx + syy
-        let det = sxx * syy - sxy * sxy
-        let disc = Swift.max(0, tr * tr / 4 - det)
-        let root = disc.squareRoot()
-        let l1 = tr / 2 + root
-        let l2 = tr / 2 - root
-        guard l1 > 1e-9 else { return nil }
-        return (Swift.max(0, l2) / l1).squareRoot()
-    }
-
-    /// Różnica kątów z zawijaniem na 180°.
-    static func angleDiff180(_ a: Double, _ b: Double) -> Double {
-        var d = abs(a - b).truncatingRemainder(dividingBy: 180)
-        if d > 90 { d = 180 - d }
-        return d
-    }
-
-    /// Scala linie opisujące tę samą ścianę.
-    ///
-    /// Ta sama ściana wykryta z dwóch fragmentów chmury ma ten sam kąt i
-    /// przesunięcie, ale inny zakres. Scalamy, wydłużając zakres — inaczej
-    /// powstałyby dwa równoległe odcinki i fałszywy „narożnik" między nimi.
-    static func mergeLines(_ lines: [WallLine], options: Options) -> [WallLine] {
-        var out: [WallLine] = []
-        for line in lines.sorted(by: { $0.support > $1.support }) {
-            var merged = false
-            for i in 0..<out.count {
-                let a = out[i]
-                // Porównujemy ODLEGŁOŚĆ PROSTOPADŁĄ między liniami, a nie
-                // różnicę offsetów: offset zależy od zwrotu normalnej, więc
-                // naprzeciwległe ściany (x=+2 i x=-2) potrafią mieć ten sam
-                // offset i zostać scalone w jedną (zmierzone: 4 ściany → 3,
-                // a potem → 2). Odległość punktu jednej prostej od drugiej jest
-                // nieujemna i niezależna od znaku.
-                let perpendicularGap = abs(simd_dot(line.point - a.point, a.normal))
-                if angleDiff180(a.angleDeg, line.angleDeg) < options.mergeAngleDeg,
-                   perpendicularGap < 0.06 {
-                    // przedłuź zakres obu odcinków do wspólnej osi
-                    let dir = a.direction
-                    var lo = Float.greatestFiniteMagnitude
-                    var hi = -Float.greatestFiniteMagnitude
-                    for probe in [a.point + dir * a.tMin, a.point + dir * a.tMax,
-                                  line.point + dir * line.tMin, line.point + dir * line.tMax] {
-                        let t = simd_dot(probe - a.point, dir)
-                        lo = Swift.min(lo, t); hi = Swift.max(hi, t)
-                    }
-                    out[i] = WallLine(point: a.point, direction: dir,
-                                      tMin: lo, tMax: hi,
-                                      support: a.support + line.support)
-                    merged = true
-                    break
-                }
-            }
-            if !merged { out.append(line) }
-        }
-        return out
-    }
-
-    /// Narożniki: przecięcia linii o różnych kierunkach, mieszczące się w zakresach.
-    static func intersect(lines: [WallLine], options: Options) -> [SIMD2<Float>]? {
-        guard lines.count >= 3 else { return nil }
-        var out: [SIMD2<Float>] = []
-        // ile razy dany punkt już dodano (zbieżność 3 linii w jednym narożniku)
-        func alreadyThere(_ p: SIMD2<Float>) -> Bool {
-            out.contains { simd_length($0 - p) < 0.05 }
-        }
-
-        for i in 0..<lines.count {
-            for j in (i + 1)..<lines.count {
-                let a = lines[i], b = lines[j]
-                let det = a.direction.x * b.direction.y - a.direction.y * b.direction.x
-                // równoległe (albo prawie) — brak narożnika
-                guard abs(det) > 0.15 else { continue }
-
-                let ab = b.point - a.point
-                let t = (ab.x * b.direction.y - ab.y * b.direction.x) / det
-                let p = a.point + a.direction * t
-
-                // Przecięcie musi leżeć w zakresie OBIE linii, ale z dużym
-                // marginesem: wykryty zakres linii bywa krótszy od ściany
-                // (punkty przy narożniku trafiają do sąsiedniej ściany), a wtedy
-                // prawdziwy narożnik wypada poza zakres i znika — zmierzone:
-                // narożnik (2, -1,47) leżał 0,64 m poza końcem wykrytej linii.
-                let margin: Float = 0.7
-                let tb = simd_dot(p - b.point, b.direction)
-                if ProcessInfo.processInfo.environment["ROOM_DEBUG"] != nil {
-                    FileHandle.standardError.write(Data(String(format:
-                        "      %5.1f x %5.1f → (%.3f, %.3f) t=%.2f [%.2f,%.2f] tb=%.2f [%.2f,%.2f] %@\n",
-                        a.angleDeg, b.angleDeg, p.x, p.y, t, a.tMin, a.tMax, tb, b.tMin, b.tMax,
-                        (t >= a.tMin - margin && t <= a.tMax + margin
-                         && tb >= b.tMin - margin && tb <= b.tMax + margin) ? "OK" : "poza").utf8))
-                }
-                guard t >= a.tMin - margin, t <= a.tMax + margin,
-                      tb >= b.tMin - margin, tb <= b.tMax + margin else { continue }
-                guard !alreadyThere(p) else { continue }
-                out.append(p)
-            }
-        }
-        return out.count >= 3 ? out : nil
-    }
-
-    /// Porządkuje narożniki w zamknięty kontur.
-    ///
-    /// Kolejność bierzemy z grafu: dwa narożniki sąsiadują, gdy leżą na tej
-    /// samej linii i nic nie stoi między nimi. Sortowanie kątowe względem środka
-    /// odpada — dla pomieszczeń niewypukłych (L, T) daje przestawiony obrys.
-    static func orderContour(corners: [SIMD2<Float>], lines: [WallLine]) -> [SIMD2<Float>]? {
-        guard corners.count >= 3 else { return nil }
-
-        // zbuduj listę sąsiadów: dla każdej linii weź narożniki leżące NA niej
-        // (w tolerancji), posortuj wzdłuż i połącz kolejne.
-        //
-        // Wcześniej filtrowałem po zakresie t, ale narożnik jest przecięciem
-        // dwóch linii, więc może wypaść kilka cm poza wykryty zakres jednej
-        // z nich — dlatego decyduje odległość od linii, nie zakres.
-        let onLineTolerance: Float = 0.08
-        var adjacency: [[Int]] = Array(repeating: [], count: corners.count)
-        for line in lines {
-            let members = (0..<corners.count)
-                .map { (idx: $0, t: simd_dot(corners[$0] - line.point, line.direction),
-                        d: abs(simd_dot(corners[$0] - line.point, line.normal))) }
-                .filter { $0.d <= onLineTolerance }
-                .sorted { $0.t < $1.t }
-            guard members.count >= 2 else { continue }
-            for k in 0..<(members.count - 1) {
-                let i = members[k].idx, j = members[k + 1].idx
-                if !adjacency[i].contains(j) { adjacency[i].append(j) }
-                if !adjacency[j].contains(i) { adjacency[j].append(i) }
-            }
-        }
-
-        // przejdź cykl grafowy, zaczynając od narożnika o najmniejszym indeksie
-        var visited = [Bool](repeating: false, count: corners.count)
-        var order: [Int] = []
-        var current = 0
-        visited[0] = true
-        order.append(0)
-        while true {
-            let next = adjacency[current].first { !visited[$0] }
-            guard let n = next else { break }
-            visited[n] = true
-            order.append(n)
-            current = n
-        }
-        // kontur musi objąć wszystkie narożniki — inaczej wykrycie jest niespójne
-        guard order.count == corners.count else { return nil }
-        return order.map { corners[$0] }
+        return WallLine(point: centroid, direction: dir, tMin: tMin, tMax: tMax)
     }
 
     // MARK: - ściany z dopasowaniem płaszczyzny
@@ -663,7 +573,6 @@ public extension RoomModel {
             let median = residuals[residuals.count / 2]
             let p95 = residuals[Swift.min(residuals.count - 1, Int(Double(residuals.count) * 0.95))]
 
-            // pion: porównanie średniego przesunięcia dolnej i górnej połowy
             let midY = (a.yMin + a.yMax) / 2
             var lowSum: Float = 0, lowN: Float = 0
             var highSum: Float = 0, highN: Float = 0
@@ -722,40 +631,52 @@ public extension RoomModel {
                 grid[r * cols + c] = true
             }
 
-            // kolumny CAŁKOWICIE puste w pionie = prawdziwe otwory
-            // (pojedyncze dziury to szum i meble)
-            var emptyRuns: [(start: Int, end: Int)] = []
-            var runStart: Int? = nil
-            for c in 0..<cols {
-                var filled = 0
-                for r in 0..<rows where grid[r * cols + c] { filled += 1 }
-                let isEmpty = filled <= 1
-                if isEmpty, runStart == nil { runStart = c }
-                if !isEmpty, let s = runStart { emptyRuns.append((s, c - 1)); runStart = nil }
-            }
-            if let s = runStart { emptyRuns.append((s, cols - 1)) }
+            // Otwór to SPÓJNY OBSZAR bez punktów, nie „pusta kolumna".
+            //
+            // Wcześniej szukałem kolumn pustych na całej wysokości. To nie
+            // działa, gdy otwór ma nadproże: nad drzwiami jest ściana, więc
+            // kolumna jest częściowo wypełniona i otwór znikał (zmierzone:
+            // drzwi 0,9 m i okno 1,2 m → 0 otworów). Teraz szukamy plam:
+            // łączenie pustych komórek 4-spójnie, a potem prostokąt otaczający.
+            let skipBottom = Swift.max(1, Int(0.20 / cellV))
+            var visited = [Bool](repeating: false, count: cols * rows)
+            var regions: [(c0: Int, c1: Int, r0: Int, r1: Int)] = []
 
-            for run in emptyRuns {
-                let width = Float(run.end - run.start + 1) * cellU
-                guard width >= 0.4, width <= len * 0.95 else { continue }
-
-                var lowestEmpty = rows
-                var highestEmpty = -1
-                for c in run.start...run.end {
-                    for r in 0..<rows where !grid[r * cols + c] {
-                        lowestEmpty = Swift.min(lowestEmpty, r)
-                        highestEmpty = Swift.max(highestEmpty, r)
+            for c0 in 0..<cols {
+                for r0 in skipBottom..<rows where !grid[r0 * cols + c0] {
+                    guard !visited[r0 * cols + c0] else { continue }
+                    // zalewanie plamy pustych komórek
+                    var stack = [(c0, r0)]
+                    visited[r0 * cols + c0] = true
+                    var minC = c0, maxC = c0, minR = r0, maxR = r0
+                    while let (c, r) = stack.popLast() {
+                        minC = Swift.min(minC, c); maxC = Swift.max(maxC, c)
+                        minR = Swift.min(minR, r); maxR = Swift.max(maxR, r)
+                        for (dc, dr) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                            let nc = c + dc, nr = r + dr
+                            guard nc >= 0, nc < cols, nr >= skipBottom, nr < rows else { continue }
+                            guard !grid[nr * cols + nc], !visited[nr * cols + nc] else { continue }
+                            visited[nr * cols + nc] = true
+                            stack.append((nc, nr))
+                        }
                     }
+                    regions.append((minC, maxC, minR, maxR))
                 }
-                guard highestEmpty >= lowestEmpty else { continue }
-                let sill = Float(lowestEmpty) * cellV
-                let top = Float(highestEmpty + 1) * cellV
-                let h = top - sill
-                guard h >= 0.4 else { continue }
+            }
 
+            for region in regions {
+                let width = Float(region.c1 - region.c0 + 1) * cellU
+                let h = Float(region.r1 - region.r0 + 1) * cellV
+                // otwór sensowny: ≥ 40 cm szerokości, ≥ 40 cm wysokości,
+                // i nie cała ściana (to byłby brak pokrycia, nie otwór)
+                guard width >= 0.4, width <= len * 0.95 else { continue }
+                guard h >= 0.4 else { continue }
+                // plama przyklejona do dolnego pasa = sięga podłogi → drzwi
+                let reachesFloor = region.r0 <= skipBottom + 1
+                let sill = reachesFloor ? 0 : Float(region.r0) * cellV
                 let kind: Opening.Kind = sill <= 0.15 ? .door : .window
                 out.append(Opening(wallIndex: wi, kind: kind,
-                                   offset: Float(run.start) * cellU,
+                                   offset: Float(region.c0) * cellU,
                                    width: width, sill: sill, height: h))
             }
         }
@@ -764,7 +685,19 @@ public extension RoomModel {
 
     // MARK: - geometria planu
 
-    /// Pole powierzchni wielokąta (wzór sznurowadła).
+    /// Pole powierzchni wielokąta w planie (wzór sznurowadła).
+    static func polygonArea(_ poly: [SIMD2<Float>]) -> Float {
+        guard poly.count >= 3 else { return 0 }
+        var sum: Float = 0
+        for i in 0..<poly.count {
+            let a = poly[i]
+            let b = poly[(i + 1) % poly.count]
+            sum += a.x * b.y - b.x * a.y
+        }
+        return abs(sum) / 2
+    }
+
+    /// Pole powierzchni wielokąta (wzór sznurowadła) — wariant dla narożników.
     static func polygonArea(_ corners: [Corner]) -> Float {
         guard corners.count >= 3 else { return 0 }
         var sum: Float = 0

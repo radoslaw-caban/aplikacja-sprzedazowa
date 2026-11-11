@@ -817,4 +817,44 @@ final class GestureNavTests: XCTestCase {
         wide.fieldOfView = 5
         XCTAssertEqual(wide.clampedFieldOfView, 28)
     }
+
+    // MARK: - import planu z obrazu
+
+    func testPlanImageImportFindsOutline() {
+        let width = 200, height = 150
+        var gray = [UInt8](repeating: 255, count: width * height)
+        // prostokąt ścian: ramka 2 px od (20,15) do (179,134)
+        for x in 20...179 {
+            for t in 0..<2 {
+                gray[(15 + t) * width + x] = 40
+                gray[(134 - t) * width + x] = 40
+            }
+        }
+        for y in 15...134 {
+            for t in 0..<2 {
+                gray[y * width + (20 + t)] = 40
+                gray[y * width + (179 - t)] = 40
+            }
+        }
+
+        guard let analysis = PlanImageImport.analyze(gray: gray, width: width, height: height) else {
+            return XCTFail("nie wykryto obrysu")
+        }
+        XCTAssertEqual(analysis.box.x, 20)
+        XCTAssertEqual(analysis.box.y, 15)
+        XCTAssertEqual(analysis.box.w, 160)
+        XCTAssertEqual(analysis.box.h, 120)
+        XCTAssertGreaterThanOrEqual(analysis.verticalLines.count, 2)
+        XCTAssertGreaterThanOrEqual(analysis.horizontalLines.count, 2)
+
+        let plan = PlanImageImport.plan(from: analysis, realWidthMM: 10_000)
+        XCTAssertEqual(plan.size.x, 10_000, accuracy: 0.5)
+        XCTAssertEqual(plan.size.y, 7_500, accuracy: 1)   // 120/160 × 10 m
+        XCTAssertEqual(plan.wallCount, 4)
+    }
+
+    func testPlanImageImportRejectsBlankImage() {
+        let gray = [UInt8](repeating: 255, count: 100 * 100)
+        XCTAssertNil(PlanImageImport.analyze(gray: gray, width: 100, height: 100))
+    }
 }

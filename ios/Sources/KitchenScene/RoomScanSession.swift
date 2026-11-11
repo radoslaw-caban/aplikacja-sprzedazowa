@@ -5,6 +5,7 @@ import KitchenCore
 #if os(iOS)
 import ARKit
 import UIKit
+import AVFoundation
 #endif
 
 /// Przechwytywanie skanu pomieszczenia z LiDAR-u (ARKit scene reconstruction).
@@ -38,6 +39,24 @@ public final class RoomScanSession: NSObject, ObservableObject {
     /// Mediana niepewności fuzji („1,8 mm") — realna miara dokładności skanu.
     @Published public private(set) var precisionText: String = "—"
 
+    /// Tryb skanowania (pełny / krawędzie).
+    @Published public var mode: ScanMode = .full
+    /// Latarka włączona — mocno poprawia skan w słabo oświetlonych kuchniach.
+    @Published public private(set) var torchOn = false
+    /// Czy urządzenie w ogóle ma latarkę (iPad Pro 11" M2 ma; nie każdy iPad ma).
+    @Published public private(set) var hasTorch = false
+
+
+    /// Kontur rozpoznany na żywo — do rysowania linii na podglądzie.
+    @Published public private(set) var liveOutline: [SIMD2<Float>] = []
+    /// Ile wokseli planu już zebrano (diagnostyka trybu krawędzi).
+    @Published public private(set) var planPoints = 0
+    /// Pole powierzchni z rozpoznanego na żywo konturu („8,94 m²").
+    @Published public private(set) var outlineAreaText: String = "—"
+
+    /// Zbieranie planu w trakcie skanowania (kontur na żywo).
+    public nonisolated let planTracker = RoomPlanTracker()
+
     /// Fuzja map głębi — celowo poza MainActor, bo klatki przychodzą z kolejki ARKit.
     public nonisolated let depthStore = DepthFusionStore()
 
@@ -49,6 +68,34 @@ public final class RoomScanSession: NSObject, ObservableObject {
         #else
         false
         #endif
+    }
+
+    /// Tryb skanowania — czym ma się skupić aplikacja.
+    ///
+    /// Jedno pomieszczenie skanuje się raz, a potem model buduje się z tego
+    /// samego zbioru punktów, więc „tryb" zmienia TYLKO sposób zbierania
+    /// i to, co widać na ekranie. Nie zmienia wyniku końcowego.
+    public enum ScanMode: String, CaseIterable, Sendable {
+        /// pełny skan — geometria, kolor, tekstura
+        case full
+        /// tylko narożniki i linie ścian: pomiar i rzut
+        case edges
+
+        public var title: String {
+            switch self {
+            case .full: "Pełny skan"
+            case .edges: "Krawędzie i narożniki"
+            }
+        }
+
+        public var hint: String {
+            switch self {
+            case .full:
+                "Przejdź powoli całe pomieszczenie — ściany, podłogę i sufit. Zbieram geometrię, kolor i materiał."
+            case .edges:
+                "Prowadź iPada wzdłuż linii ścian, na wysokości narożników (ok. 1,2 m). Kolorowe linie pokazują rozpoznany obrys — dopóki się nie domknie, obejdź brakujący fragment."
+            }
+        }
     }
 
     /// Czy jest mapa głębi (LiDAR). Na iPhone'ach/iPadach bez LiDAR ARKit
@@ -102,6 +149,11 @@ public final class RoomScanSession: NSObject, ObservableObject {
         cfg.planeDetection = [.horizontal, .vertical]
         // środowisko wyłączone: obciąża GPU, a do geometrii nic nie wnosi
         cfg.environmentTexturing = .none
+        // latarka: ARKit nie steruje sprzętową lampą, robi to AVCaptureDevice.
+        // Włączamy, gdy użytkownik tego chce — w ciemnej kuchni bez tego
+        // mapa głębi ma dziury (LiDAR potrzebuje światła odbitego).
+        hasTorch = Self.detectTorch()
+        planTracker.reset()
         // mapa głębi LiDAR-a: z niej powstaje dokładna chmura (DepthFusion).
         // Koszt jest znikomy, a bez tego ARKit w ogóle nie wypełnia sceneDepth.
         if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
@@ -120,9 +172,57 @@ public final class RoomScanSession: NSObject, ObservableObject {
     public func stop() {
         #if os(iOS)
         session.pause()
+        setTorch(false)
         #endif
         isRunning = false
     }
+
+    // MARK: - latarka
+
+    /// Włącza/wyłącza latarkę.
+    ///
+    /// Latarka to NIE element ARKit — ARKit tylko czyta kamerę. Sprzętową lampę
+    /// ustawia się przez `AVCaptureDevice.torchMode` na urządzeniu kamery.
+    ///
+    /// Po co: LiDAR mierzy światło odbite, więc w ciemnej kuchni mapa głębi ma
+    /// dziury (szczególnie pod szafkami i w narożnikach). Doświetlenie lampą
+    /// wyraźnie poprawia pokrycie — kosztem tego, że błyszczące fronty odbijają
+    /// światło wprost do czujnika i w tych miejscach pomiar nadal wypada.
+    /// Czy jest lampa błyskowa (bez tego przycisk latarki nie ma sensu).
+    public static func detectTorch() -> Bool {
+        #if os(iOS)
+        return AVCaptureDevice.default(for: .video)?.hasTorch ?? false
+        #else
+        return false
+        #endif
+    }
+
+    public func setTorch(_ on: Bool) {
+        #if os(iOS)
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else {
+            torchOn = false
+            return
+        }
+        do {
+            try device.lockForConfiguration()
+            if on {
+                // poziom 0,6 — pełna moc przepala bliskie ściany i daje odblaski
+                try device.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel * 0.6)
+            } else {
+                device.torchMode = .off
+            }
+            device.unlockForConfiguration()
+            torchOn = on
+        } catch {
+            torchOn = false
+        }
+        #else
+        torchOn = false
+        #endif
+    }
+
+    /// Przełącza latarkę.
+    public func toggleTorch() { setTorch(!torchOn) }
 
     public func reset() {
         #if os(iOS)
@@ -143,9 +243,19 @@ public final class RoomScanSession: NSObject, ObservableObject {
         fusedVoxels = 0
         precisionText = "—"
         ceilingHeight = nil
+        liveOutline = []
+        planPoints = 0
+        outlineAreaText = "—"
+        planFrameCounter = 0
+        planTracker.reset()
     }
 
-    /// Czy jest co eksportować.
+    /// licznik klatek dla trackera planu (dzielenie modulo w delegate)
+    nonisolated(unsafe) private var planFrameCounter: UInt64 = 0
+    /// poziom podłogi przyjęty dla trackera (aktualizowany ze statystyk)
+    nonisolated(unsafe) public private(set) var trackedFloorY: Float = 0
+
+    /// czy jest co eksportować.
     public var hasScan: Bool {
         #if os(iOS)
         if !meshAnchors.isEmpty { return true }
@@ -276,6 +386,17 @@ public final class RoomScanSession: NSObject, ObservableObject {
         }
         coverageText = String(format: "%.1f m²", totalArea)
         estimatedPoints = Int(totalArea / (cell * cell))
+
+        // kontur na żywo: tracker liczy w tle, my tylko odbieramy gotowy wynik
+        if let snap = planTracker.refreshIfNeeded(minInterval: 1.2) {
+            liveOutline = snap.outline
+            planPoints = snap.points
+            if snap.area > 0.5 {
+                outlineAreaText = String(format: "%.2f m²", snap.area)
+            }
+        } else if liveOutline.isEmpty {
+            planPoints = planTracker.pointCount
+        }
         #endif
     }
 }
@@ -333,6 +454,16 @@ extension RoomScanSession: ARSessionDelegate {
         if depthStore.claim(timestamp: frame.timestamp),
            let depthFrame = ARDepthConverter.depthFrame(from: frame) {
             depthStore.add(depthFrame)
+        }
+
+        // Kontur na żywo: karmimy tracker punktami mapy głębi (co ~5 klatkę).
+        // Bierzemy je właśnie stąd, a nie z siatki, bo mapa głębi jest gęsta
+        // (256×192 na klatkę) i ma realną geometrię ścian — z siatki ARKit
+        // (komórki 5–10 cm) kontur byłby widoczny dopiero po minucie.
+        planFrameCounter &+= 1
+        if planFrameCounter % 5 == 0,
+           let depthFrame = ARDepthConverter.depthFrame(from: frame) {
+            planTracker.add(points: depthFrame.positions(step: 2), floorY: trackedFloorY)
         }
 
         let state: String
