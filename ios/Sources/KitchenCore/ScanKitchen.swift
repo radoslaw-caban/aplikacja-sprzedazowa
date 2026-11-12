@@ -33,7 +33,7 @@ public enum ScanKitchen {
         public var runDepthMin: Float = 0.48
         public var runDepthMax: Float = 0.70
         /// minimalna długość i powierzchnia biegu
-        public var minRunLength: Float = 0.80
+        public var minRunLength: Float = 0.45
         public var minRunArea: Float = 0.25
         /// docelowa szerokość modułu [mm]
         public var moduleTarget: Float = 600
@@ -46,6 +46,9 @@ public enum ScanKitchen {
         /// bieg musi stać przy pionowej powierzchni (ścianie/słupku);
         /// odsiewa stoły, wyspy i blaty kuchenek wolnostojących
         public var requireWall: Bool = true
+        /// biegi liczone wzdłuż ścian (eksperymentalne: w skanie z wieloma
+        /// pomieszczeniami kierunki ścian są mylące — domyślnie wyłączone)
+        public var useWallRuns: Bool = false
         /// jak blisko ściany musi być tył biegu [m]
         public var wallProximity: Float = 0.40
 
@@ -244,6 +247,16 @@ public enum ScanKitchen {
             }
         }
 
+        // 5. biegi „przy ścianie" są pewniejsze niż pasy z rastra: ściana daje
+        //    prostą, do której wystarczy przypiąć punkty blatu — dzięki temu
+        //    przerwy w blacie i dwa „pasy" tej samej ściany nie robią trzech biegnów
+        if options.useWallRuns, options.requireWall, !wallPoints.isEmpty {
+            let along = runsAlongWalls(samples: local, walls: wallPoints, rotation: rot, options: options)
+            if !along.isEmpty { runs = along }
+        }
+
+        // 6. scalanie współliniowych odcinków (przerwy zlewu/płyty dzielą blat)
+        runs = mergeCollinear(runs, options: options)
         runs.sort { $0.lengthMM > $1.lengthMM }
 
         if runs.isEmpty {
@@ -255,6 +268,200 @@ public enum ScanKitchen {
 
         return Proposal(runs: runs, rotationDeg: degrees(rot), worktopHeightMM: (worktop * 1000).rounded(),
                         counterAreaM2: counterArea, notes: notes)
+    }
+
+    // MARK: - Biegi po ścianach
+
+    /// Biegi wyznaczone **wzdłuż ścian**: dla każdej wykrytej linii ściany bierzemy
+    /// punkty blatu w odległości ≤ 0,75 m i liczymy przedziały pokrycia.
+    /// Przerwy do 300 mm (zlew, płyta) nie dzielą biegu.
+    private static func runsAlongWalls(samples: [SIMD2<Float>], walls: [SIMD2<Float>],
+                                       rotation: Float, options: Options) -> [Run] {
+        guard samples.count > 50, walls.count > 20 else { return [] }
+
+        // tylko ściany **przy blacie** (≤1 m): w skanie jest cały budynek,
+        // a kierunki ścian z innych pomieszczeń psuły orientację biegnów
+        let gridCell: Float = 0.5
+        var occupied = Set<Int64>()
+        func key(_ x: Int, _ y: Int) -> Int64 { Int64(x) &* 100_000 &+ Int64(y) }
+        for p in samples {
+            occupied.insert(key(Int((p.x / gridCell).rounded(.down)), Int((p.y / gridCell).rounded(.down))))
+        }
+        let nearWalls = walls.filter { w in
+            let cx = Int((w.x / gridCell).rounded(.down))
+            let cy = Int((w.y / gridCell).rounded(.down))
+            for dx in -2...2 {
+                for dy in -2...2 where occupied.contains(key(cx + dx, cy + dy)) {
+                    return true
+                }
+            }
+            return false
+        }
+        guard nearWalls.count > 20 else { return [] }
+
+        // 1. dominujące kierunki ścian (mod 180°), max dwa, min 30° różnicy
+        let bins = 90                                  // koszyk 2°
+        var weight = [Float](repeating: 0, count: bins)
+        for i in 1..<nearWalls.count {
+            let d = nearWalls[i] - nearWalls[i - 1]
+            let len = simd_length(d)
+            guard len > 0.2 else { continue }
+            var ang = atan2(d.y, d.x) * 180 / .pi
+            ang = ang.truncatingRemainder(dividingBy: 180)
+            if ang < 0 { ang += 180 }
+            weight[Swift.min(bins - 1, Int(ang / 2))] += len
+        }
+        var directions: [Float] = []
+        for _ in 0..<2 {
+            guard let peak = weight.indices.max(by: { weight[$0] < weight[$1] }), weight[peak] > 0 else { break }
+            directions.append(Float(peak) * 2 * .pi / 180)
+            let center = peak
+            for d in -8...8 {
+                let idx = center + d
+                if idx >= 0 && idx < bins { weight[idx] = 0 }
+            }
+        }
+        guard !directions.isEmpty else { return [] }
+
+        var runs: [Run] = []
+        for direction in directions {
+            let u = SIMD2<Float>(cos(direction), sin(direction))
+            let n = SIMD2<Float>(-u.y, u.x)
+
+            // 2. linie ścian: klastrowanie po odległości od początku układu
+            var lineBuckets: [Int: [(t: Float, s: Float)]] = [:]
+            for w in nearWalls {
+                let t = simd_dot(w, u)
+                let sv = simd_dot(w, n)
+                lineBuckets[Int((sv / 0.08).rounded()), default: []].append((t, sv))
+            }
+
+            for (_, points) in lineBuckets {
+                guard points.count >= 12 else { continue }
+                let ts = points.map { $0.t }
+                guard let minT = ts.min(), let maxT = ts.max(), maxT - minT > 1.0 else { continue }
+                let sLine = points.map { $0.s }.sorted()[points.count / 2]
+
+                // 3. punkty blatu przy tej ścianie
+                var along: [Float] = []
+                var depthSum: Float = 0
+                for p in samples {
+                    let sv = simd_dot(p, n)
+                    let dist = abs(sv - sLine)
+                    guard dist <= 0.75 else { continue }
+                    along.append(simd_dot(p, u))
+                    depthSum += dist
+                }
+                guard along.count > 60 else { continue }
+                along.sort()
+
+                // 4. przedziały z tolerancją przerwy 300 mm
+                var intervals: [(Float, Float)] = []
+                var start = along[0], prev = along[0]
+                for value in along.dropFirst() {
+                    if value - prev > 0.30 {
+                        intervals.append((start, prev))
+                        start = value
+                    }
+                    prev = value
+                }
+                intervals.append((start, prev))
+
+                for (a, b) in intervals {
+                    let lengthMM = ((b - a) * 1000).rounded()
+                    guard lengthMM >= options.minRunLength * 1000 else { continue }
+                    // głębokość: mediana odległości (przybliżenie średnią), w granicach
+                    let depthMM = Swift.min(options.runDepthMax * 1000,
+                                            Swift.max(options.runDepthMin * 1000,
+                                                      (depthSum / Float(along.count)) * 1000 * 1.6)).rounded()
+                    let originLocal = u * a + n * sLine
+                    let originWorld = rotate(originLocal, by: rotation)
+                    runs.append(Run(startX: originWorld.x * 1000,
+                                    startZ: originWorld.y * 1000,
+                                    angleDeg: degrees(rotation + direction),
+                                    lengthMM: lengthMM,
+                                    depthMM: depthMM,
+                                    worktopMM: 0,
+                                    modules: split(lengthMM: lengthMM, options: options)))
+                }
+            }
+        }
+        return runs
+    }
+
+    // MARK: - Scalanie biegnów
+
+    /// Łączy odcinki leżące na jednej linii, jeśli przerwa jest mniejsza niż `maxGapMM`.
+    ///
+    /// Blat w skanie bywa przerwany zlewem, płytą albo okapem — bez scalania
+    /// jeden bieg rozjeżdża się na 2,5 + 2,3 + 1,2 m zamiast 3,9 m.
+    /// Odcinki **nakładające się** też są scalane (detektor może dwa razy
+    /// złapać ten sam fragment pod różnym kątem siatki).
+    static func mergeCollinear(_ runs: [Run], options: Options,
+                               maxGapMM: Float = 400, maxAngleDiff: Float = 4,
+                               maxLineOffsetMM: Float = 260) -> [Run] {
+        guard runs.count > 1 else { return runs }
+        var pending = runs.sorted { $0.lengthMM > $1.lengthMM }
+        var merged: [Run] = []
+
+        while let base = pending.first {
+            pending.removeFirst()
+            var dir = SIMD2<Float>(cos(base.angleDeg * .pi / 180), sin(base.angleDeg * .pi / 180))
+            var origin = SIMD2<Float>(base.startX, base.startZ)
+            var end = origin + dir * base.lengthMM
+            var depth = base.depthMM
+            var worktop = base.worktopMM
+
+            var didMerge = true
+            while didMerge {
+                didMerge = false
+                for (index, other) in pending.enumerated() {
+                    let otherDir = SIMD2<Float>(cos(other.angleDeg * .pi / 180), sin(other.angleDeg * .pi / 180))
+                    // kąt (mod 180°, biegi są odcinkami, nie wektorami)
+                    var dot = abs(simd_dot(dir, otherDir))
+                    dot = Swift.min(1, dot)
+                    let angleDiff = acos(dot) * 180 / .pi
+                    guard angleDiff <= maxAngleDiff else { continue }
+
+                    // odległość linii: rzut prostopadły początku drugiego odcinka
+                    let normal = SIMD2<Float>(-dir.y, dir.x)
+                    let offset = abs(simd_dot(SIMD2(other.startX, other.startZ) - origin, normal))
+                    guard offset <= maxLineOffsetMM else { continue }
+
+                    // przedziały wzdłuż kierunku
+                    let oStart = simd_dot(SIMD2(other.startX, other.startZ) - origin, dir)
+                    let oEnd = oStart + other.lengthMM
+                    let bStart: Float = 0
+                    let bEnd = simd_length(end - origin)
+                    let overlaps = oStart <= bEnd + maxGapMM && oEnd >= bStart - maxGapMM
+                    guard overlaps else { continue }
+
+                    // scal: nowy zakres
+                    let newStart = Swift.min(bStart, oStart)
+                    let newEnd = Swift.max(bEnd, oEnd)
+                    let newOrigin = origin + dir * newStart
+                    origin = newOrigin
+                    end = origin + dir * (newEnd - newStart)
+                    depth = Swift.max(depth, other.depthMM)
+                    if worktop == 0 { worktop = other.worktopMM }
+                    pending.remove(at: index)
+                    didMerge = true
+                    break
+                }
+            }
+
+            let length = simd_length(end - origin)
+            guard length >= options.minRunLength * 1000 else { continue }
+            let angle = atan2(dir.y, dir.x) * 180 / .pi
+            merged.append(Run(startX: origin.x,
+                              startZ: origin.y,
+                              angleDeg: angle,
+                              lengthMM: length.rounded(),
+                              depthMM: depth,
+                              worktopMM: worktop,
+                              modules: split(lengthMM: length.rounded(), options: options)))
+        }
+        return merged
     }
 
     // MARK: - Podział na moduły

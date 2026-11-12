@@ -77,6 +77,23 @@ final class ScanKitchenTests: XCTestCase {
         XCTAssertEqual(lengths[1], 3900, accuracy: 150)
     }
 
+    /// Blat przerwany zlewem (30 cm) ma zostać jednym biegiem, nie dwoma.
+    func testMergesRunsAcrossSmallGap() {
+        let gapped = slab(x0: 0.0, z0: 0.0, x1: 0.6, z1: 2.4, y: 0.85)
+                   + slab(x0: 0.0, z0: 2.7, x1: 0.6, z1: 4.5, y: 0.85)
+        let proposal = ScanKitchen.detect(triangles: gapped)
+        XCTAssertEqual(proposal.runs.count, 1, "przerwa 0,3 m powinna się scalić, biegi: \(proposal.runs.map { $0.lengthMM })")
+        XCTAssertEqual(proposal.runs.first?.lengthMM ?? 0, 4500, accuracy: 200)
+    }
+
+    /// Dwa biegi prostopadłe nie mogą się scalić.
+    func testDoesNotMergePerpendicularRuns() {
+        let proposal = ScanKitchen.detect(triangles: lShape)
+        XCTAssertEqual(proposal.runs.count, 2)
+        let angles = proposal.runs.map { abs($0.angleDeg.truncatingRemainder(dividingBy: 180)) }
+        XCTAssertNotEqual(angles[0], angles[1], accuracy: 5, "biegi prostopadłe mają różne kąty")
+    }
+
     func testEmptyGeometryReturnsEmptyProposal() {
         let proposal = ScanKitchen.detect(triangles: [])
         XCTAssertTrue(proposal.isEmpty)

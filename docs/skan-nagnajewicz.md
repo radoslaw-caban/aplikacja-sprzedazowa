@@ -49,17 +49,21 @@ Niezależny od UI, bez RealityKit — wejście to trójkąty w metrach.
 
 ```
 obrót kuchni: 11,0°   blat: 858 mm   powierzchnia blatów: 14,35 m²
-biegi: 3, moduły: 10, suma: 6150 mm
-  bieg 1: 2550 × 500 mm  kąt 101,0°  moduły 4 × [638, 638, 638, 636]
-  bieg 2: 2350 × 550 mm  kąt 101,0°  moduły 4 × [588, 588, 588, 586]
-  bieg 3: 1250 × 600 mm  kąt 101,0°  moduły 2 × [625, 625]
+biegi: 2, moduły: 8, suma: 4750 mm
+  bieg 1: 3500 × 550 mm  kąt 101,0°  moduły 6 × [583, 583, 583, 583, 583, 585]
+  bieg 2: 1250 × 600 mm  kąt 101,0°  moduły 2 × [625, 625]
 ```
 
-Suma 6,15 m zgadza się z realną długością zabudowy (~6,2 m), ale detektor
-**pociął jedno ramię na trzy odcinki** i nie rozpoznał drugiego ramienia L
-(jego kąt powinien wyjść ~11°, a wyszedł 101° dla wszystkich). Przyczyny:
-przerwy w siatce (zlew, płyta, sprzęt) i zbyt sztywne kryterium przylegania
-do ściany — próg dobrany tak, by przechodził blat przy ścianie z szumem skanu.
+Po dodaniu scalania współliniowych odcinków (przerwa ≤ 400 mm) trzy fragmenty
+ramienia zlały się w jeden bieg 3,5 m. Nadal brakuje **drugiego ramienia L**
+(powinno mieć ~2,9 m pod kątem ~11°, a wszystko wychodzi 101°) i 1,25 m
+„ogona" na równoległej linii 0,45 m od pierwszego biegu — to prawdopodobnie
+druga płaszczyzna tego samego blatu (np. część przy okapie), a nie osobny bieg.
+
+Ścieżka „biegi wzdłuż ścian" (`useWallRuns`) jest napisana, ale **domyślnie
+wyłączona**: w tym pliku są ściany z całego mieszkania, więc kierunki wychodziły
+95–179° zamiast 11/101°. Potrzebne jest grupowanie ścian w pokoje, zanim ta
+metoda będzie użyteczna.
 
 ### Czego moduł nie robi (świadomie)
 
@@ -77,14 +81,17 @@ swift run KitchenChecks --kitchen-scan "/Users/radoslawcaban/Dom /Chmura dom/Nag
 swift test --filter ScanKitchenTests
 ```
 
-Testy (7) sprawdzają L-kę syntetyczną: dwa biegi 3,9 m i 2,9 m × 0,6 m, obrót 30°,
-sumę modułów, ignorowanie ścian pionowych i powtarzalność wyniku.
+Testy (9) sprawdzają L-kę syntetyczną: dwa biegi 3,9 m i 2,9 m × 0,6 m, obrót 30°,
+sumę modułów, ignorowanie ścian pionowych, scalanie blatu przerwanego na 0,3 m,
+nierozłączanie biegnów prostopadłych i powtarzalność wyniku.
 
 ## Następne kroki (do decyzji)
 
-1. Łączenie współliniowych odcinków w jeden bieg (przerwy < 400 mm) — to naprawi
-   podział 2550 + 2350 + 1250.
-2. Wykrywanie drugiego ramienia: pasy liczone też po **ścianach**, a nie tylko
-   po blacie (blat w L bywa przerwany okapem).
-3. Rozpoznanie zlewu/płyty po otworach i „wklęsłościach” w blacie.
-4. Dopiero potem: mapowanie biegu na `Cabinet` + blat + cokół i podpięcie w UI.
+1. ✅ scalanie współliniowych odcinków (zrobione, przerwa ≤ 400 mm).
+2. **Drugie ramię L** — najbardziej brakujący element; wymaga albo grupowania
+   ścian w pokoje (żeby `useWallRuns` miało sens), albo wykrywania załamań
+   obrysu blatu po jego krawędziach zewnętrznych.
+3. Odrzucanie „bliźniaczych" pasaży na tej samej ścianie (dwa pasy 0,45 m od
+   siebie to jeden blat, nie dwa biegi).
+4. Rozpoznanie zlewu/płyty po otworach we blacie.
+5. Mapowanie biegu na `Cabinet` + blat + cokół i podpięcie w UI.
