@@ -118,12 +118,16 @@ func runRoomMeshChecks(_ r: Reporter) {
 
     // 5) kolory z chmury: mediana, odporna na odblaski
     do {
-        var cloud = syntheticRoom(width: 4, depth: 3, height: 2.6)
-        // koloruj: podłoga brązowa, ściany jasne, kilka punktów-odblasków białych
+        let cloud = syntheticRoom(width: 4, depth: 3, height: 2.6)
+        // UWAGA: minimum liczymy RAZ, poza pętlą. Wcześniej `cloud.map(\.position.y).min()`
+        // było wołane wewnątrz pętli po 58 tys. punktów, czyli 58 tys. razy
+        // alokowało tablicę 58 tys. liczb — 3,4 mld operacji. Testy wisiały
+        // kilkanaście minut zamiast przejść w sekundę.
+        let minY = cloud.map(\.position.y).min() ?? 0
         var colors: [SIMD3<UInt8>] = []
         colors.reserveCapacity(cloud.count)
         for (i, s) in cloud.enumerated() {
-            let relY = s.position.y - (cloud.map(\.position.y).min() ?? 0)
+            let relY = s.position.y - minY
             if relY < 0.05 {
                 colors.append(SIMD3(120, 85, 60))          // podłoga
             } else if i % 500 == 0 {
@@ -133,7 +137,6 @@ func runRoomMeshChecks(_ r: Reporter) {
             }
         }
         let colored = PointCloud(positions: cloud.map(\.position), colors: colors)
-        cloud = cloud.map { s in s }
 
         guard let model = RoomModel.build(from: cloud) else {
             r.check("kolory: model powstał", false, "nil"); return
