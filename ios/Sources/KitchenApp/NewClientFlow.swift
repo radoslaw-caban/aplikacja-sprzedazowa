@@ -10,6 +10,8 @@ enum FieldKind { case text, phone, email }
 /// Kolejność: intro z chmurą punktów → imię i nazwisko → „pokaż gdzie chcesz
 /// działać" (mapa) → dane kontaktowe → nowa kartoteka i powrót do 3D.
 struct NewClientFlow: View {
+    /// na którym kroku zacząć (0 = wstęp); hak diagnostyczny
+    var startStep: Int = 0
     var onFinish: (_ firstName: String, _ lastName: String, _ address: String, _ phone: String, _ email: String) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -45,6 +47,9 @@ struct NewClientFlow: View {
         }
         .background(Color.black)
         .preferredColorScheme(.dark)
+        .onAppear {
+            if startStep > 0 { step = startStep }
+        }
     }
 
     // MARK: - 1. intro

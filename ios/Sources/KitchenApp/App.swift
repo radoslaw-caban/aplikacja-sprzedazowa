@@ -172,14 +172,19 @@ struct ContentView: View {
             )
         }
         .planPresentation(isPresented: $showNewClient) {
-            NewClientFlow { firstName, lastName, address, phone, email in
+            NewClientFlow(startStep: UserDefaults.standard.integer(forKey: "demoIntroStep")) { firstName, lastName, address, phone, email in
                 let project = model.createClient(firstName: firstName, lastName: lastName,
                                                  address: address, phone: phone, email: email)
                 model.addToWorkingSet(project.id)
-                // po kreatorze stajemy na podjeździe w widoku pierwszoosobowym
+                UserDefaults.standard.set(true, forKey: "introDone")
+                // po pytaniach: wybór metody planu, potem edytor i 3D
                 Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 350_000_000)
-                    showFPS = true
+                    try? await Task.sleep(nanoseconds: 550_000_000)
+                    planDraft = model.currentPlan
+                    planStartMode = nil
+                    planStartPresets = false
+                    planStartImport = false
+                    showPlanMethod = true
                 }
             }
         }
@@ -334,8 +339,14 @@ struct ContentView: View {
                 showPlan = true
             }
 
-            // Start aplikacji = pytanie „jak określimy budynek?", nie od razu edytor.
-            if UserDefaults.standard.object(forKey: "startWithPlan") == nil || UserDefaults.standard.bool(forKey: "startWithPlan") {
+            // Start aplikacji: najpierw wstęp (chmura punktów, logo) i pytania
+            // o dane klienta — dopiero potem pytanie o metodę planu.
+            let introDone = UserDefaults.standard.bool(forKey: "introDone")
+            if !introDone, !showNewClient {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                showNewClient = true
+            } else if UserDefaults.standard.object(forKey: "startWithPlan") == nil
+                        || UserDefaults.standard.bool(forKey: "startWithPlan") {
                 if !showPlan, !showPlanMethod {
                     planDraft = model.currentPlan
                     try? await Task.sleep(nanoseconds: 400_000_000)

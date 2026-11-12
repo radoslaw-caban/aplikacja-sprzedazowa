@@ -10,6 +10,7 @@ import simd
 /// odpowiada narysowanemu planowi.
 struct PlanEditorView: View {
     @Binding var plan: FloorPlan
+    @Environment(\.dismiss) private var dismiss
     /// wywoływane po każdej zmianie (zapis do projektu)
     var onChange: (FloorPlan) -> Void
     /// wywoływane po kliknięciu „Wstaw szafki" na zaznaczonej ścianie
@@ -197,7 +198,7 @@ struct PlanEditorView: View {
             }
             .buttonStyle(.bordered)
             Button {
-                onOpen3D?()
+                goTo3D()
             } label: {
                 Label("Przejdź do 3D", systemImage: "cube.transparent")
                     .font(.caption.weight(.semibold))
@@ -224,6 +225,14 @@ struct PlanEditorView: View {
     }
 
     /// Wszystko w milimetrach — tak, jak się to podaje na produkcji.
+    /// Wyjście do projektu 3D — zamyka plan dwiema drogami (closure + dismiss),
+    /// bo na iPadzie arkusz bywa prezentowany w kontenerze i jedno wywołanie
+    /// potrafi nie zadziałać.
+    private func goTo3D() {
+        onOpen3D?()
+        dismiss()
+    }
+
     private var summary: String {
         let size = plan.size
         return "\(Units.mm(size.x)) × \(Units.mm(size.y)) mm · "
@@ -666,7 +675,7 @@ struct PlanEditorView: View {
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             Button {
-                onOpen3D?()
+                goTo3D()
             } label: {
                 Label("Przejdź do projektu 3D", systemImage: "cube.transparent")
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
