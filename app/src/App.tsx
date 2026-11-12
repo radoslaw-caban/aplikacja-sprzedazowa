@@ -19,7 +19,6 @@ import { activeQuestions, type ZoneAnswers, type ZoneKind } from './design/zoneP
 import { buildAllZoneCabinets, buildZoneCabinets, featureCabinet, makeZone, planForZone, wallFrame, wallLabel, type Zone } from './design/zones';
 import ZoneLibrary from './ui/ZoneLibrary';
 import ZoneWizard from './ui/ZoneWizard';
-import { GROUP_LABELS } from './design/library';
 import { computeRuns, worktopBoxes, plinthBoxes, contactShadows } from './design/runs';
 import { exteriorBoxes } from './design/exterior';
 import { landscapeBoxes } from './design/terrain';
@@ -36,7 +35,8 @@ import { HANDLE_SPECS, RUNNER_SPECS } from './design/hardware';
 import { stepFromPrecision, toUnit, fromUnit } from './design/units';
 import OrganizerPanel from './ui/OrganizerPanel';
 import SettingsPanel from './ui/SettingsPanel';
-import CabinetThumb from './ui/CabinetThumb';
+import LibraryPanel from './ui/LibraryPanel';
+import { APPLIANCE_ITEMS } from './design/libraryCategories';
 import CutoutMenu from './ui/CutoutMenu';
 import ScanPanel, { type ScanMeta } from './ui/ScanPanel';
 import { detectFormat } from './engine/scanFormats';
@@ -908,6 +908,27 @@ export default function App() {
     setSelectedId(placed.id);
   };
 
+  /** Dodaje AGD do zaznaczonej szafki (albo tworzy podblatową, gdy brak). */
+  const addAppliance = (kind: string) => {
+    if (!guardLocked()) return;
+    const spec = APPLIANCE_ITEMS.find((a) => a.kind === kind);
+    if (!spec) return;
+    const target = active;
+    if (!target) {
+      flash('Najpierw zaznacz szafkę, do której wstawić AGD');
+      return;
+    }
+    const list = target.appliances ?? [];
+    if (list.some((a) => a.kind === (kind as never))) {
+      flash(`${spec.label} już jest w tej szafce`);
+      return;
+    }
+    patchCabinet(target.id, {
+      appliances: [...list, { kind: kind as never, w: spec.w, h: spec.h, d: spec.d }],
+    });
+    flash(`Dodano: ${spec.label} (${spec.w}×${spec.h} mm)`);
+  };
+
   /** Dodaje element tylko jeśli nie koliduje z istniejącym. */
   const addElement = (t: ElementTemplate) => {
     if (!active) {
@@ -1343,23 +1364,22 @@ export default function App() {
                 />
               )
             ) : tab === 'layout' ? (
-              LIBRARY_GROUPS.map((g) => (
-                <div className="sb-group" key={g}>
-                  <div className="sb-title">{GROUP_LABELS[g] ?? g}</div>
-                  {byGroup(g).map((t) => (
-                    <div
-                      key={t.key} className="sb-item" draggable
-                      onDragStart={(e) => e.dataTransfer.setData('text/cabinet', t.key)}
-                      onDragEnd={() => addCabinet(t, 'right')}
-                      onClick={() => addCabinet(t, 'right')}
-                      title={`${t.label} — klik lub przeciągnij`}
-                    >
-                      <CabinetThumb t={t} size={46} />
-                      <span>{t.label}</span>
-                    </div>
-                  ))}
-                </div>
-              ))
+              <LibraryPanel
+                templatesByGroup={byGroup}
+                cabinetGroups={LIBRARY_GROUPS}
+                onPickCabinet={(t) => addCabinet(t, 'right')}
+                lights={LIGHT_TEMPLATES}
+                onPickLight={addLight}
+                onPickAppliance={addAppliance}
+                onStartZone={() => setTab('zones')}
+                zonesCount={zones.length}
+                decorCount={ELEMENT_TEMPLATES.length}
+                decorTemplates={ELEMENT_TEMPLATES.map((t) => ({ key: t.key, label: t.label }))}
+                onAddDecor={(key) => {
+                  const t = ELEMENT_TEMPLATES.find((x) => x.key === key);
+                  if (t) addElement(t);
+                }}
+              />
             ) : (
               <>
                 <div className="sb-group">
