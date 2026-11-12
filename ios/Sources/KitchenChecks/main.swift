@@ -889,6 +889,28 @@ func runCutoutChecks() {
         r.check("drzwi: różne środki", abs(doors[0].position.x - doors[1].position.x) > 100)
     }
 
+    var shelfCab = Cabinet(name: "półki", type: .tall, width: 600, height: 2000, depth: 560, plinth: 0)
+    shelfCab.setShelfCount(4)
+    let shelves = shelfCab.elements.filter { $0.kind == .shelf }
+    r.check("półki: 4 szt.", shelves.count == 4)
+    r.check("półki: rosnące y", zip(shelves, shelves.dropFirst()).allSatisfy { $0.y < $1.y })
+    shelfCab.setShelfSpacing(300)
+    let spaced = shelfCab.elements.filter { $0.kind == .shelf }.map(\.y).sorted()
+    if spaced.count > 1 {
+        let diffs = zip(spaced.dropFirst(), spaced).map { $0 - $1 }
+        r.check("półki: rozstaw ok. 300 mm", diffs.allSatisfy { abs($0 - 300) < 1 })
+    }
+    shelfCab.setShelfCount(0)
+    r.check("półki: 0 usuwa wszystkie", !shelfCab.elements.contains { $0.kind == .shelf })
+
+    var hw = Cabinet(name: "okucia", type: .base)
+    hw.hinge = .softClose
+    hw.accessories = [CabinetAccessory(kind: .basket), CabinetAccessory(kind: .led)]
+    let hwData = try! JSONEncoder().encode(hw)
+    let hwBack = try! JSONDecoder().decode(Cabinet.self, from: hwData)
+    r.check("okucia: zawias i akcesoria w JSON",
+            hwBack.hinge == .softClose && hwBack.accessories?.count == 2)
+
     let finishesDir = URL(fileURLWithPath: "Resources/Textures/Finishes")
     var missing = 0
     for finish in CabinetFinishes.all {

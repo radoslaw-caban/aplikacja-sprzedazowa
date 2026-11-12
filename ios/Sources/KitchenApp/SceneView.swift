@@ -262,6 +262,11 @@ struct SceneView: View {
                 hasher.combine(e.y); hasher.combine(e.height)
             }
             hasher.combine(cabinet.cutouts?.count ?? 0)
+            hasher.combine(cabinet.hinge?.rawValue ?? "standard")
+            hasher.combine(cabinet.accessories?.count ?? 0)
+            for a in cabinet.accessories ?? [] {
+                hasher.combine(a.id); hasher.combine(a.kind.rawValue); hasher.combine(a.y)
+            }
             for cut in cabinet.cutouts ?? [] {
                 hasher.combine(cut.id)
                 hasher.combine(cut.plane.rawValue)

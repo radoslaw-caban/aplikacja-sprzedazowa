@@ -370,8 +370,16 @@ struct CabinetEditorPanel: View {
                                 .frame(width: 20)
                             Text(accessory.kind.label).font(.caption)
                             Spacer()
+                            Button {
+                                moveAccessory(accessory.id, by: -50)
+                            } label: { Image(systemName: "minus.circle") }
+                                .buttonStyle(.plain)
                             Text("y = \(Int(accessory.y))").font(.caption2.monospacedDigit())
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondary).frame(width: 58)
+                            Button {
+                                moveAccessory(accessory.id, by: 50)
+                            } label: { Image(systemName: "plus.circle") }
+                                .buttonStyle(.plain)
                             Button(role: .destructive) {
                                 draft.accessories?.removeAll { $0.id == accessory.id }
                                 commit()
@@ -738,6 +746,13 @@ struct CabinetEditorPanel: View {
 
     private func bodyHeight() -> Double {
         draft.height - (draft.type == .base ? draft.plinth : 0)
+    }
+
+    private func moveAccessory(_ id: UUID, by delta: Double) {
+        guard let i = draft.accessories?.firstIndex(where: { $0.id == id }) else { return }
+        let limit = max(0, bodyHeight() - 120)
+        draft.accessories?[i].y = min(max(0, (draft.accessories?[i].y ?? 0) + delta), limit)
+        commit()
     }
 
     private func addElement(_ kind: ElementKind) {

@@ -49,7 +49,8 @@ każdej zmianie. Zmiany zapisują się od razu przez `AppModel.updateCabinet`.
 
 ## Weryfikacja
 
-- `KitchenChecks --cutouts` → **15/15 OK** (w tym 10 tekstur wykończeń):
+- `KitchenChecks --cutouts` → **20/20 OK** (w tym półki, zawiasy, akcesoria,
+  10 tekstur wykończeń):
   - zlew 560 × 460 na wysokości 901 mm (przycięty do szafki 600),
   - uchwyt 160 × 26 na froncie (y = 772 mm),
   - Codable.
@@ -73,7 +74,13 @@ Menu boczne → **Projekt** → **Szafki — edytor**.
   Nowe szafki bez wyboru dostają domyślnie dąb naturalny; tekstura trafia na
   front, boki oraz górę i dół korpusu, nie tylko na skrzydło.
 - **liczba drzwi**: 1 lub 2 skrzydła (Generator dzieli front z 3 mm szczeliną),
-- wnętrze: półki/szuflady i asortyment,
+- wnętrze: **liczba półek (0–12)** i **rozstaw (120–600 mm)** — półki rozkładają
+  się nad szufladami, zachowując przypisany asortyment,
+- **zawiasy**: standard clip / soft-close Blumotion / push-to-open Tip-On / brak,
+  po 2 na skrzydło (przy 2 drzwiach po obu stronach),
+- **akcesoria wnętrza**: kosz wyciągany, drążek, organizer sztućców, kosz na
+  odpady, przegrody, półka szklana, LED; wysokość regulowana co 50 mm,
+- półki/szuflady i asortyment,
 - duplikowanie, usuwanie, odłączanie szafki od strefy,
 - dodawanie nowej szafki z biblioteki (stawiana przy ścianie).
 

@@ -24,7 +24,8 @@ struct CabinetManagerView: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedID: UUID?
-    @State private var editorMode: CabinetEditorMode = .body
+    @State private var editorMode: CabinetEditorMode =
+        UserDefaults.standard.string(forKey: "demoCabinetMode") == "interior" ? .interior : .body
 
     var body: some View {
         NavigationStack {
