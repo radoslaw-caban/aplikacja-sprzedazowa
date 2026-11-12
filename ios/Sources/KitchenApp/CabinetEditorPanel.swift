@@ -10,9 +10,12 @@ enum CabinetEditorMode: String, CaseIterable {
 /// Jedno dotknięcie = bryła (wymiary, położenie, rodzaj, przeznaczenie).
 /// Dwa dotknięcia = wnętrze (półki, szuflady, co będzie przechowywane).
 struct CabinetEditorPanel: View {
+    private let cabinet: Cabinet
     let room: Room
     let mode: CabinetEditorMode
     let isOpen: Bool
+    let dragArmed: Bool
+    var onArmDrag: (Bool) -> Void
     var onLiveChange: (Cabinet) -> Void
     var onSave: (Cabinet) -> Void
     var onClose: () -> Void
@@ -27,15 +30,20 @@ struct CabinetEditorPanel: View {
          room: Room,
          mode: CabinetEditorMode,
          isOpen: Bool,
+         dragArmed: Bool,
+         onArmDrag: @escaping (Bool) -> Void,
          onLiveChange: @escaping (Cabinet) -> Void,
          onSave: @escaping (Cabinet) -> Void,
          onClose: @escaping () -> Void,
          onDelete: (() -> Void)? = nil,
          onOpenFront: @escaping (Bool) -> Void,
          onModeChange: @escaping (CabinetEditorMode) -> Void) {
+        self.cabinet = cabinet
         self.room = room
         self.mode = mode
         self.isOpen = isOpen
+        self.dragArmed = dragArmed
+        self.onArmDrag = onArmDrag
         self.onLiveChange = onLiveChange
         self.onSave = onSave
         self.onClose = onClose
@@ -80,6 +88,9 @@ struct CabinetEditorPanel: View {
         .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
         .padding(.trailing, 18)
         .onAppear { applyDemoStorage() }
+        .onChange(of: cabinet) { _, new in
+            if new != draft { draft = new }
+        }
         .alert("Usunąć szafkę?", isPresented: $showDelete) {
             Button("Usuń", role: .destructive) { onDelete?() }
             Button("Anuluj", role: .cancel) {}
@@ -181,6 +192,20 @@ struct CabinetEditorPanel: View {
                         .background(Color.cyan.opacity(0.16), in: RoundedRectangle(cornerRadius: 9))
                 }
                 .buttonStyle(.plain)
+
+                Button {
+                    onArmDrag(!dragArmed)
+                } label: {
+                    Label(dragArmed ? "Przeciąganie włączone — przeciągnij scenę"
+                                    : "Przeciągnij szafkę palcem w 3D",
+                          systemImage: "hand.draw.fill")
+                        .font(.caption)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(dragArmed ? Color.cyan.opacity(0.35) : Color.white.opacity(0.08),
+                                    in: RoundedRectangle(cornerRadius: 9))
+                }
+                .buttonStyle(.plain)
             }
 
             section("Rodzaj i przeznaczenie") {
@@ -254,6 +279,14 @@ struct CabinetEditorPanel: View {
 
     private var interiorEditor: some View {
         VStack(alignment: .leading, spacing: 14) {
+            let used = draft.elements.map { $0.y + max($0.height, $0.kind == .shelf ? 18 : $0.height) }.max() ?? 0
+            if used > bodyHeight() + 1 {
+                Label("Elementy nie mieszczą się w korpusie — obniż półki albo zwiększ wysokość szafki.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+
             HStack {
                 Button {
                     onOpenFront(!isOpen)

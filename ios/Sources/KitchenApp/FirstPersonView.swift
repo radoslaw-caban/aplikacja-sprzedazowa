@@ -49,6 +49,8 @@ struct FirstPersonView: View {
     @State private var editingCabinet: UUID?
     @State private var editorMode: CabinetEditorMode = .body
     @State private var workingCabinets: [Cabinet] = []
+    @State private var dragArmed = false
+    @State private var lastCabinetDrag: CGSize = .zero
     @State private var accessoryNote: String?
     @State private var flourishUntil: Date = .distantPast
 
@@ -189,6 +191,11 @@ struct FirstPersonView: View {
                         room: room,
                         mode: editorMode,
                         isOpen: world?.isCabinetOpen(id) ?? false,
+                        dragArmed: dragArmed,
+                        onArmDrag: { armed in
+                            dragArmed = armed
+                            lastCabinetDrag = .zero
+                        },
                         onLiveChange: { applyLive($0) },
                         onSave: { onSaveCabinet?($0) },
                         onClose: { closeEditor() },
@@ -385,10 +392,23 @@ struct FirstPersonView: View {
         guard let c = workingCabinets.first(where: { $0.name.localizedCaseInsensitiveContains(match) }),
               let world, let cam = cameraEntity else { return }
         editingCabinet = c.id
-        editorMode = .interior
+        editorMode = UserDefaults.standard.string(forKey: "demoEditorMode") == "body" ? .body : .interior
         accessoryNote = nil
         world.setSelected(c.id)
         world.setCabinetOpen(c.id, open: true)
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "demoArmDrag") {
+            dragArmed = true
+        }
+        if let mm = UserDefaults.standard.object(forKey: "demoMoveMM") as? Double, mm != 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                moveCabinet(c.id, by: CGSize(width: CGFloat(mm / 10), height: 0))
+                if let cab = workingCabinets.first(where: { $0.id == c.id }) {
+                    onSaveCabinet?(cab)
+                }
+            }
+        }
+        #endif
         let rad = Float(c.rotation * .pi / 180)
         let normal = SIMD3<Float>(sin(rad), 0, cos(rad))
         let distance = UserDefaults.standard.object(forKey: "demoSelectDistance") != nil
@@ -423,6 +443,7 @@ struct FirstPersonView: View {
         if let id = editingCabinet { world?.setSelected(nil) }
         editingCabinet = nil
         editingWall = nil
+        dragArmed = false
     }
 
     private func deleteCabinet(_ id: UUID) {
@@ -617,9 +638,50 @@ struct FirstPersonView: View {
     private var lookGesture: some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
+                if dragArmed, let id = editingCabinet {
+                    let delta = CGSize(width: value.translation.width - lastCabinetDrag.width,
+                                       height: value.translation.height - lastCabinetDrag.height)
+                    lastCabinetDrag = value.translation
+                    moveCabinet(id, by: delta)
+                    return
+                }
                 yaw -= Float(value.translation.width) * 0.0025
                 pitch = min(0.6, max(-0.7, pitch - Float(value.translation.height) * 0.002))
             }
+            .onEnded { _ in
+                guard dragArmed else { return }
+                lastCabinetDrag = .zero
+                if let id = editingCabinet,
+                   let cab = workingCabinets.first(where: { $0.id == id }) {
+                    onSaveCabinet?(cab)
+                    accessoryNote = "Położenie zapisane"
+                }
+            }
+    }
+
+    /// Przesunięcie zaznaczonej szafki po podłodze, w osiach kamery.
+    private func moveCabinet(_ id: UUID, by delta: CGSize) {
+        guard let i = workingCabinets.firstIndex(where: { $0.id == id }) else { return }
+        let cam = cameraEntity?.position ?? [0, 1.6, 0]
+        let cx = Float(workingCabinets[i].x / 1000)
+        let cz = Float(workingCabinets[i].z / 1000)
+        let distance = max(1.2, hypot(cx - cam.x, cz - cam.z))
+        let scale = Double(0.0022 * distance) * 1000
+        let dx = Double(delta.width) * scale
+        let dy = -Double(delta.height) * scale
+        let right = SIMD2<Double>(Double(cos(yaw)), -Double(sin(yaw)))
+        let forward = SIMD2<Double>(-Double(sin(yaw)), -Double(cos(yaw)))
+        var x = workingCabinets[i].x + right.x * dx + forward.x * dy
+        var z = workingCabinets[i].z + right.y * dx + forward.y * dy
+
+        let rotated = workingCabinets[i].rotation == 90 || workingCabinets[i].rotation == 270
+        let halfW = (rotated ? workingCabinets[i].depth : workingCabinets[i].width) / 2
+        let halfD = (rotated ? workingCabinets[i].width : workingCabinets[i].depth) / 2
+        x = min(max(x, -room.width / 2 + halfW), room.width / 2 - halfW)
+        z = min(max(z, -room.depth / 2 + halfD), room.depth / 2 - halfD)
+        workingCabinets[i].x = x
+        workingCabinets[i].z = z
+        world?.updateCabinets(workingCabinets)
     }
 }
 

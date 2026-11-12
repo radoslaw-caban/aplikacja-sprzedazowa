@@ -50,7 +50,7 @@ public enum DrawerSystem: String, Codable, Sendable {
     }
 }
 
-public struct CabinetElement: Identifiable, Codable, Sendable {
+public struct CabinetElement: Identifiable, Codable, Sendable, Equatable {
     public var id: UUID
     public var kind: ElementKind
     /// pozycja dolnej krawędzi elementu od dna korpusu (mm)
@@ -72,7 +72,7 @@ public struct CabinetElement: Identifiable, Codable, Sendable {
     }
 }
 
-public struct Cabinet: Identifiable, Codable, Sendable {
+public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
     public var id: UUID
     public var name: String
     public var type: CabinetType
