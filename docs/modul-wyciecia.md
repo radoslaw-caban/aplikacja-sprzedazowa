@@ -57,6 +57,8 @@ każdej zmianie. Zmiany zapisują się od razu przez `AppModel.updateCabinet`.
 - `swift build` — OK; `xcodebuild -sdk iphonesimulator` — BUILD SUCCEEDED.
 - Edytor na symulatorze iPad Pro 13": lista 12 szafek, karta „Zlew”, dodawanie
   wycięcia, zmiana płaszczyzny i wymiarów.
+- Zakładka „Projekt 3D kuchnia”: kadr wewnętrzny liczony z zabudowy (nie ze
+  skanu); widać czarne wycięcie zlewu na blacie oraz uchwyty na frontach.
 
 ## Modele okuć i akcesoriów
 

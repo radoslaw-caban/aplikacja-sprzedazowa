@@ -282,6 +282,20 @@ struct SceneView: View {
         if !interiorView {
             return PreviewCamera.exterior(room: room)
         }
+        // Kadr wewnętrzny liczony z zabudowy, nie ze skanu — skan potrafi
+        // otoczyć kamerę chmurą i zasłonić meble.
+        if !built.extents.x.isZero {
+            let c = built.center
+            let e = built.extents
+            let halfW = Float(room.width / 1000) / 2 - 0.45
+            let halfD = Float(room.depth / 1000) / 2 - 0.45
+            let eye = SIMD3<Float>(
+                min(halfW, max(-halfW, c.x)),
+                min(Float(room.height / 1000) - 0.3, max(1.55, c.y + 0.35)),
+                min(halfD, max(-halfD, c.z + max(2.6, e.z * 0.75)))
+            )
+            return PreviewCamera(position: eye, target: [c.x, max(0.7, c.y), c.z])
+        }
         if let scanEntity, scanEntity.children.count > 0 {
             return PreviewCamera.fit(center: built.center, extents: built.extents)
         }
