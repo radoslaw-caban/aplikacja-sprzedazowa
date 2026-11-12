@@ -429,6 +429,9 @@ public final class FirstPersonWorld {
         m.baseColor = .init(tint: Self.color(wallColorHex))
         m.roughness = .init(floatLiteral: 0.9)
         m.metallic = .init(floatLiteral: 0)
+        // delikatna emisja: wnętrze czytelne nawet bez lamp (FPS nie ma cieni)
+        m.emissiveColor = .init(color: WorldColor(white: 0.55, alpha: 1))
+        m.emissiveIntensity = 0.35
         return m
     }
 
@@ -474,6 +477,14 @@ public final class FirstPersonWorld {
             roomWalls[side, default: []].append(e)
         }
 
+        // sufit — zasłania połać dachu nad pomieszczeniem
+        if let mesh = MeshFactory.texturedBox(width: w, height: 0.02, depth: d, tile: 2.5) {
+            let ceil = ModelEntity(mesh: mesh, materials: [mat])
+            ceil.position = [0, h, 0]
+            ceil.name = "fps-ceiling"
+            root.addChild(ceil)
+        }
+
         // północ, wschód, zachód — pełne
         panel(.north, size: [w, h, thickness], pos: [0, h / 2, -d / 2])
         panel(.east, size: [thickness, h, d], pos: [w / 2, h / 2, 0])
@@ -488,22 +499,6 @@ public final class FirstPersonWorld {
             panel(.south, size: [opening, h - 2.1, thickness], pos: [0, 2.1 + (h - 2.1) / 2, d / 2])
         }
 
-        // światło wewnątrz — bez niego wnętrze jest czarną skrzynką
-        for x in [-w * 0.22, w * 0.22] {
-            let lamp = Entity()
-            lamp.position = [x, h * 0.82, 0]
-            lamp.components.set(PointLightComponent(
-                color: WorldColor(red: 1.0, green: 0.94, blue: 0.86, alpha: 1),
-                intensity: 45000,
-                attenuationRadius: max(w, d) * 1.1 + 4
-            ))
-            root.addChild(lamp)
-        }
-        // miękkie światło od góry — wnętrze musi być czytelne
-        let fill = Entity()
-        fill.components.set(DirectionalLightComponent(color: WorldColor(white: 0.95, alpha: 1), intensity: 18000))
-        fill.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
-        root.addChild(fill)
     }
 
     /// Wstawia zabudowę projektu do wnętrza (te same mm, ten sam układ).
@@ -518,7 +513,7 @@ public final class FirstPersonWorld {
             let name = entity.name
             guard let cabIDString = name.split(separator: ":").first,
                   let cabID = UUID(uuidString: String(cabIDString)) else { continue }
-            let isFront = name.contains(":front") || name.contains(":drawerFront")
+            let isFront = name.contains(":front") || name.contains(":drawerFront") || name.contains(":drawer:")
             if isFront, let mesh = entity as? ModelEntity {
                 cabinetFronts[cabID, default: []].append((mesh, mesh.transform))
             }

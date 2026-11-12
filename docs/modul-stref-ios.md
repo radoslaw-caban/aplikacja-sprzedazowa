@@ -69,6 +69,29 @@ Nowa strefa powstaje w trybie **podglądu** (`Zone.draft = true`):
 - Poprawka kamery wewnętrznej: `SceneView.baseCamera` stawia kamerę między zabudową
   a przeciwległą ścianą (wcześniej kadr wychodził przed elewację).
 
+## Magiczny ołówek w trybie FPS (v2)
+
+- Pytanie „Którą ręką rysujesz?” jest krokiem kreatora nowego klienta
+  (po imieniu i nazwisku). Odpowiedź zapisuje się w `UserDefaults` pod
+  `magicHand` (`left`/`right`) i jest używana przez widok FPS.
+- W scenie pierwszoosobowej ołówek jest trzymany w wybranej dłoni
+  (przełącznik „Ręka P/L” w pasku). Po dotknięciu wykonuje ruch czarodzieja
+  (obrót grotu), a celownik w środku ekranu pokazuje miejsce wskazania.
+- Promień idzie ze **środka ekranu** (kamera RealityKit patrzy w lokalne −Z),
+  a nie z miejsca dotknięcia palcem.
+- Trafienie w ścianę otwiera paletę kolorów; wybór zapisuje się w projekcie
+  (`wallColor`) i jest odtwarzany przy kolejnym wejściu do FPS.
+- Trafienie w szafkę otwiera jej fronty (animacja) i pokazuje panel akcesoriów:
+  półka, kosz, drążek, szuflada. Akcesorium jest dodawane do `elements` szafki
+  i zapisywane w `projects.json`.
+- Wnętrze ma własną podłogę, ściany i sufit (na wymiarach pomieszczenia),
+  żeby FPS pokazywał kuchnię, a nie elewację/połać dachu.
+
+Weryfikacja na symulatorze iPad Pro 13" (M5): scena wewnątrz kuchni,
+ołówek w prawej i lewej ręce, trafienie w szafkę „Szafka pod płytą 600” →
+otwarcie + panel akcesoriów, „Dodano: Półka” i wpis w JSON; trafienie w ścianę
+→ paleta i zmiana koloru na `#b7c4b0` zapisana w projekcie.
+
 ## Ograniczenia v1 / następne kroki
 
 - Ściana wybierana z **planu** (klik w ścianę → Strefa…) albo z listy; bezpośredni

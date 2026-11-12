@@ -13,12 +13,16 @@ struct NewClientFlow: View {
     var onFinish: (_ firstName: String, _ lastName: String, _ address: String, _ phone: String, _ email: String) -> Void
     @Environment(\.dismiss) private var dismiss
 
-    @State private var step = 0
+    @State private var step = UserDefaults.standard.integer(forKey: "demoNewClientStep")
     @State private var firstName = ""
     @State private var lastName = ""
     @State private var address = ""
     @State private var phone = ""
     @State private var email = ""
+    /// odpowiedź klienta: w której ręce trzyma magiczny ołówek (FPS)
+    @AppStorage("magicHand") private var magicHand = "right"
+
+    private var handColor: Color { Color(red: 0.98, green: 0.93, blue: 0.72) }
 
     // mapa
     @State private var camera: MapCameraPosition = .region(
@@ -34,7 +38,8 @@ struct NewClientFlow: View {
             switch step {
             case 0: intro
             case 1: nameStep
-            case 2: locationStep
+            case 2: handStep
+            case 3: locationStep
             default: contactStep
             }
         }
@@ -109,6 +114,72 @@ struct NewClientFlow: View {
         }
     }
 
+    // MARK: - 2b. ręka do magicznego ołówka
+
+    private var handStep: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            VStack(spacing: 6) {
+                Text("Którą ręką rysujesz?")
+                    .font(.title2.weight(.semibold)).foregroundStyle(.white)
+                Text("W trybie FPS wręczymy Ci magiczny ołówek — wskazuje środek ekranu")
+                    .font(.caption).foregroundStyle(.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 32)
+
+            HStack(spacing: 18) {
+                handCard("Lewa", value: "left", icon: "hand.raised.fill", mirrored: true)
+                handCard("Prawa", value: "right", icon: "hand.raised.fill", mirrored: false)
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.3)) { step = 3 }
+            } label: {
+                Label("Dalej", systemImage: "arrow.right")
+                    .font(.headline)
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(handColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 30)
+        }
+    }
+
+    private func handCard(_ label: String, value: String, icon: String, mirrored: Bool) -> some View {
+        let selected = magicHand == value
+        return Button {
+            magicHand = value
+        } label: {
+            VStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 46, weight: .light))
+                    .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+                Text(label).font(.headline)
+                Text(selected ? "wybrana" : "dotknij")
+                    .font(.caption2)
+                    .foregroundStyle(selected ? .black.opacity(0.65) : .white.opacity(0.5))
+            }
+            .foregroundStyle(selected ? .black : .white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 22)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(selected ? handColor : Color.white.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(selected ? 0 : 0.15), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - 3. mapa
 
     private var locationStep: some View {
@@ -156,7 +227,7 @@ struct NewClientFlow: View {
             VStack {
                 Spacer()
                 Button {
-                    withAnimation(.easeInOut(duration: 0.3)) { step = 3 }
+                    withAnimation(.easeInOut(duration: 0.3)) { step = 4 }
                 } label: {
                     Label("Dalej", systemImage: "arrow.right")
                         .font(.headline)

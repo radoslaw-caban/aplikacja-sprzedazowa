@@ -81,8 +81,8 @@ struct FirstPersonView: View {
                 #if DEBUG
                 // weryfikacja: start wewnątrz kuchni, twarzą do zabudowy
                 if UserDefaults.standard.bool(forKey: "demoFPSInside") {
-                    yaw = .pi
-                    pitch = -0.16
+                    yaw = 0
+                    pitch = UserDefaults.standard.bool(forKey: "demoFPSAutoColor") ? 0.12 : -0.16
                     camera.position = [0, 1.6, Float(room.depth / 1000) / 2 - 0.8]
                 }
                 #endif
@@ -237,12 +237,12 @@ struct FirstPersonView: View {
                 let side: Float = hand == .right ? 1 : -1
                 let head = simd_quatf(angle: yaw, axis: [0, 1, 0])
                     * simd_quatf(angle: pitch, axis: [1, 0, 0])
-                let local = SIMD3<Float>(side * 0.16, -0.18 + sin(t * 1.6) * 0.006, 0.55)
+                let local = SIMD3<Float>(side * 0.18, -0.20 + sin(t * 1.6) * 0.006, -0.55)
                 pencil.position = camera.position + head.act(local)
                 pencil.orientation = head
-                    * simd_quatf(angle: side * 0.26, axis: [0, 1, 0])
+                    * simd_quatf(angle: side * 0.80, axis: [0, 1, 0])
                     * simd_quatf(angle: spin, axis: [0, 0, 1])
-                    * simd_quatf(angle: -0.18 + (flourish ? sin(t * 14) * 0.12 : 0), axis: [1, 0, 0])
+                    * simd_quatf(angle: 0.65 + (flourish ? sin(t * 14) * 0.12 : 0), axis: [1, 0, 0])
             }
 
             // pies
@@ -296,20 +296,41 @@ struct FirstPersonView: View {
     private func tap(at location: CGPoint) {
         flourishUntil = Date().addingTimeInterval(0.85)
         guard let world, let camera = cameraEntity else { return }
+        // RealityKit: kamera patrzy w lokalne −Z
         let dir = SIMD3<Float>(
-            sin(yaw) * cos(pitch),
+            -sin(yaw) * cos(pitch),
             sin(pitch),
-            cos(yaw) * cos(pitch)
+            -cos(yaw) * cos(pitch)
         )
         switch world.pick(origin: camera.position, direction: dir) {
         case .wall(let side):
             editingWall = side
             editingCabinet = nil
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "demoFPSAutoColor") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    world.setWallColor("#b7c4b0", side: side)
+                    onWallColor?("#b7c4b0")
+                    editingWall = nil
+                    accessoryNote = "Kolor ściany zmieniony"
+                }
+            }
+            #endif
         case .cabinet(let id):
             world.toggleCabinet(id)
             editingCabinet = id
             editingWall = nil
             accessoryNote = nil
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "demoFPSAutoShelf") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                    if world.addAccessory(id, kind: "shelf") {
+                        onAddElement?(id, element(for: "shelf"))
+                        accessoryNote = "Dodano: Półka"
+                    }
+                }
+            }
+            #endif
         case .none:
             if dogClose {
                 pettingUntil = Date().addingTimeInterval(2.4)
@@ -365,25 +386,25 @@ struct FirstPersonView: View {
         root.addChild(body)
 
         let tip = ModelEntity(mesh: .generateCone(height: 0.08, radius: 0.017), materials: [gold])
-        tip.orientation = simd_quatf(angle: .pi / 2, axis: [1, 0, 0])
-        tip.position = [0, 0, 0.21]
+        tip.orientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0])
+        tip.position = [0, 0, -0.21]
         root.addChild(tip)
 
         let star = ModelEntity(mesh: .generateSphere(radius: 0.014),
                                materials: [UnlitMaterial(color: FPSColor(red: 1, green: 0.9, blue: 0.55, alpha: 1))])
-        star.position = [0, 0, 0.26]
+        star.position = [0, 0, -0.26]
         root.addChild(star)
 
         // dłoń trzymająca ołówek
         let palm = ModelEntity(mesh: .generateBox(width: 0.075, height: 0.095, depth: 0.12, cornerRadius: 0.03),
                                materials: [skin])
-        palm.position = [0, -0.035, -0.10]
+        palm.position = [0, -0.035, 0.10]
         root.addChild(palm)
 
         let side: Float = hand == .right ? 1 : -1
-        root.position = [side * 0.16, -0.18, 0.55]
-        root.orientation = simd_quatf(angle: side * 0.26, axis: [0, 1, 0])
-            * simd_quatf(angle: -0.18, axis: [1, 0, 0])
+        root.position = [side * 0.18, -0.20, -0.55]
+        root.orientation = simd_quatf(angle: side * 0.80, axis: [0, 1, 0])
+            * simd_quatf(angle: 0.65, axis: [1, 0, 0])
         return root
     }
 
