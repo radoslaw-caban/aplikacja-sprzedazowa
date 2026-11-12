@@ -13,6 +13,10 @@ struct OrderFlowView: View {
     var scanPlan: ScanPlan?
     @Binding var interiorView: Bool
     @Binding var locked: Bool
+    /// Warstwa skanu włączana niezależnie od bryły budynku.
+    var showScan: Bool = true
+    /// Warstwa budynku (ściany, podłoga, sufit) niezależnie od skanu.
+    var showBuilding: Bool = true
     var openPlan: () -> Void
     var openScan: () -> Void
     var openDocuments: () -> Void
@@ -46,10 +50,12 @@ struct OrderFlowView: View {
                                  openClientProjects: openClientProjects)
                     .tag(2)
                 ProjectScenePage(model: model, interior: false, scanPlan: scanPlan, locked: locked,
-                                 note: "Dom w otoczeniu — widok dla klienta")
+                                 note: "Dom w otoczeniu — widok dla klienta",
+                                 showScan: showScan, showBuilding: showBuilding)
                     .tag(3)
                 ProjectScenePage(model: model, interior: true, scanPlan: scanPlan, locked: locked,
-                                 note: "Kuchnia — zabudowa w skali 1:1")
+                                 note: "Kuchnia — zabudowa w skali 1:1",
+                                 showScan: showScan, showBuilding: showBuilding)
                     .tag(4)
                 NextRoomPage(model: model)
                     .tag(5)
@@ -497,9 +503,12 @@ struct ProjectScenePage: View {
     var interior: Bool
     /// plan domu ze skanu (nil = willa proceduralna)
     var scanPlan: ScanPlan?
-    /// false = odblokowany: przeciąganie obraca projektem
+    /// false = odblokowany: można edytować projekt
     var locked: Bool
     var note: String
+    /// rozdzielne przełączniki: skan i bryła budynku niezależnie
+    var showScan = true
+    var showBuilding = true
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -510,7 +519,9 @@ struct ProjectScenePage: View {
                 transform: model.scanTransform,
                 interiorView: interior,
                 scanPlan: scanPlan,
-                locked: locked
+                locked: locked,
+                showScan: showScan,
+                showBuilding: showBuilding
             )
             Text(note)
                 .font(.caption2)

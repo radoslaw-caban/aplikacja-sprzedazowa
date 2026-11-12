@@ -62,7 +62,12 @@ public enum SceneBuilder {
             root.addChild(entity(for: b))
         }
         // okucia i akcesoria (modele GLB: zawiasy, prowadnice, uchwyty)
-        if let hardware = hardwareEntity(cabinets: cabinets) {
+        #if DEBUG
+        let skipHardware = UserDefaults.standard.bool(forKey: "demoNoHardware")
+        #else
+        let skipHardware = false
+        #endif
+        if !skipHardware, let hardware = hardwareEntity(cabinets: cabinets) {
             root.addChild(hardware)
         }
 

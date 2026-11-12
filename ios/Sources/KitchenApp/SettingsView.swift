@@ -32,6 +32,25 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Odległość orbity od osi")
+                            Spacer()
+                            Text(String(format: "%.2f×", settings.orbitRadiusScale))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $settings.orbitRadiusScale, in: 0.25...1.6, step: 0.05) { _ in
+                            dirty = true
+                        }
+                        Text("""
+                        Mniejsza wartość = obrót ciaśniejszy, projekt \u{201E}w ręku\u{201D}. \
+                        Większa = kamera krąży dalej od środka. Zmiana działa od razu \
+                        po zapisaniu ustawień.
+                        """)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                     slider("Czułość zbliżania", value: $settings.zoomSensitivity, range: 0.2...1.6)
                     slider("Czułość przesuwania", value: $settings.panSensitivity, range: 0.3...2.0)
                     slider("Wygładzanie ruchu", value: $settings.smoothing, range: 0.1...0.95)

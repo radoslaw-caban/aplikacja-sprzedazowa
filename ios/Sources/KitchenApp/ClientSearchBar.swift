@@ -27,7 +27,11 @@ struct ClientSearchBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Logo nad wyszukiwarką — lewy górny róg aplikacji.
+            KarpatiaLogo(height: 20)
+                .padding(.leading, 2)
+
             HStack(spacing: 8) {
                 Button(action: onNewClient) {
                     Image(systemName: "plus")

@@ -31,10 +31,11 @@ final class AppModel {
         self.store = store
         var loaded = store.load()
         if loaded.isEmpty {
-            loaded = [Project(name: "Projekt 1", cabinets: [
-                Library.make(Library.base[0], at: -1200, z: -2200),
-                Library.make(Library.base[1], at: -600, z: -2200),
-            ])]
+            // Bazowo projekt jest PUSTY — użytkownik stawia szafki sam.
+            // Zgłoszony błąd: startowe szafki udawały gotową kuchnię i myliły
+            // przy pierwszym uruchomieniu (nie było wiadomo, czy to projekt,
+            // czy przykład). Pusty projekt + biblioteka jest jednoznaczny.
+            loaded = [Project(name: "Projekt 1", cabinets: [])]
         }
         self.projects = loaded
         if let raw = UserDefaults.standard.array(forKey: Self.workingSetKey) as? [String] {

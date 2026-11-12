@@ -56,16 +56,14 @@ struct NewClientFlow: View {
 
     private var intro: some View {
         ZStack {
-            PointCloudBackdrop()
+            // Realna chmura punktów ze skanu — nie proceduralna sfera.
+            ScanBackdrop()
                 .ignoresSafeArea()
-                .blur(radius: 0.5)
 
             VStack(spacing: 18) {
                 Spacer()
-                Text("KARPATIA")
-                    .font(.system(size: 42, weight: .light, design: .serif))
-                    .tracking(10)
-                    .foregroundStyle(.white)
+                // Logo firmy (białe na czarnym tle), zamiast napisanego tekstu
+                KarpatiaLogo(height: 62, onDark: true)
                 Text("made by human, for human")
                     .font(.custom("Snell Roundhand", size: 26))
                     .foregroundStyle(.white.opacity(0.85))
