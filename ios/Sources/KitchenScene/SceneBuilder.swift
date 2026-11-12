@@ -39,8 +39,11 @@ public enum SceneBuilder {
             // Generator zwraca układ lokalny (środek szafki = 0,0,0) —
             // dopiero tutaj trafia do pokoju, tak jak cabinetsOrigin w wersji web.
             for b in Generator.build(c) {
-                // tekstura z biblioteki trafia tylko na fronty — korpus zostaje płytą
-                let texture = (b.role == .front || b.role == .drawerFront) ? c.texture : nil
+                // wszystkie widoczne powierzchnie szafki dostają teksturę
+                // (front, boki, góra/dół); domyślnie dąb naturalny
+                let finish = c.texture ?? CabinetFinishes.defaultFinish.fileName
+                let textured: [Box.Role] = [.front, .drawerFront, .side, .top, .bottom]
+                let texture = textured.contains(b.role) ? finish : nil
                 boxes.append(Box(
                     id: b.id,
                     role: b.role,
@@ -172,6 +175,19 @@ public enum SceneBuilder {
         return added ? root : nil
     }
 
+    /// Tekstura użytkownika z biblioteki albo wbudowane wykończenie z bundle.
+    private static func textureURL(named name: String) -> URL? {
+        if let url = TextureStore.shared.url(for: name) { return url }
+        for ext in ["jpg", "png"] {
+            if let url = Bundle.main.url(forResource: name, withExtension: ext,
+                                         subdirectory: "Textures/Finishes") { return url }
+            if let url = Bundle.main.url(forResource: name, withExtension: ext,
+                                         subdirectory: "Finishes") { return url }
+            if let url = Bundle.main.url(forResource: name, withExtension: ext) { return url }
+        }
+        return nil
+    }
+
     /// Pojedyncza bryła: siatka w metrach, materiał PBR, obrót wokół Y.
     @MainActor
     public static func entity(for b: Box) -> ModelEntity {
@@ -199,7 +215,7 @@ public enum SceneBuilder {
         var material = PhysicallyBasedMaterial()
         // front może mieć teksturę z biblioteki (nazwa pliku w `Box.texture`)
         if let textureName = b.texture,
-           let url = TextureStore.shared.url(for: textureName),
+           let url = textureURL(named: textureName),
            let texture = try? TextureResource.load(contentsOf: url) {
             material.baseColor = .init(tint: .white, texture: .init(texture))
         } else {

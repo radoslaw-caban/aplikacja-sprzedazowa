@@ -889,6 +889,16 @@ func runCutoutChecks() {
         r.check("drzwi: różne środki", abs(doors[0].position.x - doors[1].position.x) > 100)
     }
 
+    let finishesDir = URL(fileURLWithPath: "Resources/Textures/Finishes")
+    var missing = 0
+    for finish in CabinetFinishes.all {
+        let found = ["jpg", "png"].contains {
+            FileManager.default.fileExists(atPath: finishesDir.appendingPathComponent("\(finish.fileName).\($0)").path)
+        }
+        if !found { missing += 1 }
+    }
+    r.check("wykończenia: \(CabinetFinishes.all.count) tekstur w Resources", missing == 0, "brak \(missing)")
+
     let cut = CabinetCutout(plane: .side, purpose: .cable, x: 20, y: 100, width: 60, height: 60)
     let data = try! JSONEncoder().encode(cut)
     let back = try! JSONDecoder().decode(CabinetCutout.self, from: data)

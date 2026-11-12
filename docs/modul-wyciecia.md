@@ -49,7 +49,7 @@ każdej zmianie. Zmiany zapisują się od razu przez `AppModel.updateCabinet`.
 
 ## Weryfikacja
 
-- `KitchenChecks --cutouts` → **9/9 OK**:
+- `KitchenChecks --cutouts` → **15/15 OK** (w tym 10 tekstur wykończeń):
   - zlew 560 × 460 na wysokości 901 mm (przycięty do szafki 600),
   - uchwyt 160 × 26 na froncie (y = 772 mm),
   - Codable.
@@ -67,7 +67,11 @@ Menu boczne → **Projekt** → **Szafki — edytor**.
 - lista wszystkich szafek z wymiarami, typem i przeznaczeniem,
 - wymiary, położenie w budynku, obrót, przyciąganie do ściany,
 - rodzaj (dolna/wisząca/stojąca/zaślepka), szablon z biblioteki, przeznaczenie,
-- **wygląd frontu**: 6 kolorów i tekstura z biblioteki,
+- **wykończenie**: wyłącznie tekstury — 10 wbudowanych (dąb naturalny,
+  dąb bielony, orzech, wiśnia, biel matowa, grafit, beż piaskowy, oliwka,
+  beton jasny, aluminium szczotkowane) + tekstury użytkownika.
+  Nowe szafki bez wyboru dostają domyślnie dąb naturalny; tekstura trafia na
+  front, boki oraz górę i dół korpusu, nie tylko na skrzydło.
 - **liczba drzwi**: 1 lub 2 skrzydła (Generator dzieli front z 3 mm szczeliną),
 - wnętrze: półki/szuflady i asortyment,
 - duplikowanie, usuwanie, odłączanie szafki od strefy,

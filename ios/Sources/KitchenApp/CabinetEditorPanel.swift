@@ -231,46 +231,53 @@ struct CabinetEditorPanel: View {
                 }
             }
 
-            section("Wygląd frontu") {
-                HStack(spacing: 8) {
-                    ForEach(["#c8bca9", "#f2efe9", "#8fa6b8", "#6b7280", "#2f3437", "#c9a227"], id: \.self) { hex in
-                        Button {
-                            draft.color = hex
-                            draft.texture = nil
-                            commit()
-                        } label: {
-                            Circle()
-                                .fill(Color(hex: hex))
-                                .frame(width: 32, height: 32)
-                                .overlay(Circle().stroke(Color.white.opacity(draft.color == hex ? 0.9 : 0.2),
-                                                          lineWidth: draft.color == hex ? 2 : 1))
+            section("Wykończenie (tekstura)") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(CabinetFinishes.all) { finish in
+                            Button {
+                                draft.texture = finish.fileName
+                                commit()
+                            } label: {
+                                FinishSwatch(finish: finish,
+                                             selected: CabinetFinishes.finish(for: draft.texture).id == finish.id)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.vertical, 2)
                 }
+
+                HStack {
+                    Label("Wybrano", systemImage: "paintpalette")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(currentFinishName)
+                        .font(.caption)
+                        .lineLimit(1)
+                }
+
                 Menu {
-                    Button("Bez tekstury") {
-                        draft.texture = nil
+                    Button("Dąb naturalny (domyślne)") {
+                        draft.texture = CabinetFinishes.defaultFinish.fileName
                         commit()
                     }
-                    Divider()
-                    ForEach(TextureStore.shared.textures) { texture in
-                        Button(texture.name) {
-                            draft.texture = texture.name
-                            commit()
+                    if !TextureStore.shared.textures.isEmpty {
+                        Divider()
+                        ForEach(TextureStore.shared.textures) { texture in
+                            Button(texture.name) {
+                                draft.texture = texture.name
+                                commit()
+                            }
                         }
                     }
                 } label: {
-                    HStack {
-                        Label(draft.texture == nil ? "Tekstura z biblioteki" : "Tekstura: \(draft.texture!)",
-                              systemImage: "square.grid.3x3")
-                        Spacer()
-                        Image(systemName: "chevron.up.chevron.down")
-                    }
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 9)
-                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 9))
+                    Label("Tekstura użytkownika…", systemImage: "square.grid.3x3")
+                        .font(.caption)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 9))
                 }
             }
 
@@ -548,6 +555,15 @@ struct CabinetEditorPanel: View {
         }
     }
 
+    private var currentFinishName: String {
+        if let texture = draft.texture,
+           CabinetFinishes.all.contains(where: { $0.fileName == texture }) {
+            return CabinetFinishes.finish(for: texture).name
+        }
+        if let texture = draft.texture { return texture }
+        return CabinetFinishes.defaultFinish.name
+    }
+
     private func icon(for type: CabinetType) -> String {
         switch type {
         case .base: "cabinet"
@@ -686,4 +702,66 @@ struct CabinetEditorPanel: View {
         draft.elements = sorted
         commit()
     }
+}
+
+private struct FinishSwatch: View {
+    let finish: CabinetFinish
+    let selected: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Group {
+                if let image = loadFinishImage(finish.fileName) {
+                    #if os(iOS)
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                    #else
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFill()
+                    #endif
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(hex: finish.fallbackColor))
+                }
+            }
+            .frame(width: 74, height: 58)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(selected ? Color.cyan : Color.white.opacity(0.18),
+                            lineWidth: selected ? 2.5 : 1)
+            )
+
+            Text(finish.name)
+                .font(.system(size: 9, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? .cyan : .secondary)
+                .lineLimit(1)
+                .frame(width: 74)
+        }
+    }
+}
+
+#if os(iOS)
+private func loadFinishImage(_ name: String) -> UIImage? {
+    guard let url = bundleFinishURL(name) else { return nil }
+    return UIImage(contentsOfFile: url.path)
+}
+#else
+private func loadFinishImage(_ name: String) -> NSImage? {
+    guard let url = bundleFinishURL(name) else { return nil }
+    return NSImage(contentsOf: url)
+}
+#endif
+
+private func bundleFinishURL(_ name: String) -> URL? {
+    for ext in ["jpg", "png"] {
+        if let url = Bundle.main.url(forResource: name, withExtension: ext,
+                                     subdirectory: "Textures/Finishes") { return url }
+        if let url = Bundle.main.url(forResource: name, withExtension: ext,
+                                     subdirectory: "Finishes") { return url }
+        if let url = Bundle.main.url(forResource: name, withExtension: ext) { return url }
+    }
+    return nil
 }
