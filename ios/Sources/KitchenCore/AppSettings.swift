@@ -19,6 +19,8 @@ public struct AppSettings: Codable, Sendable, Equatable {
     public var notebookDistance: Double = 3.2
     /// Czy pokazywać ołówek przy oddalonym planie.
     public var showPencil: Bool = true
+    /// Efekty magiczne: świecąca ramka i brokat przy ważnych akcjach.
+    public var magicEffects: Bool = true
     /// Odległość orbity od osi obrotu (mnożnik).
     ///
     /// 1,0 = kamera w odległości wyliczonej automatycznie z kadru. Mniejsza

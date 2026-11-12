@@ -1,5 +1,6 @@
 import Foundation
 import RealityKit
+import KitchenCore
 
 /// Biblioteka modeli 3D wczytanych z plików GLB.
 ///
@@ -65,9 +66,15 @@ public enum ModelLibrary {
         if let cached = cache[name] {
             return cached.clone(recursive: true)
         }
-        guard let dir = modelsDirectory() else { return nil }
-        let url = dir.appendingPathComponent("\(name).glb")
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let url: URL
+        if let dir = modelsDirectory(),
+           FileManager.default.fileExists(atPath: dir.appendingPathComponent("\(name).glb").path) {
+            url = dir.appendingPathComponent("\(name).glb")
+        } else if let user = UserModelStore.shared.url(for: "\(name)") {
+            url = user
+        } else {
+            return nil
+        }
         guard let loaded = try? GLBLoader.load(url: url) else { return nil }
         let entity = loaded.entity
         entity.name = name

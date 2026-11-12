@@ -17,6 +17,8 @@ struct OrderFlowView: View {
     var showScan: Bool = true
     /// Warstwa budynku (ściany, podłoga, sufit) niezależnie od skanu.
     var showBuilding: Bool = true
+    /// Siatka pomieszczenia z modelu LiDAR (niezależna warstwa).
+    var showRoomMesh: Bool = true
     var openPlan: () -> Void
     var openScan: () -> Void
     var openDocuments: () -> Void
@@ -51,11 +53,13 @@ struct OrderFlowView: View {
                     .tag(2)
                 ProjectScenePage(model: model, interior: false, scanPlan: scanPlan, locked: locked,
                                  note: "Dom w otoczeniu — widok dla klienta",
-                                 showScan: showScan, showBuilding: showBuilding)
+                                 showScan: showScan, showBuilding: showBuilding,
+                                 showRoomMesh: showRoomMesh)
                     .tag(3)
                 ProjectScenePage(model: model, interior: true, scanPlan: scanPlan, locked: locked,
                                  note: "Kuchnia — zabudowa w skali 1:1",
-                                 showScan: showScan, showBuilding: showBuilding)
+                                 showScan: showScan, showBuilding: showBuilding,
+                                 showRoomMesh: showRoomMesh)
                     .tag(4)
                 NextRoomPage(model: model)
                     .tag(5)
@@ -506,9 +510,10 @@ struct ProjectScenePage: View {
     /// false = odblokowany: można edytować projekt
     var locked: Bool
     var note: String
-    /// rozdzielne przełączniki: skan i bryła budynku niezależnie
+    /// rozdzielne przełączniki: skan, bryła budynku i siatka pomieszczenia
     var showScan = true
     var showBuilding = true
+    var showRoomMesh = true
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -521,7 +526,12 @@ struct ProjectScenePage: View {
                 scanPlan: scanPlan,
                 locked: locked,
                 showScan: showScan,
-                showBuilding: showBuilding
+                showBuilding: showBuilding,
+                roomMesh: model.roomMesh,
+                roomMeshColors: model.roomMeshColors,
+                showRoomMesh: showRoomMesh,
+                selectedCabinetID: model.selectedCabinetID,
+                onSelectCabinet: { model.selectedCabinetID = $0 }
             )
             Text(note)
                 .font(.caption2)

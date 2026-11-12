@@ -39,6 +39,19 @@ struct SceneView: View {
     var showScan = true
     /// Pokaż BRYŁĘ BUDYNKU (ściany, podłoga, sufit) — niezależnie od skanu.
     var showBuilding = true
+    /// SIATKA POMIESZCZENIA ze skanu (ściany z otworami, UV w metrach, kolory).
+    ///
+    /// To jest właściwy wynik modułu LiDAR: geometria z modelu, a nie z
+    /// triangulacji ARKit. Rysowana jako osobna warstwa, żeby można ją było
+    /// porównać z chmurą (czy ściany pokrywają się ze skanem).
+    var roomMesh: RoomMesh.Result?
+    /// Kolory powierzchni siatki (z chmury).
+    var roomMeshColors: [RoomMesh.SurfaceColor] = []
+    /// Pokaż siatkę pomieszczenia (niezależny przełącznik).
+    var showRoomMesh = true
+    /// Zaznaczona szafka (kontury) — klik w scenie ustawia przez `onSelectCabinet`.
+    var selectedCabinetID: UUID?
+    var onSelectCabinet: ((UUID?) -> Void)?
 
     /// Stan kamery niezależny od modelu: przesunięcie celu (m), obrót i zbliżenie.
     // Kamera trzymana poza @State: modyfikowana co klatkę (płynność), bez
@@ -69,6 +82,7 @@ struct SceneView: View {
         var camera: Entity?
         var environment: Entity?
         var fitted: PreviewCamera?
+        var currentCamera: PreviewCamera?
         var cabinetFocus: SIMD3<Float>?
         /// gwiazdki podglądu strefy (mrugają co klatkę)
         var sparkles: Entity?
@@ -114,6 +128,11 @@ struct SceneView: View {
             let cabinetRoot = built.root
             cache.sparkles = cabinetRoot.findEntity(named: "sparkles")
             content.add(cabinetRoot)
+            // SIATKA POMIESZCZENIA z modelu (niezależna warstwa)
+            if showRoomMesh, let roomMesh, !roomMesh.surfaces.isEmpty {
+                let meshEntity = RoomMeshEntity.make(roomMesh, colors: roomMeshColors)
+                content.add(meshEntity)
+            }
             // chmura skanu tylko gdy włączona (niezależnie od bryły)
             let scanEntity = showScan ? scanEntityToAdd() : nil
             if let scanEntity { content.add(scanEntity) }
@@ -232,12 +251,79 @@ struct SceneView: View {
                     onPan: { pan(dx: $0, dy: $1) },
                     onZoom: { zoom(scale: $0) },
                     onEndRotate: { endRotation(velocityX: $0) },
-                    onEndPan: { endPan(velocityX: $0, velocityY: $1) }
+                    onEndPan: { endPan(velocityX: $0, velocityY: $1) },
+                    onTap: { point, size in select(at: point, size: size) }
                 )
             }
             #endif
         }
         .background(Color(red: 0.93, green: 0.92, blue: 0.90))
+    }
+
+    /// Tap w scenie: promień z kamery i najbliższa szafka.
+    private func select(at point: CGPoint, size: CGSize) {
+        guard let cam = cache.currentCamera, size.width > 0, size.height > 0 else { return }
+        let ray = cam.ray(normalizedPoint: point, aspect: Float(size.width / size.height))
+        var best: (Float, UUID)?
+        for c in cabinets {
+            let rotated = c.rotation == 90 || c.rotation == 270
+            let halfW = Float((rotated ? c.depth : c.width) / 2000)
+            let halfD = Float((rotated ? c.width : c.depth) / 2000)
+            let center = SIMD3<Float>(Float(c.x / 1000), Float(c.height / 2000), Float(c.z / 1000))
+            if let t = Self.rayBox(origin: ray.origin, direction: ray.direction,
+                              min: center - SIMD3(halfW, center.y, halfD),
+                              max: center + SIMD3(halfW, center.y, halfD)) {
+                if best == nil || t < best!.0 { best = (t, c.id) }
+            }
+        }
+        onSelectCabinet?(best?.1)
+    }
+
+    private static func rayBox(origin o: SIMD3<Float>, direction d: SIMD3<Float>,
+                               min lo: SIMD3<Float>, max hi: SIMD3<Float>) -> Float? {
+        var tmin: Float = 0
+        var tmax: Float = .greatestFiniteMagnitude
+        for i in 0..<3 {
+            if abs(d[i]) < 1e-6 {
+                if o[i] < lo[i] || o[i] > hi[i] { return nil }
+            } else {
+                var t1 = (lo[i] - o[i]) / d[i]
+                var t2 = (hi[i] - o[i]) / d[i]
+                if t1 > t2 { swap(&t1, &t2) }
+                tmin = max(tmin, t1)
+                tmax = min(tmax, t2)
+                if tmin > tmax { return nil }
+            }
+        }
+        return tmin
+    }
+
+    /// Kontury wszystkich brył szafki (12 krawędzi na każdą bryłę).
+    @MainActor
+    private func outlineEntity(for c: Cabinet) -> Entity {
+        let root = Entity()
+        root.name = "selection-outline"
+        root.position = [Float(c.x / 1000), 0, Float(c.z / 1000)]
+        root.orientation = simd_quatf(angle: Float(c.rotation * .pi / 180), axis: [0, 1, 0])
+        let material = UnlitMaterial(color: .cyan)
+        let t: Float = 0.008
+        for b in Generator.build(c) {
+            let w = Float(b.size.x / 1000), h = Float(b.size.y / 1000), d = Float(b.size.z / 1000)
+            let p = SIMD3<Float>(Float(b.position.x / 1000), Float(b.position.y / 1000), Float(b.position.z / 1000))
+            func edge(_ sx: Float, _ sy: Float, _ sz: Float, _ x: Float, _ y: Float, _ z: Float) {
+                let e = ModelEntity(mesh: .generateBox(width: sx, height: sy, depth: sz), materials: [material])
+                e.position = p + [x, y, z]
+                root.addChild(e)
+            }
+            for sx in [-1 as Float, 1] {
+                for sz in [-1 as Float, 1] { edge(t, h, t, sx * w / 2, 0, sz * d / 2) }
+            }
+            for sy in [-1 as Float, 1] {
+                for sz in [-1 as Float, 1] { edge(w, t, t, 0, sy * h / 2, sz * d / 2) }
+                for sx in [-1 as Float, 1] { edge(t, t, d, sx * w / 2, sy * h / 2, 0) }
+            }
+        }
+        return root
     }
 
     /// Podpis danych sceny — tani do policzenia, zmienia się tylko przy realnych zmianach.
@@ -274,10 +360,13 @@ struct SceneView: View {
                 hasher.combine(cut.width); hasher.combine(cut.height)
             }
         }
+        hasher.combine(selectedCabinetID?.uuidString ?? "")
         hasher.combine(showEnvironment)
         hasher.combine(interiorView)
         hasher.combine(showScan)
         hasher.combine(showBuilding)
+        hasher.combine(showRoomMesh)
+        hasher.combine(roomMesh?.surfaces.count ?? 0)
         hasher.combine(scan != nil)
         hasher.combine(surfaceEntity != nil)
         hasher.combine(showPoints)
@@ -487,6 +576,7 @@ struct SceneView: View {
     /// Tania aktualizacja samej kamery (bez przebudowy sceny).
     private func applyCameraControl(_ camera: Entity, base: PreviewCamera) {
         let cam = controlled(base)
+        cache.currentCamera = cam
         camera.position = cam.position
         camera.look(at: cam.target, from: cam.position, relativeTo: nil)
         if var perspective = camera.components[PerspectiveCameraComponent.self] {
@@ -553,6 +643,7 @@ struct CameraGestureLayer: UIViewRepresentable {
     var onZoom: (Float) -> Void
     var onEndRotate: (Float) -> Void
     var onEndPan: (Float, Float) -> Void
+    var onTap: (CGPoint, CGSize) -> Void = { _, _ in }
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -582,6 +673,15 @@ struct CameraGestureLayer: UIViewRepresentable {
             action: #selector(Coordinator.handlePinch(_:))
         )
         view.addGestureRecognizer(pinch)
+
+        // pojedyncze dotknięcie → zaznaczenie elementu
+        let tap = UITapGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleTap(_:))
+        )
+        tap.delegate = context.coordinator
+        view.addGestureRecognizer(tap)
+
         // Szczypanie MUSI działać równolegle z przesuwaniem dwoma palcami.
         // Wcześniej `pinch.require(toFail: pan)` przy panie na 2 palce
         // blokowało pinch na zawsze — stąd „nie ma przybliżania".
@@ -633,6 +733,12 @@ struct CameraGestureLayer: UIViewRepresentable {
                 parent.onEndPan(Float(v.x), Float(v.y))
             default: break
             }
+        }
+
+        @objc func handleTap(_ g: UITapGestureRecognizer) {
+            let p = g.location(in: g.view)
+            guard let size = g.view?.bounds.size, size.width > 0, size.height > 0 else { return }
+            parent.onTap(CGPoint(x: p.x / size.width, y: p.y / size.height), size)
         }
 
         @objc func handlePinch(_ g: UIPinchGestureRecognizer) {

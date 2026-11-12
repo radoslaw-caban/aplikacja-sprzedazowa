@@ -37,6 +37,8 @@ struct ContentView: View {
     @State private var showScanLayer = true
     /// Warstwa budynku (ściany, podłoga, sufit) — niezależnie od skanu.
     @State private var showBuildingLayer = true
+    /// Warstwa siatki pomieszczenia (ściany z otworami, z modelu LiDAR).
+    @State private var showRoomMeshLayer = true
     @State private var showScan = false
     @State private var showPlan = false
     /// pierwszy krok: pytanie „jak określimy budynek?"
@@ -70,6 +72,7 @@ struct ContentView: View {
     /// przełączała klientów. Teraz jest schowany w dolnej krawędzi i wysuwa
     /// się tylko wtedy, gdy użytkownik go wyciągnie.
     @State private var navOpen = false
+    @State private var dockOpen = true
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -84,6 +87,10 @@ struct ContentView: View {
             } else {
                 detail
             }
+
+            // Biblioteka / edytor wysuwany z lewej krawędzi.
+            LibraryDock(model: model, open: $dockOpen)
+                .zIndex(3)
 
             // Menu wyciągane z lewej krawędzi — zamiast stałego panelu.
             if drawerOpen {
@@ -233,6 +240,9 @@ struct ContentView: View {
                 showScanCloud: $showScanCloud,
                 showScan: $showScanLayer,
                 showBuilding: $showBuildingLayer,
+                showRoomMesh: $showRoomMeshLayer,
+                hasRoomModel: model.roomMesh != nil,
+                roomModelStatus: model.roomModelStatus,
                 hasScan: model.scan != nil,
                 canScan: RoomScanSession.isSupported,
                 onScan: { showScan = true },
@@ -299,6 +309,14 @@ struct ContentView: View {
 
             // hak diagnostyczny: widok FPS na podjeździe
             #if DEBUG
+            if let name = UserDefaults.standard.string(forKey: "demoSelectElement"),
+               !name.isEmpty,
+               let cabinet = model.current.cabinets.first(where: {
+                   $0.name.localizedCaseInsensitiveContains(name)
+               }) {
+                model.selectedCabinetID = cabinet.id
+                try? await Task.sleep(nanoseconds: 400_000_000)
+            }
             if UserDefaults.standard.bool(forKey: "demoCabinets") {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 showCabinets = true
@@ -658,6 +676,7 @@ struct ContentView: View {
                     locked: $locked,
                     showScan: showScanLayer,
                     showBuilding: showBuildingLayer,
+                    showRoomMesh: showRoomMeshLayer,
                     openPlan: {
                         planDraft = model.currentPlan
                         showPlan = true

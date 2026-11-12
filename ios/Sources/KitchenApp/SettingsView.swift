@@ -55,6 +55,10 @@ struct SettingsView: View {
                     slider("Czułość przesuwania", value: $settings.panSensitivity, range: 0.3...2.0)
                     slider("Wygładzanie ruchu", value: $settings.smoothing, range: 0.1...0.95)
                     Toggle("Ołówek przy oddalonym planie", isOn: $settings.showPencil)
+                    Toggle("Efekty magiczne (ramka + brokat)", isOn: Binding(
+                        get: { settings.magicEffects },
+                        set: { settings.magicEffects = $0; dirty = true }
+                    ))
                 } header: {
                     Text("Sterowanie")
                 } footer: {

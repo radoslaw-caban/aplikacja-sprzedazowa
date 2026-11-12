@@ -13,12 +13,27 @@ final class AppModel {
     /// indeks przeglądanego dokumentu (nil = pokazujemy scenę 3D)
     var documentIndex: Int?
     var status: String?
+    /// Zaznaczona szafka w scenie 3D — panel biblioteki zamienia się w edytor.
+    var selectedCabinetID: UUID?
     /// skan pomieszczenia wczytany do sceny (metry) — nil = brak skanu
     var scan: PointCloud?
     /// transformacja skanu do układu projektu
     var scanTransform = ScanTransform()
     /// nazwa pliku skanu wczytanego do sceny
     var scanName: String?
+
+    // MARK: - model pomieszczenia ze skanu
+
+    /// Model pomieszczenia rozpoznany ze skanu (narożniki, ściany, otwory).
+    var roomModel: RoomModel.Result?
+    /// Siatka pomieszczenia z modelu (ściany z otworami, podłoga, sufit).
+    var roomMesh: RoomMesh.Result?
+    /// Kolory powierzchni wyliczone z chmury (mediana — odporna na odblaski).
+    var roomMeshColors: [RoomMesh.SurfaceColor] = []
+    /// Kontur pomieszczenia w planie (metry) — do rysowania na rzucie.
+    var roomOutline: [SIMD2<Float>] = []
+    /// Komunikat o stanie modelu (pokazywany w UI).
+    var roomModelStatus: String?
 
     /// „Pulpit projektowy": klienci, nad którymi pracujemy teraz (przewijanie góra/dół).
     var workingSet: [UUID] = []
@@ -301,14 +316,22 @@ final class AppModel {
 
     /// Zapis edytowanej szafki (wymiary, położenie, typ, przeznaczenie, wnętrze).
     func updateCabinet(_ cabinet: Cabinet) {
-        guard projects.indices.contains(currentIndex) else { return }
-        var cabinets = projects[currentIndex].cabinets
+        guard let projectIndex = projects.firstIndex(where: { project in
+            project.cabinets.contains { $0.id == cabinet.id }
+        }) else { return }
+        var cabinets = projects[projectIndex].cabinets
         guard let i = cabinets.firstIndex(where: { $0.id == cabinet.id }) else { return }
         cabinets[i] = cabinet
-        projects[currentIndex].cabinets = cabinets
-        projects[currentIndex].updatedAt = Date()
+        projects[projectIndex].cabinets = cabinets
+        projects[projectIndex].updatedAt = Date()
+        if projectIndex == currentIndex { status = "Zapisano szafkę: \(cabinet.name)" }
         persist()
-        status = "Zapisano szafkę: \(cabinet.name)"
+    }
+
+    /// Szafka po ID — także gdy zaznaczenie pochodzi z chwilowo innego projektu.
+    func cabinet(id: UUID) -> Cabinet? {
+        if let c = current.cabinets.first(where: { $0.id == id }) { return c }
+        return projects.lazy.flatMap(\.cabinets).first { $0.id == id }
     }
 
     func deleteCabinet(_ id: UUID) {
@@ -529,6 +552,11 @@ final class AppModel {
             scanName = doc.fileName
             scanTransform = ScanTransform()
             documentIndex = nil
+
+            // MODEL POMIESZCZENIA ze skanu: narożniki, ściany, otwory + siatka.
+            // Liczone w tle, żeby zapis skanu nie czekał na detekcję
+            // (na 400 tys. punktów to ~200 ms, na 2 mln — kilka sekund).
+            buildRoomModel(from: cloud)
             // pokaz realną dokładność, nie tylko liczbę punktów
             if let report = ScanPLYWriter.qualityReport(cloud) {
                 let sigmaLine = report
@@ -544,6 +572,49 @@ final class AppModel {
         } catch {
             status = "Nie udało się zapisać skanu: \(error.localizedDescription)"
             return false
+        }
+    }
+
+    // MARK: - model pomieszczenia ze skanu
+
+    /// Buduje model pomieszczenia i siatkę ze skanu — w tle, wynik do sceny.
+    ///
+    /// Kolejność jest wymogiem produktowym: NAJPIERW geometria (narożniki,
+    /// kontur, ściany), DOPIERO na to siatka z UV i kolorem. Nigdy odwrotnie —
+    /// siatka z triangulacji ARKit nie ma wymiarów.
+    ///
+    /// Chmura z ARKit jest w metrach z pionem w Y, więc pasuje do `RoomModel`
+    /// bez zamiany osi (inaczej niż skan X9, gdzie pion jest w Z).
+    func buildRoomModel(from cloud: PointCloud) {
+        roomModelStatus = "Liczę model pomieszczenia…"
+        let samples = cloud.positions.map {
+            RoomModel.Sample(position: $0, sigma: 0.004)
+        }
+        let coloredCloud = cloud
+
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let model = RoomModel.build(from: samples) else {
+                await MainActor.run {
+                    self?.roomModelStatus = "Model pomieszczenia: nie udało się rozpoznać ścian"
+                    self?.roomMesh = nil
+                }
+                return
+            }
+            let mesh = RoomMesh.build(model: model)
+            let colors = RoomMesh.averageColors(mesh: mesh, cloud: coloredCloud)
+            let outline = model.corners.map { SIMD2<Float>($0.x, $0.z) }
+
+            await MainActor.run {
+                guard let self else { return }
+                self.roomModel = model
+                self.roomMesh = mesh
+                self.roomMeshColors = colors
+                self.roomOutline = outline
+                self.roomModelStatus = String(
+                    format: "Model: %d narożników, %d ścian, %d otworów · %.2f m² · %.2f m",
+                    model.corners.count, model.walls.count, model.openings.count,
+                    model.area, model.height)
+            }
         }
     }
 
