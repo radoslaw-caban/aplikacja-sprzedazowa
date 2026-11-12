@@ -139,7 +139,12 @@ public enum WallFill {
             return Result(cabinets: [], panels: [], width: 0, runLength: 0, note: "Brak ściany \(wallIndex)")
         }
         let height = cabinetType == .wall ? Standards.wallDepth + 300 : Standards.baseHeight
-        return fill(
+        // Wynik zwracamy w układzie **sceny** (środek pomieszczenia w 0,0),
+        // bo tam trafiają szafki z biblioteki. Plan może być narysowany gdziekolwiek.
+        let b = plan.bounds
+        let cx = (b.min.x + b.max.x) / 2
+        let cz = (b.min.y + b.max.y) / 2
+        var result = fill(
             wallStart: wall.a,
             wallEnd: wall.b,
             cabinetHeight: cabinetType == .wall ? 720 : height,
@@ -147,5 +152,16 @@ public enum WallFill {
             plinth: cabinetType == .wall ? 0 : Standards.plinthHeight,
             targetWidth: targetWidth
         )
+        if abs(cx) > 0.5 || abs(cz) > 0.5 {
+            func centered(_ c: Cabinet) -> Cabinet {
+                var copy = c
+                copy.x = Units.quantize(c.x - cx)
+                copy.z = Units.quantize(c.z - cz)
+                return copy
+            }
+            result.cabinets = result.cabinets.map(centered)
+            result.panels = result.panels.map(centered)
+        }
+        return result
     }
 }

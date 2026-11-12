@@ -27,15 +27,26 @@ struct SceneView: View {
     var picking = false
     /// znormalizowany punkt ekranu (0…1) po dotknięciu
     var onPick: ((CGPoint, CGSize) -> Void)?
-    /// true = projekt zablokowany: przeciąganie PRZESUWA widok.
-    /// false = odblokowany: przeciąganie OBRACA projekt wokół celu.
+    /// true = projekt zablokowany: gesty tylko oglądają (brak edycji).
+    /// false = odblokowany: można edytować projekt.
     var locked: Bool = true
+    /// Pokaż SKAN (chmurę z X9 albo z iPada) — niezależnie od bryły budynku.
+    ///
+    /// Wymóg: „chcę mieć skan z X9 wyłączany oddzielnie i budynek oddzielnie".
+    /// Dlatego to jest osobny przełącznik, a nie skutek uboczny posiadania skanu:
+    /// wcześniej samo wczytanie chmury włączało ją na stałe i wyłączało ściany
+    /// budynku (`walls: scan == nil`), więc nie dało się porównać jednego z drugim.
+    var showScan = true
+    /// Pokaż BRYŁĘ BUDYNKU (ściany, podłoga, sufit) — niezależnie od skanu.
+    var showBuilding = true
 
     /// Stan kamery niezależny od modelu: przesunięcie celu (m), obrót i zbliżenie.
     // Kamera trzymana poza @State: modyfikowana co klatkę (płynność), bez
     // wywoływania przebudowy SwiftUI 60 razy na sekundę.
     @State private var lastDragStart = CGPoint.zero
     @State private var lastDrag: CGSize = .zero
+    /// osobny licznik dla gestu dwoma palcami (przesuwanie widoku)
+    @State private var lastPanDrag: CGSize = .zero
 
     /// Cache sceny: przebudowujemy ją TYLKO gdy zmienią się dane.
     /// Wcześniej `update:` kasowało i budowało całe otoczenie przy KAŻDEJ
@@ -79,8 +90,12 @@ struct SceneView: View {
             content.renderingEffects.motionBlur = .enabled
             #endif
             content.add(SceneBuilder.sunlight())
-            content.add(SceneBuilder.buildRoom(room, walls: scan == nil, scanPlan: scanPlan, scanCloud: showScanCloud))
-            if showEnvironment, scan == nil {
+            // ściany budynku tylko gdy włączone (niezależnie od skanu)
+            if showBuilding {
+                content.add(SceneBuilder.buildRoom(room, walls: true, scanPlan: scanPlan,
+                                                   scanCloud: showScanCloud))
+            }
+            if showEnvironment, !showScan {
                 let environment = EnvironmentBuilder.makeEntity(room: room)
                 cache.environment = environment
                 content.add(environment)
@@ -96,7 +111,8 @@ struct SceneView: View {
             let cabinetRoot = built.root
             cache.sparkles = cabinetRoot.findEntity(named: "sparkles")
             content.add(cabinetRoot)
-            let scanEntity = scanEntityToAdd()
+            // chmura skanu tylko gdy włączona (niezależnie od bryły)
+            let scanEntity = showScan ? scanEntityToAdd() : nil
             if let scanEntity { content.add(scanEntity) }
             // kadr: skan, a bez skanu — zabudowa (nie cały pokój)
             let base = baseCamera(scanEntity: scanEntity, built: built)
@@ -140,8 +156,11 @@ struct SceneView: View {
                 cache.signature = signature
                 content.entities.removeAll()
                 content.add(SceneBuilder.sunlight())
-                content.add(SceneBuilder.buildRoom(room, walls: scan == nil, scanPlan: scanPlan, scanCloud: showScanCloud))
-                if showEnvironment, scan == nil {
+                if showBuilding {
+                    content.add(SceneBuilder.buildRoom(room, walls: true, scanPlan: scanPlan,
+                                                       scanCloud: showScanCloud))
+                }
+                if showEnvironment, !showScan {
                     let environment = EnvironmentBuilder.makeEntity(room: room)
                     cache.environment = environment
                     content.add(environment)
@@ -174,10 +193,26 @@ struct SceneView: View {
             #endif
         }
         .contentShape(Rectangle())
+        #if os(macOS)
         .simultaneousGesture(cameraDrag)
-        #if os(iOS)
-        .simultaneousGesture(cameraZoom)
         #endif
+        // Na iOS gesty obsługuje warstwa UIKit — tylko ona rozróżnia palce.
+        .overlay {
+            #if os(iOS)
+            // Warstwa gestów NIE działa przy wskazywaniu punktów skanu:
+            // wtedy nad sceną jest `TapCatcher` i gesty muszą do niego trafić,
+            // inaczej nie da się kliknąć punktu w chmurze.
+            if !picking {
+                CameraGestureLayer(
+                    onRotate: { rotate(dx: $0, dy: $1) },
+                    onPan: { pan(dx: $0, dy: $1) },
+                    onZoom: { zoom(scale: $0) },
+                    onEndRotate: { endRotation(velocityX: $0) },
+                    onEndPan: { endPan(velocityX: $0, velocityY: $1) }
+                )
+            }
+            #endif
+        }
         .background(Color(red: 0.93, green: 0.92, blue: 0.90))
     }
 
@@ -206,6 +241,8 @@ struct SceneView: View {
         }
         hasher.combine(showEnvironment)
         hasher.combine(interiorView)
+        hasher.combine(showScan)
+        hasher.combine(showBuilding)
         hasher.combine(scan != nil)
         hasher.combine(surfaceEntity != nil)
         hasher.combine(showPoints)
@@ -215,43 +252,64 @@ struct SceneView: View {
 
     // MARK: - sterowanie kamerą
 
-    /// Zablokowany: przesuwanie widoku (góra/dół/lewo/prawo).
-    /// Odblokowany: obrót projektu wokół celu (yaw + pochylenie).
+    // MARK: - sterowanie kamerą (macOS)
+    //
+    // NA iOS GESTY OBSŁUGUJE `CameraGestureLayer` (UIKit) — patrz niżej.
+    // Powód: `DragGesture` w tym SDK przyjmuje wyłącznie `minimumDistance`
+    // i `coordinateSpace`, więc NIE MA sposobu, by rozróżnić jeden palec od
+    // dwóch (próba `maximumNumberOfTouches:` kończy się błędem kompilacji).
+    // Bez tego rozróżnienia obrót i przesuwanie wchodziłyby naraz — dokładnie
+    // to zgłoszony problem „wariuje obrót".
+
+    #if os(macOS)
     private var cameraDrag: some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
                 let dx = Float(value.translation.width - lastDrag.width)
                 let dy = Float(value.translation.height - lastDrag.height)
                 lastDrag = value.translation
-                if locked {
-                    // przesunięcie w metrach, proporcjonalne do skali sceny
-                    let speed: Float = interiorView ? 0.006 : 0.05
-                    cache.panTarget.x = min(120, max(-120, cache.panTarget.x - dx * speed))
-                    cache.panTarget.y = min(120, max(-120, cache.panTarget.y - dy * speed))
-                    // prędkość do „dogonienia" po puszczeniu palca
-                    cache.panVelocity = SIMD2(-dx * speed, -dy * speed) * 0.55
-                } else {
-                    cache.yawTarget -= dx * 0.006
-                    cache.pitchTarget = min(1.15, max(-0.35, cache.pitchTarget + dy * 0.004))
-                    cache.yawVelocity = -dx * 0.006 * 0.5
-                }
+                rotate(dx: dx, dy: dy)
             }
             .onEnded { _ in
                 lastDrag = .zero
-            }
-    }
-
-    #if os(iOS)
-    /// Zbliżenie: pinch zmienia odległość kamery od celu.
-    private var cameraZoom: some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                // wykładniczo i z czułością z Ustawień — brak „latania" przy szczypaniu
-                let factor = pow(1 / Float(max(0.2, value.magnification)), Float(settings.zoomSensitivity))
-                cache.zoomTarget = min(2.6, max(0.35, cache.zoomTarget * factor))
+                cache.yawVelocity = 0
             }
     }
     #endif
+
+    /// Obrót projektu jednym palcem (lub myszą na Macu).
+    func rotate(dx: Float, dy: Float) {
+        let yawSpeed = Float(0.006 * settings.panSensitivity)
+        cache.yawTarget -= dx * yawSpeed
+        // pod podłogę nie schodzimy; nad horyzontem można patrzeć z góry
+        cache.pitchTarget = min(1.15, max(-0.35, cache.pitchTarget + dy * 0.004))
+        cache.yawVelocity = -dx * yawSpeed * 0.5
+    }
+
+    /// Przesuwanie widoku dwoma palcami.
+    func pan(dx: Float, dy: Float) {
+        let speed = Float((interiorView ? 0.006 : 0.05) * settings.panSensitivity)
+        cache.panTarget.x = min(120, max(-120, cache.panTarget.x - dx * speed))
+        cache.panTarget.y = min(120, max(-120, cache.panTarget.y - dy * speed))
+        cache.panVelocity = SIMD2(-dx * speed, -dy * speed) * 0.55
+    }
+
+    /// Zbliżenie szczypaniem — wykładniczo, żeby nie „latało".
+    func zoom(scale: Float) {
+        let factor = pow(1 / Float(max(0.2, scale)), Float(settings.zoomSensitivity))
+        cache.zoomTarget = min(2.6, max(0.35, cache.zoomTarget * factor))
+    }
+
+    /// Prędkość po puszczeniu palca — bezwładność obrotu i przesuwania.
+    func endRotation(velocityX: Float) {
+        let yawSpeed = Float(0.006 * settings.panSensitivity)
+        cache.yawVelocity = -velocityX * yawSpeed * 0.02
+    }
+
+    func endPan(velocityX: Float, velocityY: Float) {
+        let speed = Float((interiorView ? 0.006 : 0.05) * settings.panSensitivity)
+        cache.panVelocity = SIMD2(velocityX * speed * 0.02, velocityY * speed * 0.02)
+    }
 
     /// Encja skanu: gotowa powierzchnia albo chmura punktów.
     @MainActor
@@ -380,7 +438,13 @@ struct SceneView: View {
 
         if yaw != 0 || pitch != 0 || distanceScale != 1 {
             let offset = position - target
-            let radius = max(0.5, simd_length(offset) * distanceScale)
+            // Promień orbity mnożymy przez ustawienie użytkownika. Bez tego
+            // obrót jest „lotem wokół odległego celu" — przy automatycznym
+            // kadrze promień bywa większy niż samo pomieszczenie, więc palec
+            // na ekranie przesuwa kamerę po wielkim łuku zamiast obracać
+            // projektem w ręku.
+            let orbitScale = Float(settings.clampedOrbitRadiusScale)
+            let radius = max(0.5, simd_length(offset) * distanceScale * orbitScale)
             let baseYaw = atan2(offset.x, offset.z)
             let horizontal = max(0.001, sqrt(offset.x * offset.x + offset.z * offset.z))
             let basePitch = atan2(offset.y, horizontal)
@@ -407,6 +471,111 @@ struct SceneView: View {
 }
 
 #if os(iOS)
+
+/// Warstwa gestów dla sceny 3D: JEDEN palec obraca, DWA przesuwają, szczypanie zbliża.
+///
+/// DLACZEGO UIKit, A NIE `DragGesture`: `DragGesture` w tym SDK nie ma
+/// parametrów liczby palców, więc nie da się nim rozróżnić jednego palca od
+/// dwóch. Bez tego rozróżnienia obrót i przesuwanie uruchamiały się naraz —
+/// projekt kręcił się i jednocześnie uciekał w bok (zgłoszony „wariujący obrót").
+/// `UIPanGestureRecognizer` ma `minimumNumberOfTouches`/`maximumNumberOfTouches`
+/// wprost, więc reguła jest jednoznaczna.
+struct CameraGestureLayer: UIViewRepresentable {
+    var onRotate: (Float, Float) -> Void
+    var onPan: (Float, Float) -> Void
+    var onZoom: (Float) -> Void
+    var onEndRotate: (Float) -> Void
+    var onEndPan: (Float, Float) -> Void
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+
+        // JEDEN palec → obrót
+        let rotate = UIPanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleRotate(_:))
+        )
+        rotate.minimumNumberOfTouches = 1
+        rotate.maximumNumberOfTouches = 1
+        view.addGestureRecognizer(rotate)
+
+        // DWA palce → przesuwanie
+        let pan = UIPanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePan(_:))
+        )
+        pan.minimumNumberOfTouches = 2
+        pan.maximumNumberOfTouches = 2
+        view.addGestureRecognizer(pan)
+
+        // szczypanie → zbliżenie (jednocześnie z przesuwaniem, jak w mapach)
+        let pinch = UIPinchGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePinch(_:))
+        )
+        view.addGestureRecognizer(pinch)
+        // Szczypanie MUSI działać równolegle z przesuwaniem dwoma palcami.
+        // Wcześniej `pinch.require(toFail: pan)` przy panie na 2 palce
+        // blokowało pinch na zawsze — stąd „nie ma przybliżania".
+        pinch.delegate = context.coordinator
+        pan.delegate = context.coordinator
+
+        context.coordinator.parent = self
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.parent = self
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var parent: CameraGestureLayer
+
+        /// Dwa palce = jednocześnie przesuwanie i szczypanie (jak w Mapach).
+        func gestureRecognizer(_ g: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            true
+        }
+        init(parent: CameraGestureLayer) { self.parent = parent }
+
+        @objc func handleRotate(_ g: UIPanGestureRecognizer) {
+            let t = g.translation(in: g.view)
+            let v = g.velocity(in: g.view)
+            switch g.state {
+            case .changed:
+                parent.onRotate(Float(t.x), Float(t.y))
+                // zerujemy, żeby liczyć przyrosty, a nie sumę od początku
+                g.setTranslation(.zero, in: g.view)
+            case .ended, .cancelled:
+                parent.onEndRotate(Float(v.x))
+            default: break
+            }
+        }
+
+        @objc func handlePan(_ g: UIPanGestureRecognizer) {
+            let t = g.translation(in: g.view)
+            let v = g.velocity(in: g.view)
+            switch g.state {
+            case .changed:
+                parent.onPan(Float(t.x), Float(t.y))
+                g.setTranslation(.zero, in: g.view)
+            case .ended, .cancelled:
+                parent.onEndPan(Float(v.x), Float(v.y))
+            default: break
+            }
+        }
+
+        @objc func handlePinch(_ g: UIPinchGestureRecognizer) {
+            guard g.state == .changed else { return }
+            parent.onZoom(Float(g.scale))
+            g.scale = 1
+        }
+    }
+}
+
 /// Przechwytywanie dotknięć nad sceną 3D (RealityView sam nie zwraca punktu ekranu).
 struct TapCatcher: UIViewRepresentable {
     var onTap: (CGPoint, CGSize) -> Void

@@ -1009,4 +1009,30 @@ final class GestureNavTests: XCTestCase {
         let back = try JSONDecoder().decode(CabinetCutout.self, from: data)
         XCTAssertEqual(back, cut)
     }
+
+    /// Szafki po „Wstaw szafki" muszą stać PRZY ŚCIANIE POMIESZCZENIA,
+    /// także gdy plan jest narysowany daleko od początku układu.
+    func testWallFillIsCenteredOnRoom() {
+        let plan = FloorPlan.rectangle(x: 5000, z: 7000, width: 6000, depth: 4000, height: 2600)
+        let result = WallFill.fill(plan: plan, wallIndex: 0)
+        XCTAssertFalse(result.cabinets.isEmpty)
+
+        for cabinet in result.cabinets {
+            // `z` to ŚRODEK szafki: tył = z − głębokość/2, przód = z + głębokość/2
+            let back = cabinet.z - cabinet.depth / 2
+            let front = cabinet.z + cabinet.depth / 2
+            XCTAssertEqual(back, -2000, accuracy: 30, "tył szafki nie przy ścianie: \(back)")
+            XCTAssertLessThan(front, -1400, "szafka wystaje poza pomieszczenie: przód \(front)")
+            XCTAssertLessThanOrEqual(abs(cabinet.x) + cabinet.width / 2, 3000.5, "szafka poza szerokością: x=\(cabinet.x)")
+        }
+    }
+
+    /// Środek planu = środek pomieszczenia: suma pozycji blisko zera.
+    func testWallFillKeepsSymmetryForCenteredPlan() {
+        let plan = FloorPlan.rectangle(width: 6000, depth: 4000, height: 2600)
+        let result = WallFill.fill(plan: plan, wallIndex: 0)
+        let xs = result.cabinets.map { $0.x }
+        let center = (xs.min()! + xs.max()!) / 2
+        XCTAssertEqual(center, 0, accuracy: 5, "zabudowa nie jest wyśrodkowana")
+    }
 }

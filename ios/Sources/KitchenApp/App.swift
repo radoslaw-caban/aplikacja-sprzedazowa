@@ -33,6 +33,10 @@ struct ContentView: View {
     /// (domyślnie wyłączona; `defaults write ... showScanCloud -bool YES`
     /// pozwala zweryfikować dopasowanie bez dotykania ekranu)
     @State private var showScanCloud = UserDefaults.standard.bool(forKey: "showScanCloud")
+    /// Warstwa skanu (chmura X9 / z iPada) — włączana NIEZALEŻNIE od budynku.
+    @State private var showScanLayer = true
+    /// Warstwa budynku (ściany, podłoga, sufit) — niezależnie od skanu.
+    @State private var showBuildingLayer = true
     @State private var showScan = false
     @State private var showPlan = false
     /// pierwszy krok: pytanie „jak określimy budynek?"
@@ -42,18 +46,27 @@ struct ContentView: View {
     @State private var planStartImport = false
     @State private var showZones = false
     @State private var showCutouts = false
+    @State private var showCabinets = false
     @State private var zoneWall = 0
     @State private var showTextures = false
     @State private var showSettings = false
     @State private var showNewClient = false
     @State private var showContract = false
     @State private var showFPS = false
+    @State private var showViewOptions = false
     @State private var showClientProjects = false
     @State private var planDraft = FloorPlan.rectangle()
     /// Projekt zablokowany: na ekranie tylko 3D i kłódka (przeciąganie przesuwa).
     @State private var locked = true
     /// Menu wysunięte z lewej krawędzi.
     @State private var drawerOpen = false
+    /// Pasek nawigacji wysunięty z DOLNEJ krawędzi.
+    ///
+    /// POPRAWKA (zgłoszony błąd): górny pasek zajmował miejsce i kolidował
+    /// z gestami sceny 3D — próba obrócenia projektu w górnej części ekranu
+    /// przełączała klientów. Teraz jest schowany w dolnej krawędzi i wysuwa
+    /// się tylko wtedy, gdy użytkownik go wyciągnie.
+    @State private var navOpen = false
 
     var body: some View {
         ZStack(alignment: .leading) {
@@ -83,46 +96,10 @@ struct ContentView: View {
             edgeHandle
                 .zIndex(4)
         }
-        .overlay(alignment: .topLeading) {
+        // Pasek nawigacji na DOLNEJ krawędzi (wysuwany), zamiast overlay u góry.
+        .overlay(alignment: .bottom) {
             if !locked {
-                HStack(alignment: .top, spacing: 8) {
-                    ClientSearchBar(
-                        projects: model.projects,
-                        currentName: ClientDirectory.displayName(model.current),
-                        currentAddress: model.current.order?.address ?? "",
-                        workingSet: model.workingSet,
-                        onOpen: { id in
-                            if let index = model.projects.firstIndex(where: { $0.id == id }) {
-                                model.selectProject(index)
-                            }
-                        },
-                        onToggleWorking: { model.toggleWorkingSet($0) },
-                        onNewClient: { showNewClient = true }
-                    )
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 24).onEnded { value in
-                            guard model.workingSet.count > 1 else { return }
-                            if value.translation.height > 40 { model.switchWorking(step: 1) }
-                            if value.translation.height < -40 { model.switchWorking(step: -1) }
-                        }
-                    )
-
-                    if model.workingSet.count > 1 {
-                        VStack(spacing: 4) {
-                            Button { model.switchWorking(step: -1) } label: {
-                                Image(systemName: "chevron.up").font(.caption.weight(.bold))
-                            }
-                            Button { model.switchWorking(step: 1) } label: {
-                                Image(systemName: "chevron.down").font(.caption.weight(.bold))
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .padding(8)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                }
-                .padding(.top, 10)
-                .padding(.leading, 14)
+                bottomNavigation
             }
         }
         .planPresentation(isPresented: $showPlanMethod) {
@@ -201,7 +178,11 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showClientProjects) {
-            ClientProjectsSheet(model: model, onClose: { showClientProjects = false })
+            ClientProjectsSheet(
+                model: model,
+                onClose: { showClientProjects = false },
+                onUnlock: { locked = false }
+            )
         }
         .animation(.easeInOut(duration: 0.22), value: drawerOpen)
         .animation(.easeInOut(duration: 0.2), value: locked)
@@ -237,6 +218,7 @@ struct ContentView: View {
             #endif
         }
         .modifier(CutoutPresenter(isPresented: $showCutouts, model: model))
+        .modifier(CabinetManagerPresenter(isPresented: $showCabinets, model: model))
         .sheet(isPresented: $showZones) {
             ZoneDesignerView(model: model, initialWall: zoneWall)
         }
@@ -247,6 +229,35 @@ struct ContentView: View {
             TextureLibraryView { texture in
                 applyTexture(named: texture.name)
             }
+        }
+        .sheet(isPresented: $showViewOptions) {
+            ViewOptionsSheet(
+                interiorView: $interiorView,
+                useScanHouse: $useScanHouse,
+                showScanCloud: $showScanCloud,
+                showScan: $showScanLayer,
+                showBuilding: $showBuildingLayer,
+                hasScan: model.scan != nil,
+                canScan: RoomScanSession.isSupported,
+                onScan: { showScan = true },
+                onClearScan: { model.clearScan() },
+                onPlan: {
+                    planDraft = model.currentPlan
+                    showPlan = true
+                },
+                onTextures: { showTextures = true },
+                onFirstPerson: AppSettings.load().showFirstPersonModule ? { showFPS = true } : nil,
+                onPersist: {
+                    var s = AppSettings.load()
+                    s.interiorView = interiorView
+                    s.useScanHouse = useScanHouse
+                    s.showScanCloud = showScanCloud
+                    s.showScanLayer = showScanLayer
+                    s.showBuildingLayer = showBuildingLayer
+                    s.save()
+                }
+            )
+            .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showScan) {
             #if os(iOS)
@@ -322,7 +333,11 @@ struct ContentView: View {
                 print("[ui] strefy otwarte: ściana 1, stref \(model.currentZones.count)")
             }
             #endif
-            if UserDefaults.standard.bool(forKey: "demoFPS") {
+            // Moduł pierwszoosobowy jest ukryty; hak diagnostyczny działa tylko
+            // po włączeniu go w Ustawieniach.
+            if UserDefaults.standard.bool(forKey: "demoFPS"),
+               (AppSettings.load().showFirstPersonModule
+                || UserDefaults.standard.bool(forKey: "demoForceFPS")) {
                 try? await Task.sleep(nanoseconds: 600_000_000)
                 showFPS = true
             }
@@ -374,6 +389,19 @@ struct ContentView: View {
                     showPlanMethod = true
                 }
             }
+            if UserDefaults.standard.bool(forKey: "demoInterior") {
+                interiorView = true
+            }
+
+            // hak: wypełnij ścianę szafkami i pokaż 3D (weryfikacja położenia)
+            if UserDefaults.standard.object(forKey: "demoFillWall") != nil {
+                let wall = UserDefaults.standard.integer(forKey: "demoFillWall")
+                planDraft = model.currentPlan
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                fillWall(wall)
+                showPlan = false
+            }
+
             if UserDefaults.standard.bool(forKey: "demoPlan") {
                 // weryfikacja widoku mapy bez dotykania ekranu
                 planDraft = model.currentPlan
@@ -461,6 +489,12 @@ struct ContentView: View {
                 } label: {
                     Label("Wycięcia w szafkach (zlew, płyta, uchwyty)", systemImage: "scissors")
                 }
+                Button {
+                    showCabinets = true
+                    drawerOpen = false
+                } label: {
+                    Label("Szafki — edytor (wymiary, front, wnętrze)", systemImage: "cabinet.fill")
+                }
             }
 
             Section("Biblioteka · podblatowe") {
@@ -546,13 +580,33 @@ struct ContentView: View {
         model.status = "Ściana \(index + 1): " + result.note
     }
 
+    /// Dodaje szafkę z biblioteki — TYŁEM DO ŚCIANY, frontem do pomieszczenia.
+    ///
+    /// Pierwsza szafka idzie na ścianę północną, kolejne dostawiają się do niej
+    /// w tym samym rzędzie (jeśli jest miejsce). Gdy rząd jest pełny, szafka
+    /// przeskakuje na następną ścianę — nigdy nie ląduje „w powietrzu"
+    /// ani przodem w ścianę.
     private func add(_ t: Library.Template) {
         var cabinets = model.current.cabinets
         let new = Library.make(t)
+
         if let placed = Generator.placeNext(to: cabinets, new: new) {
             cabinets.append(placed)
+        } else if cabinets.isEmpty {
+            cabinets.append(Generator.placedAgainstWall(new, wall: 0, room: model.current.room))
         } else {
-            cabinets.append(new)
+            // następna ściana z wolnym miejscem
+            let walls = [0, 1, 2, 3]
+            var done = false
+            for wall in walls {
+                let candidate = Generator.placedAgainstWall(new, wall: wall, room: model.current.room)
+                if !cabinets.contains(where: { Collision.overlaps($0, candidate) }) {
+                    cabinets.append(candidate)
+                    done = true
+                    break
+                }
+            }
+            if !done { cabinets.append(Generator.placedAgainstWall(new, wall: 0, room: model.current.room)) }
         }
         model.updateCabinets(cabinets)
         model.persist()
@@ -572,6 +626,8 @@ struct ContentView: View {
                     scanPlan: useScanHouse ? ScanPlan.bundled() : nil,
                     interiorView: $interiorView,
                     locked: $locked,
+                    showScan: showScanLayer,
+                    showBuilding: showBuildingLayer,
                     openPlan: {
                         planDraft = model.currentPlan
                         showPlan = true
@@ -582,7 +638,6 @@ struct ContentView: View {
                     openClientProjects: { showClientProjects = true }
                 )
             }
-            bottomBar
         }
     }
 
@@ -653,74 +708,133 @@ struct ContentView: View {
         }
     }
 
-    private var bottomBar: some View {
+    // MARK: - pasek nawigacji z dolnej krawędzi
+
+    /// Pasek nawigacji wysuwany z dolnej krawędzi.
+    ///
+    /// Ukryty domyślnie — nad sceną 3D został tylko cienki „język" do
+    /// pociągnięcia. Wysunięty pokazuje wyszukiwarkę klientów, przełączanie
+    /// klientów (przyciskami, bez gestów) i wejścia do pozostałych ekranów.
+    /// Nie zajmuje górnej krawędzi, więc nie koliduje z obrotem projektu.
+    @ViewBuilder
+    private var bottomNavigation: some View {
+        VStack(spacing: 0) {
+            if navOpen {
+                VStack(spacing: 10) {
+                    HStack(alignment: .top, spacing: 8) {
+                        ClientSearchBar(
+                            projects: model.projects,
+                            currentName: ClientDirectory.displayName(model.current),
+                            currentAddress: model.current.order?.address ?? "",
+                            workingSet: model.workingSet,
+                            onOpen: { id in
+                                if let index = model.projects.firstIndex(where: { $0.id == id }) {
+                                    model.selectProject(index)
+                                }
+                            },
+                            onToggleWorking: { model.toggleWorkingSet($0) },
+                            onNewClient: { showNewClient = true }
+                        )
+                        if model.workingSet.count > 1 {
+                            VStack(spacing: 4) {
+                                Button { model.switchWorking(step: -1) } label: {
+                                    Image(systemName: "chevron.up").font(.caption.weight(.bold))
+                                }
+                                Button { model.switchWorking(step: 1) } label: {
+                                    Image(systemName: "chevron.down").font(.caption.weight(.bold))
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .padding(8)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }
+                    statusStrip
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // język do pociągnięcia + przyciski szybkie
+            HStack(spacing: 14) {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        navOpen.toggle()
+                    }
+                } label: {
+                    Image(systemName: navOpen ? "chevron.down" : "chevron.up")
+                        .font(.footnote.weight(.semibold))
+                        .frame(width: 30, height: 26)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(navOpen ? "Ukryj nawigację" : "Pokaż nawigację")
+
+                Button { showViewOptions = true } label: {
+                    Label("Opcje", systemImage: "square.grid.2x2")
+                        .font(.footnote)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    planDraft = model.currentPlan
+                    showPlan = true
+                } label: {
+                    Label("Plan", systemImage: "map").font(.footnote)
+                }
+                .buttonStyle(.plain)
+
+                Button { showClientProjects = true } label: {
+                    Label("Kartoteka", systemImage: "person.2").font(.footnote)
+                }
+                .buttonStyle(.plain)
+
+                Button { showSettings = true } label: {
+                    Label("Ustawienia", systemImage: "gear").font(.footnote)
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+
+                Button { showScan = true } label: {
+                    Label("Skanuj", systemImage: "sensor.tag.radiowaves.forward")
+                        .font(.footnote)
+                }
+                .buttonStyle(.plain)
+                .disabled(!RoomScanSession.isSupported)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 7)
+            .background(.regularMaterial)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
+        .gesture(
+            DragGesture(minimumDistance: 12)
+                .onEnded { value in
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        if value.translation.height < -24 { navOpen = true }
+                        if value.translation.height > 24 { navOpen = false }
+                    }
+                }
+        )
+    }
+
+    /// Pasek statusu: nazwa klienta, liczba szafek, komunikat. Bez przycisków —
+    /// te są w „Opcjach widoku" (kafelki w arkuszu).
+    private var statusStrip: some View {
         HStack(spacing: 12) {
-            Text(model.current.name).font(.callout)
-            Text("\(model.current.cabinets.count) szafek").font(.callout).foregroundStyle(.secondary)
+            Text(model.current.name).font(.callout.weight(.medium))
+            Text("\(model.current.cabinets.count) szafek")
+                .font(.callout).foregroundStyle(.secondary)
             if let status = model.status {
                 Text("· \(status)").font(.callout).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            Button {
-                planDraft = model.currentPlan
-                showPlan = true
-            } label: {
-                Label("Plan", systemImage: "map")
-            }
-            .help("Plan domu: rysuj kreskami i zmieniaj długości ścian")
-            Button {
-                interiorView.toggle()
-            } label: {
-                Label(interiorView ? "Wnętrze" : "Otoczenie",
-                      systemImage: interiorView ? "house" : "tree")
-            }
-            Button {
-                useScanHouse.toggle()
-            } label: {
-                Label(useScanHouse ? "Dom ze skanu" : "Willa",
-                      systemImage: useScanHouse ? "cube.transparent" : "building.2")
-            }
-            .help("Bryła domu z chmury punktów X9 (ScanPlan) albo willa proceduralna")
-            Button {
-                showScanCloud.toggle()
-            } label: {
-                Label(showScanCloud ? "Chmura ON" : "Chmura",
-                      systemImage: "circle.grid.3x3")
-            }
-            .disabled(ScanPlan.bundled() == nil)
-            .help("Nałóż chmurę punktów 1:1 na dom — widać, czy ściany pokrywają się ze skanem")
-            Button { showScan = true } label: {
-                Label("Skanuj", systemImage: "sensor.tag.radiowaves.forward")
-            }
-            .disabled(!RoomScanSession.isSupported)
-            .help(RoomScanSession.isSupported ? "Skan pomieszczenia LiDAR-em" : "Brak LiDAR-u na tym urządzeniu")
-            if model.scan != nil {
-                Button { model.clearScan() } label: {
-                    Label("Usuń skan", systemImage: "xmark.circle")
-                }
-            }
-            Button { showTextures = true } label: {
-                Label("Tekstury", systemImage: "photo.on.rectangle.angled")
-            }
-            Button { showSettings = true } label: {
-                Label("Ustawienia", systemImage: "gear")
-            }
-            Button { showFPS = true } label: {
-                Label("Wejdź do domu", systemImage: "figure.walk")
-            }
-            Button { showDocuments = true } label: {
-                Label("Dokumenty", systemImage: "folder")
-            }
-            Button { model.addProject() } label: {
-                Label("Nowy projekt", systemImage: "plus.rectangle.on.folder")
-            }
-            Button("Wyczyść szafki") {
-                model.updateCabinets([])
-                model.persist()
-            }
         }
-        .padding(12)
-        .background(.bar)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .padding(.horizontal, 12)
     }
 }
 

@@ -60,6 +60,8 @@ struct PlanEditorView: View {
 
     // widok kartki: zbliżenie i przesunięcie
     @State private var zoom: CGFloat = 1
+    /// zoom z chwili przyłożenia palców — szczypanie liczy od niego
+    @State private var zoomAtPinchStart: CGFloat?
     @State private var panOffset: CGSize = .zero
     @State private var showPresets = false
     @State private var showTakeoff = false
@@ -366,7 +368,7 @@ struct PlanEditorView: View {
         let cx = plan.points.isEmpty ? 0 : (b.min.x + b.max.x) / 2
         let cz = plan.points.isEmpty ? 0 : (b.min.y + b.max.y) / 2
 
-        plan = FloorPlan.rectangle(
+        let rect = FloorPlan.rectangle(
             x: cx - width / 2,
             z: cz - depth / 2,
             width: width,
@@ -374,6 +376,8 @@ struct PlanEditorView: View {
             height: height,
             thickness: thickness
         )
+        // doklejamy do istniejącego planu (dom rośnie), nie nadpisujemy
+        plan = plan.appending(room: rect)
         selectedWall = nil
         syncFields(from: plan)
     }
@@ -488,13 +492,16 @@ struct PlanEditorView: View {
                 }
                 // za małe przeciągnięcie = przypadkowy dotyk, plan zostaje
                 guard abs(end.x - start.x) > 200, abs(end.y - start.y) > 200 else { return }
-                plan = FloorPlan.rectangle(
+                let rect = FloorPlan.rectangle(
                     from: start,
                     to: end,
                     snap: snap,
                     height: parse(heightText).clamped(to: 2000...4000, fallback: 2600),
                     thickness: parse(thicknessText).clamped(to: 40...400, fallback: 120)
                 )
+                // DOKLEJANIE, nie zamiana: narysowany prostokąt dołącza się do
+                // istniejącego planu (dom rośnie), zamiast go nadpisywać.
+                plan = plan.appending(room: rect)
                 selectedWall = nil
             }
     }
@@ -504,12 +511,18 @@ struct PlanEditorView: View {
     private var zoomGesture: some Gesture {
         MagnifyGesture()
             .onChanged { value in
+                // `magnification` jest **sumaryczne od początku gestu**, więc nie
+                // mnożymy nim bieżącego zoomu (to dawało skoki); liczymy od stanu
+                // z chwili przyłożenia palców.
+                if zoomAtPinchStart == nil { zoomAtPinchStart = zoom }
                 pinching = true
+                let base = zoomAtPinchStart ?? zoom
                 let step = pow(Double(max(0.2, value.magnification)), settings.zoomSensitivity)
-                zoom = min(4.0, max(0.45, zoom * CGFloat(step)))
+                zoom = min(4.0, max(0.45, base * CGFloat(step)))
             }
             .onEnded { _ in
                 pinching = false
+                zoomAtPinchStart = nil
             }
     }
 
