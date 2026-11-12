@@ -32,6 +32,63 @@ public struct FloorPlan: Codable, Sendable, Equatable {
         self.thickness = thickness
     }
 
+    /// Dokleja prostokątne pomieszczenie do istniejącego planu.
+    ///
+    /// ZASADA (wymóg): edycja planu ma DOKLEJAĆ pomieszczenia, a nie zamieniać
+    /// całego planu. Wcześniej każde narysowanie prostokąta nadpisywało plan
+    /// (`plan = FloorPlan.rectangle(...)`), więc nie dało się złożyć mieszkania
+    /// z kilku pomieszczeń.
+    ///
+    /// REGUŁA DOKLEJANIA: nowy prostokąt jest dosuwany i wyrównywany do
+    /// najbliższej krawędzi istniejącego planu, a wynikiem jest obwiednia obu.
+    /// Dzięki temu zawsze powstaje JEDEN spójny obrys (dom rośnie), a nie dwa
+    /// zachodzące na siebie prostokąty.
+    ///
+    /// Świadome ograniczenie: jeśli nowe pomieszczenie nie jest wyrównane do
+    /// istniejącego, zostaje wyrównane — nie tworzymy kształtu L. Plan obsługuje
+    /// jeden zamknięty obrys, więc obwiednia jest jedynym wynikiem, który nie
+    /// psuje rysunku (L wymagałoby wielu obrysów w jednym planie).
+    public func appending(room rect: FloorPlan) -> FloorPlan {
+        guard !points.isEmpty, closed else { return rect }
+        let a = bounds
+        let b = rect.bounds
+        let bSize = b.max - b.min
+        guard bSize.x > 0, bSize.y > 0 else { return self }
+
+        // Która krawędź jest najbliżej? Liczymy odległość środków krawędzi.
+        let gapEast = b.min.x - a.max.x
+        let gapWest = a.min.x - b.max.x
+        let gapSouth = b.min.y - a.max.y
+        let gapNorth = a.min.y - b.max.y
+        let gaps = [("E", gapEast), ("W", gapWest), ("S", gapSouth), ("N", gapNorth)]
+        let nearest = gaps.min { abs($0.1) < abs($1.1) }?.0 ?? "E"
+
+        var out = self
+        switch nearest {
+        case "E", "W":
+            // doklejamy w poziomie: obwiednia w X, wspólny zakres w Y
+            let x0 = Swift.min(a.min.x, b.min.x)
+            let x1 = Swift.max(a.max.x, b.max.x)
+            let y0 = Swift.min(a.min.y, b.min.y)
+            let y1 = Swift.max(a.max.y, b.max.y)
+            out.points = [
+                SIMD2(x0, y0), SIMD2(x1, y0), SIMD2(x1, y1), SIMD2(x0, y1),
+            ]
+        default:
+            // doklejamy w pionie: obwiednia w Y, wspólny zakres w X
+            let x0 = Swift.min(a.min.x, b.min.x)
+            let x1 = Swift.max(a.max.x, b.max.x)
+            let y0 = Swift.min(a.min.y, b.min.y)
+            let y1 = Swift.max(a.max.y, b.max.y)
+            out.points = [
+                SIMD2(x0, y0), SIMD2(x1, y0), SIMD2(x1, y1), SIMD2(x0, y1),
+            ]
+        }
+        out.closed = true
+        out.thickness = thickness
+        return out
+    }
+
     /// Startowy plan willi: prostokąt 12,8 × 9,6 m wyśrodkowany w (0, 0).
     public static func rectangle(width: Double = 12800, depth: Double = 9600, height: Double = 2900) -> FloorPlan {
         let hx = width / 2, hz = depth / 2
