@@ -1,0 +1,1713 @@
+{
+ "generatedAt": "2026-11-12T21:48:57.483Z",
+ "license": "CC0 1.0 — Poly Haven",
+ "licenseUrl": "https://polyhaven.com/license",
+ "attribution": "Zasoby: Poly Haven (polyhaven.com), licencja CC0 — atrybucja nieobowiązkowa.",
+ "selection": "Najpopularniejsze (download_count) w każdej kategorii, rozdzielczość 1k.",
+ "groups": [
+  {
+   "id": "terrain",
+   "label": "Ukształtowanie terenu"
+  },
+  {
+   "id": "rocks",
+   "label": "Skałki i gleba"
+  },
+  {
+   "id": "plants",
+   "label": "Rośliny"
+  },
+  {
+   "id": "paving",
+   "label": "Kostka brukowa"
+  },
+  {
+   "id": "fences",
+   "label": "Ogrodzenia i bramy"
+  },
+  {
+   "id": "earthworks",
+   "label": "Prace ziemne"
+  },
+  {
+   "id": "walls",
+   "label": "Budowanie ścian"
+  },
+  {
+   "id": "roofing",
+   "label": "Pokrycie dachu"
+  },
+  {
+   "id": "facades",
+   "label": "Elewacje"
+  },
+  {
+   "id": "floors",
+   "label": "Podłogi"
+  },
+  {
+   "id": "paint",
+   "label": "Malowanie i tynki"
+  }
+ ],
+ "hdriGroups": [
+  {
+   "id": "studio",
+   "label": "Studio (produkt)"
+  },
+  {
+   "id": "morning",
+   "label": "Rano"
+  },
+  {
+   "id": "noon",
+   "label": "Południe"
+  },
+  {
+   "id": "evening",
+   "label": "Wieczór"
+  },
+  {
+   "id": "night",
+   "label": "Noc"
+  },
+  {
+   "id": "overcast",
+   "label": "Zachmurzenie"
+  }
+ ],
+ "textures": [
+  {
+   "id": "terrain:coast_sand_rocks_02",
+   "assetId": "coast_sand_rocks_02",
+   "name": "Coast Sand Rocks 02",
+   "group": "terrain",
+   "dims": [
+    15000,
+    15000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/coast_sand_rocks_02.png?width=256&height=256&format=webp&v=63f92b86",
+   "maps": {
+    "diff": "tex/coast_sand_rocks_02/diff_1k.jpg",
+    "nor": "tex/coast_sand_rocks_02/nor_1k.jpg",
+    "rough": "tex/coast_sand_rocks_02/rough_1k.jpg"
+   },
+   "popularity": 549001
+  },
+  {
+   "id": "terrain:brown_mud_leaves_01",
+   "assetId": "brown_mud_leaves_01",
+   "name": "Brown Mud Leaves 01",
+   "group": "terrain",
+   "dims": [
+    1299.9998331069946,
+    1299.9998331069946
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/brown_mud_leaves_01.png?width=256&height=256&format=webp&v=ce084bc9",
+   "maps": {
+    "diff": "tex/brown_mud_leaves_01/diff_1k.jpg",
+    "nor": "tex/brown_mud_leaves_01/nor_1k.jpg",
+    "rough": "tex/brown_mud_leaves_01/rough_1k.jpg"
+   },
+   "popularity": 532129
+  },
+  {
+   "id": "terrain:asphalt_02",
+   "assetId": "asphalt_02",
+   "name": "Asphalt 02",
+   "group": "terrain",
+   "dims": [
+    3000.000238418579,
+    3000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/asphalt_02.png?width=256&height=256&format=webp&v=6af3d04c",
+   "maps": {
+    "diff": "tex/asphalt_02/diff_1k.jpg",
+    "nor": "tex/asphalt_02/nor_1k.jpg",
+    "rough": "tex/asphalt_02/rough_1k.jpg"
+   },
+   "popularity": 403459
+  },
+  {
+   "id": "terrain:aerial_rocks_02",
+   "assetId": "aerial_rocks_02",
+   "name": "Aerial Rocks 02",
+   "group": "terrain",
+   "dims": [
+    50000,
+    50000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_rocks_02.png?width=256&height=256&format=webp&v=8146a458",
+   "maps": {
+    "diff": "tex/aerial_rocks_02/diff_1k.jpg",
+    "nor": "tex/aerial_rocks_02/nor_1k.jpg",
+    "rough": "tex/aerial_rocks_02/rough_1k.jpg"
+   },
+   "popularity": 403204
+  },
+  {
+   "id": "terrain:aerial_grass_rock",
+   "assetId": "aerial_grass_rock",
+   "name": "Aerial Grass Rock",
+   "group": "terrain",
+   "dims": [
+    15000,
+    15000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_grass_rock.png?width=256&height=256&format=webp&v=da74fb8a",
+   "maps": {
+    "diff": "tex/aerial_grass_rock/diff_1k.jpg",
+    "nor": "tex/aerial_grass_rock/nor_1k.jpg",
+    "rough": "tex/aerial_grass_rock/rough_1k.jpg"
+   },
+   "popularity": 366654
+  },
+  {
+   "id": "terrain:forrest_ground_01",
+   "assetId": "forrest_ground_01",
+   "name": "Forest Ground 01",
+   "group": "terrain",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/forrest_ground_01.png?width=256&height=256&format=webp&v=90f311a5",
+   "maps": {
+    "diff": "tex/forrest_ground_01/diff_1k.jpg",
+    "nor": "tex/forrest_ground_01/nor_1k.jpg",
+    "rough": "tex/forrest_ground_01/rough_1k.jpg"
+   },
+   "popularity": 329001
+  },
+  {
+   "id": "terrain:rocky_terrain_02",
+   "assetId": "rocky_terrain_02",
+   "name": "Rocky Terrain 02",
+   "group": "terrain",
+   "dims": [
+    90000,
+    90000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/rocky_terrain_02.png?width=256&height=256&format=webp&v=6c54f222",
+   "maps": {
+    "diff": "tex/rocky_terrain_02/diff_1k.jpg",
+    "nor": "tex/rocky_terrain_02/nor_1k.jpg",
+    "rough": "tex/rocky_terrain_02/rough_1k.jpg"
+   },
+   "popularity": 288556
+  },
+  {
+   "id": "terrain:snow_02",
+   "assetId": "snow_02",
+   "name": "Snow 02",
+   "group": "terrain",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/snow_02.png?width=256&height=256&format=webp&v=0c06ec15",
+   "maps": {
+    "diff": "tex/snow_02/diff_1k.jpg",
+    "nor": "tex/snow_02/nor_1k.jpg",
+    "rough": "tex/snow_02/rough_1k.jpg"
+   },
+   "popularity": 235843
+  },
+  {
+   "id": "terrain:aerial_rocks_04",
+   "assetId": "aerial_rocks_04",
+   "name": "Aerial Rocks 04",
+   "group": "terrain",
+   "dims": [
+    80000,
+    80000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_rocks_04.png?width=256&height=256&format=webp&v=a9b1d6d2",
+   "maps": {
+    "diff": "tex/aerial_rocks_04/diff_1k.jpg",
+    "nor": "tex/aerial_rocks_04/nor_1k.jpg",
+    "rough": "tex/aerial_rocks_04/rough_1k.jpg"
+   },
+   "popularity": 224936
+  },
+  {
+   "id": "terrain:rock_face_03",
+   "assetId": "rock_face_03",
+   "name": "Rock Face 03",
+   "group": "terrain",
+   "dims": [
+    2699.9995708465576,
+    2699.9995708465576
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/rock_face_03.png?width=256&height=256&format=webp&v=83c5ed9e",
+   "maps": {
+    "diff": "tex/rock_face_03/diff_1k.jpg",
+    "nor": "tex/rock_face_03/nor_1k.jpg",
+    "rough": "tex/rock_face_03/rough_1k.jpg"
+   },
+   "popularity": 187788
+  },
+  {
+   "id": "rocks:coast_sand_rocks_02",
+   "assetId": "coast_sand_rocks_02",
+   "name": "Coast Sand Rocks 02",
+   "group": "rocks",
+   "dims": [
+    15000,
+    15000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/coast_sand_rocks_02.png?width=256&height=256&format=webp&v=63f92b86",
+   "maps": {
+    "diff": "tex/coast_sand_rocks_02/diff_1k.jpg",
+    "nor": "tex/coast_sand_rocks_02/nor_1k.jpg",
+    "rough": "tex/coast_sand_rocks_02/rough_1k.jpg"
+   },
+   "popularity": 549001
+  },
+  {
+   "id": "rocks:concrete_floor_worn_001",
+   "assetId": "concrete_floor_worn_001",
+   "name": "Concrete Floor Worn 001",
+   "group": "rocks",
+   "dims": [
+    3000,
+    3000.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_floor_worn_001.png?width=256&height=256&format=webp&v=87815d37",
+   "maps": {
+    "diff": "tex/concrete_floor_worn_001/diff_1k.jpg",
+    "nor": "tex/concrete_floor_worn_001/nor_1k.jpg",
+    "rough": "tex/concrete_floor_worn_001/rough_1k.jpg"
+   },
+   "popularity": 451614
+  },
+  {
+   "id": "rocks:wood_table_worn",
+   "assetId": "wood_table_worn",
+   "name": "Wood Table Worn",
+   "group": "rocks",
+   "dims": [
+    549.9999523162842,
+    550.0000715255737
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/wood_table_worn.png?width=256&height=256&format=webp&v=ba59696d",
+   "maps": {
+    "diff": "tex/wood_table_worn/diff_1k.jpg",
+    "nor": "tex/wood_table_worn/nor_1k.jpg",
+    "rough": "tex/wood_table_worn/rough_1k.jpg"
+   },
+   "popularity": 420286
+  },
+  {
+   "id": "rocks:aerial_rocks_02",
+   "assetId": "aerial_rocks_02",
+   "name": "Aerial Rocks 02",
+   "group": "rocks",
+   "dims": [
+    50000,
+    50000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_rocks_02.png?width=256&height=256&format=webp&v=8146a458",
+   "maps": {
+    "diff": "tex/aerial_rocks_02/diff_1k.jpg",
+    "nor": "tex/aerial_rocks_02/nor_1k.jpg",
+    "rough": "tex/aerial_rocks_02/rough_1k.jpg"
+   },
+   "popularity": 403204
+  },
+  {
+   "id": "rocks:aerial_grass_rock",
+   "assetId": "aerial_grass_rock",
+   "name": "Aerial Grass Rock",
+   "group": "rocks",
+   "dims": [
+    15000,
+    15000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_grass_rock.png?width=256&height=256&format=webp&v=da74fb8a",
+   "maps": {
+    "diff": "tex/aerial_grass_rock/diff_1k.jpg",
+    "nor": "tex/aerial_grass_rock/nor_1k.jpg",
+    "rough": "tex/aerial_grass_rock/rough_1k.jpg"
+   },
+   "popularity": 366654
+  },
+  {
+   "id": "rocks:metal_plate",
+   "assetId": "metal_plate",
+   "name": "Metal Plate",
+   "group": "rocks",
+   "dims": [
+    500,
+    500
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/metal_plate.png?width=256&height=256&format=webp&v=23925522",
+   "maps": {
+    "diff": "tex/metal_plate/diff_1k.jpg",
+    "nor": "tex/metal_plate/nor_1k.jpg",
+    "rough": "tex/metal_plate/rough_1k.jpg"
+   },
+   "popularity": 311824
+  },
+  {
+   "id": "rocks:weathered_brown_planks",
+   "assetId": "weathered_brown_planks",
+   "name": "Weathered Brown Planks",
+   "group": "rocks",
+   "dims": [
+    1799.9999523162842,
+    1799.9999523162842
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/weathered_brown_planks.png?width=256&height=256&format=webp&v=e0e529a5",
+   "maps": {
+    "diff": "tex/weathered_brown_planks/diff_1k.jpg",
+    "nor": "tex/weathered_brown_planks/nor_1k.jpg",
+    "rough": "tex/weathered_brown_planks/rough_1k.jpg"
+   },
+   "popularity": 301012
+  },
+  {
+   "id": "rocks:green_metal_rust",
+   "assetId": "green_metal_rust",
+   "name": "Green Metal Rust",
+   "group": "rocks",
+   "dims": [
+    1000,
+    1000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/green_metal_rust.png?width=256&height=256&format=webp&v=0587b388",
+   "maps": {
+    "diff": "tex/green_metal_rust/diff_1k.jpg",
+    "nor": "tex/green_metal_rust/nor_1k.jpg",
+    "rough": "tex/green_metal_rust/rough_1k.jpg"
+   },
+   "popularity": 296883
+  },
+  {
+   "id": "rocks:rust_coarse_01",
+   "assetId": "rust_coarse_01",
+   "name": "Rust Coarse 01",
+   "group": "rocks",
+   "dims": [
+    2199.9998092651367,
+    2200.000286102295
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/rust_coarse_01.png?width=256&height=256&format=webp&v=023d6939",
+   "maps": {
+    "diff": "tex/rust_coarse_01/diff_1k.jpg",
+    "nor": "tex/rust_coarse_01/nor_1k.jpg",
+    "rough": "tex/rust_coarse_01/rough_1k.jpg"
+   },
+   "popularity": 234940
+  },
+  {
+   "id": "rocks:aerial_rocks_04",
+   "assetId": "aerial_rocks_04",
+   "name": "Aerial Rocks 04",
+   "group": "rocks",
+   "dims": [
+    80000,
+    80000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_rocks_04.png?width=256&height=256&format=webp&v=a9b1d6d2",
+   "maps": {
+    "diff": "tex/aerial_rocks_04/diff_1k.jpg",
+    "nor": "tex/aerial_rocks_04/nor_1k.jpg",
+    "rough": "tex/aerial_rocks_04/rough_1k.jpg"
+   },
+   "popularity": 224936
+  },
+  {
+   "id": "plants:plywood",
+   "assetId": "plywood",
+   "name": "Plywood",
+   "group": "plants",
+   "dims": [
+    499.999940395355,
+    499.999940395355
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/plywood.png?width=256&height=256&format=webp&v=4fd30a5c",
+   "maps": {
+    "diff": "tex/plywood/diff_1k.jpg",
+    "nor": "tex/plywood/nor_1k.jpg",
+    "rough": "tex/plywood/rough_1k.jpg"
+   },
+   "popularity": 733857
+  },
+  {
+   "id": "plants:coast_sand_rocks_02",
+   "assetId": "coast_sand_rocks_02",
+   "name": "Coast Sand Rocks 02",
+   "group": "plants",
+   "dims": [
+    15000,
+    15000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/coast_sand_rocks_02.png?width=256&height=256&format=webp&v=63f92b86",
+   "maps": {
+    "diff": "tex/coast_sand_rocks_02/diff_1k.jpg",
+    "nor": "tex/coast_sand_rocks_02/nor_1k.jpg",
+    "rough": "tex/coast_sand_rocks_02/rough_1k.jpg"
+   },
+   "popularity": 549001
+  },
+  {
+   "id": "plants:brown_mud_leaves_01",
+   "assetId": "brown_mud_leaves_01",
+   "name": "Brown Mud Leaves 01",
+   "group": "plants",
+   "dims": [
+    1299.9998331069946,
+    1299.9998331069946
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/brown_mud_leaves_01.png?width=256&height=256&format=webp&v=ce084bc9",
+   "maps": {
+    "diff": "tex/brown_mud_leaves_01/diff_1k.jpg",
+    "nor": "tex/brown_mud_leaves_01/nor_1k.jpg",
+    "rough": "tex/brown_mud_leaves_01/rough_1k.jpg"
+   },
+   "popularity": 532129
+  },
+  {
+   "id": "plants:oak_veneer_01",
+   "assetId": "oak_veneer_01",
+   "name": "Oak Veneer 01",
+   "group": "plants",
+   "dims": [
+    1830.0000429153442,
+    1830.0000429153442
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/oak_veneer_01.png?width=256&height=256&format=webp&v=bd35f4bb",
+   "maps": {
+    "diff": "tex/oak_veneer_01/diff_1k.jpg",
+    "nor": "tex/oak_veneer_01/nor_1k.jpg",
+    "rough": "tex/oak_veneer_01/rough_1k.jpg"
+   },
+   "popularity": 430704
+  },
+  {
+   "id": "plants:aerial_rocks_02",
+   "assetId": "aerial_rocks_02",
+   "name": "Aerial Rocks 02",
+   "group": "plants",
+   "dims": [
+    50000,
+    50000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_rocks_02.png?width=256&height=256&format=webp&v=8146a458",
+   "maps": {
+    "diff": "tex/aerial_rocks_02/diff_1k.jpg",
+    "nor": "tex/aerial_rocks_02/nor_1k.jpg",
+    "rough": "tex/aerial_rocks_02/rough_1k.jpg"
+   },
+   "popularity": 403204
+  },
+  {
+   "id": "plants:aerial_grass_rock",
+   "assetId": "aerial_grass_rock",
+   "name": "Aerial Grass Rock",
+   "group": "plants",
+   "dims": [
+    15000,
+    15000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_grass_rock.png?width=256&height=256&format=webp&v=da74fb8a",
+   "maps": {
+    "diff": "tex/aerial_grass_rock/diff_1k.jpg",
+    "nor": "tex/aerial_grass_rock/nor_1k.jpg",
+    "rough": "tex/aerial_grass_rock/rough_1k.jpg"
+   },
+   "popularity": 366654
+  },
+  {
+   "id": "paving:asphalt_02",
+   "assetId": "asphalt_02",
+   "name": "Asphalt 02",
+   "group": "paving",
+   "dims": [
+    3000.000238418579,
+    3000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/asphalt_02.png?width=256&height=256&format=webp&v=6af3d04c",
+   "maps": {
+    "diff": "tex/asphalt_02/diff_1k.jpg",
+    "nor": "tex/asphalt_02/nor_1k.jpg",
+    "rough": "tex/asphalt_02/rough_1k.jpg"
+   },
+   "popularity": 403459
+  },
+  {
+   "id": "paving:aerial_asphalt_01",
+   "assetId": "aerial_asphalt_01",
+   "name": "Aerial Asphalt 01",
+   "group": "paving",
+   "dims": [
+    30000,
+    30000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/aerial_asphalt_01.png?width=256&height=256&format=webp&v=151f24f1",
+   "maps": {
+    "diff": "tex/aerial_asphalt_01/diff_1k.jpg",
+    "nor": "tex/aerial_asphalt_01/nor_1k.jpg",
+    "rough": "tex/aerial_asphalt_01/rough_1k.jpg"
+   },
+   "popularity": 149041
+  },
+  {
+   "id": "paving:sandstone_cracks",
+   "assetId": "sandstone_cracks",
+   "name": "Sandstone Cracks",
+   "group": "paving",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/sandstone_cracks.png?width=256&height=256&format=webp&v=5bc18cfd",
+   "maps": {
+    "diff": "tex/sandstone_cracks/diff_1k.jpg",
+    "nor": "tex/sandstone_cracks/nor_1k.jpg",
+    "rough": "tex/sandstone_cracks/rough_1k.jpg"
+   },
+   "popularity": 119863
+  },
+  {
+   "id": "paving:asphalt_01",
+   "assetId": "asphalt_01",
+   "name": "Asphalt 01",
+   "group": "paving",
+   "dims": [
+    2079.9994468688965,
+    2079.9996852874756
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/asphalt_01.png?width=256&height=256&format=webp&v=da942cee",
+   "maps": {
+    "diff": "tex/asphalt_01/diff_1k.jpg",
+    "nor": "tex/asphalt_01/nor_1k.jpg",
+    "rough": "tex/asphalt_01/rough_1k.jpg"
+   },
+   "popularity": 72611
+  },
+  {
+   "id": "paving:red_laterite_soil_stones",
+   "assetId": "red_laterite_soil_stones",
+   "name": "Red Laterite Soil Stones",
+   "group": "paving",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/red_laterite_soil_stones.png?width=256&height=256&format=webp&v=3e15d464",
+   "maps": {
+    "diff": "tex/red_laterite_soil_stones/diff_1k.jpg",
+    "nor": "tex/red_laterite_soil_stones/nor_1k.jpg",
+    "rough": "tex/red_laterite_soil_stones/rough_1k.jpg"
+   },
+   "popularity": 71572
+  },
+  {
+   "id": "paving:asphalt_pit_lane",
+   "assetId": "asphalt_pit_lane",
+   "name": "Asphalt Pit Lane",
+   "group": "paving",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/asphalt_pit_lane.png?width=256&height=256&format=webp&v=db57df04",
+   "maps": {
+    "diff": "tex/asphalt_pit_lane/diff_1k.jpg",
+    "nor": "tex/asphalt_pit_lane/nor_1k.jpg",
+    "rough": "tex/asphalt_pit_lane/rough_1k.jpg"
+   },
+   "popularity": 69691
+  },
+  {
+   "id": "paving:cobblestone_floor_04",
+   "assetId": "cobblestone_floor_04",
+   "name": "Cobblestone Floor 04",
+   "group": "paving",
+   "dims": [
+    1500,
+    1500
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/cobblestone_floor_04.png?width=256&height=256&format=webp&v=1b93f088",
+   "maps": {
+    "diff": "tex/cobblestone_floor_04/diff_1k.jpg",
+    "nor": "tex/cobblestone_floor_04/nor_1k.jpg",
+    "rough": "tex/cobblestone_floor_04/rough_1k.jpg"
+   },
+   "popularity": 68576
+  },
+  {
+   "id": "paving:interior_tiles",
+   "assetId": "interior_tiles",
+   "name": "Interior Tiles",
+   "group": "paving",
+   "dims": [
+    1899.9998569488525,
+    1899.9998569488525
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/interior_tiles.png?width=256&height=256&format=webp&v=a9cb598c",
+   "maps": {
+    "diff": "tex/interior_tiles/diff_1k.jpg",
+    "nor": "tex/interior_tiles/nor_1k.jpg",
+    "rough": "tex/interior_tiles/rough_1k.jpg"
+   },
+   "popularity": 61343
+  },
+  {
+   "id": "paving:brick_moss_001",
+   "assetId": "brick_moss_001",
+   "name": "Brick Moss 001",
+   "group": "paving",
+   "dims": [
+    2239.999771118164,
+    2240.0002479553223
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/brick_moss_001.png?width=256&height=256&format=webp&v=5bd7086b",
+   "maps": {
+    "diff": "tex/brick_moss_001/diff_1k.jpg",
+    "nor": "tex/brick_moss_001/nor_1k.jpg",
+    "rough": "tex/brick_moss_001/rough_1k.jpg"
+   },
+   "popularity": 59670
+  },
+  {
+   "id": "paving:asphalt_04",
+   "assetId": "asphalt_04",
+   "name": "Asphalt 04",
+   "group": "paving",
+   "dims": [
+    4039.9999618530273,
+    4039.9999618530273
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/asphalt_04.png?width=256&height=256&format=webp&v=d7452987",
+   "maps": {
+    "diff": "tex/asphalt_04/diff_1k.jpg",
+    "nor": "tex/asphalt_04/nor_1k.jpg",
+    "rough": "tex/asphalt_04/rough_1k.jpg"
+   },
+   "popularity": 58218
+  },
+  {
+   "id": "fences:plywood",
+   "assetId": "plywood",
+   "name": "Plywood",
+   "group": "fences",
+   "dims": [
+    499.999940395355,
+    499.999940395355
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/plywood.png?width=256&height=256&format=webp&v=4fd30a5c",
+   "maps": {
+    "diff": "tex/plywood/diff_1k.jpg",
+    "nor": "tex/plywood/nor_1k.jpg",
+    "rough": "tex/plywood/rough_1k.jpg"
+   },
+   "popularity": 733857
+  },
+  {
+   "id": "fences:oak_veneer_01",
+   "assetId": "oak_veneer_01",
+   "name": "Oak Veneer 01",
+   "group": "fences",
+   "dims": [
+    1830.0000429153442,
+    1830.0000429153442
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/oak_veneer_01.png?width=256&height=256&format=webp&v=bd35f4bb",
+   "maps": {
+    "diff": "tex/oak_veneer_01/diff_1k.jpg",
+    "nor": "tex/oak_veneer_01/nor_1k.jpg",
+    "rough": "tex/oak_veneer_01/rough_1k.jpg"
+   },
+   "popularity": 430704
+  },
+  {
+   "id": "fences:wood_table_worn",
+   "assetId": "wood_table_worn",
+   "name": "Wood Table Worn",
+   "group": "fences",
+   "dims": [
+    549.9999523162842,
+    550.0000715255737
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/wood_table_worn.png?width=256&height=256&format=webp&v=ba59696d",
+   "maps": {
+    "diff": "tex/wood_table_worn/diff_1k.jpg",
+    "nor": "tex/wood_table_worn/nor_1k.jpg",
+    "rough": "tex/wood_table_worn/rough_1k.jpg"
+   },
+   "popularity": 420286
+  },
+  {
+   "id": "fences:metal_plate",
+   "assetId": "metal_plate",
+   "name": "Metal Plate",
+   "group": "fences",
+   "dims": [
+    500,
+    500
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/metal_plate.png?width=256&height=256&format=webp&v=23925522",
+   "maps": {
+    "diff": "tex/metal_plate/diff_1k.jpg",
+    "nor": "tex/metal_plate/nor_1k.jpg",
+    "rough": "tex/metal_plate/rough_1k.jpg"
+   },
+   "popularity": 311824
+  },
+  {
+   "id": "fences:green_metal_rust",
+   "assetId": "green_metal_rust",
+   "name": "Green Metal Rust",
+   "group": "fences",
+   "dims": [
+    1000,
+    1000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/green_metal_rust.png?width=256&height=256&format=webp&v=0587b388",
+   "maps": {
+    "diff": "tex/green_metal_rust/diff_1k.jpg",
+    "nor": "tex/green_metal_rust/nor_1k.jpg",
+    "rough": "tex/green_metal_rust/rough_1k.jpg"
+   },
+   "popularity": 296883
+  },
+  {
+   "id": "fences:rust_coarse_01",
+   "assetId": "rust_coarse_01",
+   "name": "Rust Coarse 01",
+   "group": "fences",
+   "dims": [
+    2199.9998092651367,
+    2200.000286102295
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/rust_coarse_01.png?width=256&height=256&format=webp&v=023d6939",
+   "maps": {
+    "diff": "tex/rust_coarse_01/diff_1k.jpg",
+    "nor": "tex/rust_coarse_01/nor_1k.jpg",
+    "rough": "tex/rust_coarse_01/rough_1k.jpg"
+   },
+   "popularity": 234940
+  },
+  {
+   "id": "earthworks:concrete_floor_worn_001",
+   "assetId": "concrete_floor_worn_001",
+   "name": "Concrete Floor Worn 001",
+   "group": "earthworks",
+   "dims": [
+    3000,
+    3000.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_floor_worn_001.png?width=256&height=256&format=webp&v=87815d37",
+   "maps": {
+    "diff": "tex/concrete_floor_worn_001/diff_1k.jpg",
+    "nor": "tex/concrete_floor_worn_001/nor_1k.jpg",
+    "rough": "tex/concrete_floor_worn_001/rough_1k.jpg"
+   },
+   "popularity": 451614
+  },
+  {
+   "id": "earthworks:wood_table_worn",
+   "assetId": "wood_table_worn",
+   "name": "Wood Table Worn",
+   "group": "earthworks",
+   "dims": [
+    549.9999523162842,
+    550.0000715255737
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/wood_table_worn.png?width=256&height=256&format=webp&v=ba59696d",
+   "maps": {
+    "diff": "tex/wood_table_worn/diff_1k.jpg",
+    "nor": "tex/wood_table_worn/nor_1k.jpg",
+    "rough": "tex/wood_table_worn/rough_1k.jpg"
+   },
+   "popularity": 420286
+  },
+  {
+   "id": "earthworks:metal_plate",
+   "assetId": "metal_plate",
+   "name": "Metal Plate",
+   "group": "earthworks",
+   "dims": [
+    500,
+    500
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/metal_plate.png?width=256&height=256&format=webp&v=23925522",
+   "maps": {
+    "diff": "tex/metal_plate/diff_1k.jpg",
+    "nor": "tex/metal_plate/nor_1k.jpg",
+    "rough": "tex/metal_plate/rough_1k.jpg"
+   },
+   "popularity": 311824
+  },
+  {
+   "id": "earthworks:weathered_brown_planks",
+   "assetId": "weathered_brown_planks",
+   "name": "Weathered Brown Planks",
+   "group": "earthworks",
+   "dims": [
+    1799.9999523162842,
+    1799.9999523162842
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/weathered_brown_planks.png?width=256&height=256&format=webp&v=e0e529a5",
+   "maps": {
+    "diff": "tex/weathered_brown_planks/diff_1k.jpg",
+    "nor": "tex/weathered_brown_planks/nor_1k.jpg",
+    "rough": "tex/weathered_brown_planks/rough_1k.jpg"
+   },
+   "popularity": 301012
+  },
+  {
+   "id": "earthworks:green_metal_rust",
+   "assetId": "green_metal_rust",
+   "name": "Green Metal Rust",
+   "group": "earthworks",
+   "dims": [
+    1000,
+    1000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/green_metal_rust.png?width=256&height=256&format=webp&v=0587b388",
+   "maps": {
+    "diff": "tex/green_metal_rust/diff_1k.jpg",
+    "nor": "tex/green_metal_rust/nor_1k.jpg",
+    "rough": "tex/green_metal_rust/rough_1k.jpg"
+   },
+   "popularity": 296883
+  },
+  {
+   "id": "earthworks:rust_coarse_01",
+   "assetId": "rust_coarse_01",
+   "name": "Rust Coarse 01",
+   "group": "earthworks",
+   "dims": [
+    2199.9998092651367,
+    2200.000286102295
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/rust_coarse_01.png?width=256&height=256&format=webp&v=023d6939",
+   "maps": {
+    "diff": "tex/rust_coarse_01/diff_1k.jpg",
+    "nor": "tex/rust_coarse_01/nor_1k.jpg",
+    "rough": "tex/rust_coarse_01/rough_1k.jpg"
+   },
+   "popularity": 234940
+  },
+  {
+   "id": "walls:concrete_floor_worn_001",
+   "assetId": "concrete_floor_worn_001",
+   "name": "Concrete Floor Worn 001",
+   "group": "walls",
+   "dims": [
+    3000,
+    3000.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_floor_worn_001.png?width=256&height=256&format=webp&v=87815d37",
+   "maps": {
+    "diff": "tex/concrete_floor_worn_001/diff_1k.jpg",
+    "nor": "tex/concrete_floor_worn_001/nor_1k.jpg",
+    "rough": "tex/concrete_floor_worn_001/rough_1k.jpg"
+   },
+   "popularity": 451614
+  },
+  {
+   "id": "walls:beige_wall_001",
+   "assetId": "beige_wall_001",
+   "name": "Beige Wall 001",
+   "group": "walls",
+   "dims": [
+    3000,
+    3000.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/beige_wall_001.png?width=256&height=256&format=webp&v=3c72ed3c",
+   "maps": {
+    "diff": "tex/beige_wall_001/diff_1k.jpg",
+    "nor": "tex/beige_wall_001/nor_1k.jpg",
+    "rough": "tex/beige_wall_001/rough_1k.jpg"
+   },
+   "popularity": 431114
+  },
+  {
+   "id": "walls:painted_plaster_wall",
+   "assetId": "painted_plaster_wall",
+   "name": "Painted Plaster Wall",
+   "group": "walls",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/painted_plaster_wall.png?width=256&height=256&format=webp&v=13b70c43",
+   "maps": {
+    "diff": "tex/painted_plaster_wall/diff_1k.jpg",
+    "nor": "tex/painted_plaster_wall/nor_1k.jpg",
+    "rough": "tex/painted_plaster_wall/rough_1k.jpg"
+   },
+   "popularity": 313215
+  },
+  {
+   "id": "walls:white_plaster_02",
+   "assetId": "white_plaster_02",
+   "name": "White Plaster 02",
+   "group": "walls",
+   "dims": [
+    1000,
+    1000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/white_plaster_02.png?width=256&height=256&format=webp&v=fa5c48d2",
+   "maps": {
+    "diff": "tex/white_plaster_02/diff_1k.jpg",
+    "nor": "tex/white_plaster_02/nor_1k.jpg",
+    "rough": "tex/white_plaster_02/rough_1k.jpg"
+   },
+   "popularity": 229004
+  },
+  {
+   "id": "walls:concrete_floor_02",
+   "assetId": "concrete_floor_02",
+   "name": "Concrete Floor 02",
+   "group": "walls",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_floor_02.png?width=256&height=256&format=webp&v=18eb52c0",
+   "maps": {
+    "diff": "tex/concrete_floor_02/diff_1k.jpg",
+    "nor": "tex/concrete_floor_02/nor_1k.jpg",
+    "rough": "tex/concrete_floor_02/rough_1k.jpg"
+   },
+   "popularity": 195592
+  },
+  {
+   "id": "walls:red_brick",
+   "assetId": "red_brick",
+   "name": "Red Brick",
+   "group": "walls",
+   "dims": [
+    1399.999976158142,
+    1399.999976158142
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/red_brick.png?width=256&height=256&format=webp&v=cde84146",
+   "maps": {
+    "diff": "tex/red_brick/diff_1k.jpg",
+    "nor": "tex/red_brick/nor_1k.jpg",
+    "rough": "tex/red_brick/rough_1k.jpg"
+   },
+   "popularity": 183572
+  },
+  {
+   "id": "walls:red_brick_03",
+   "assetId": "red_brick_03",
+   "name": "Red Brick 03",
+   "group": "walls",
+   "dims": [
+    1000,
+    1000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/red_brick_03.png?width=256&height=256&format=webp&v=ecc91b8b",
+   "maps": {
+    "diff": "tex/red_brick_03/diff_1k.jpg",
+    "nor": "tex/red_brick_03/nor_1k.jpg",
+    "rough": "tex/red_brick_03/rough_1k.jpg"
+   },
+   "popularity": 146914
+  },
+  {
+   "id": "walls:medieval_blocks_03",
+   "assetId": "medieval_blocks_03",
+   "name": "Medieval Blocks 03",
+   "group": "walls",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/medieval_blocks_03.png?width=256&height=256&format=webp&v=a680b39a",
+   "maps": {
+    "diff": "tex/medieval_blocks_03/diff_1k.jpg",
+    "nor": "tex/medieval_blocks_03/nor_1k.jpg",
+    "rough": "tex/medieval_blocks_03/rough_1k.jpg"
+   },
+   "popularity": 145282
+  },
+  {
+   "id": "roofing:factory_wall",
+   "assetId": "factory_wall",
+   "name": "Factory Wall",
+   "group": "roofing",
+   "dims": [
+    3000,
+    3000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/factory_wall.png?width=256&height=256&format=webp&v=1315ffc6",
+   "maps": {
+    "diff": "tex/factory_wall/diff_1k.jpg",
+    "nor": "tex/factory_wall/nor_1k.jpg",
+    "rough": "tex/factory_wall/rough_1k.jpg"
+   },
+   "popularity": 108334
+  },
+  {
+   "id": "roofing:corrugated_iron",
+   "assetId": "corrugated_iron",
+   "name": "Corrugated Iron",
+   "group": "roofing",
+   "dims": [
+    1120.0000047683716,
+    1120.0000047683716
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/corrugated_iron.png?width=256&height=256&format=webp&v=99c60d8c",
+   "maps": {
+    "diff": "tex/corrugated_iron/diff_1k.jpg",
+    "nor": "tex/corrugated_iron/nor_1k.jpg",
+    "rough": "tex/corrugated_iron/rough_1k.jpg"
+   },
+   "popularity": 102349
+  },
+  {
+   "id": "roofing:roof_09",
+   "assetId": "roof_09",
+   "name": "Roof 09",
+   "group": "roofing",
+   "dims": [
+    4000,
+    4000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/roof_09.png?width=256&height=256&format=webp&v=847771cd",
+   "maps": {
+    "diff": "tex/roof_09/diff_1k.jpg",
+    "nor": "tex/roof_09/nor_1k.jpg",
+    "rough": "tex/roof_09/rough_1k.jpg"
+   },
+   "popularity": 92281
+  },
+  {
+   "id": "roofing:roof_slates_03",
+   "assetId": "roof_slates_03",
+   "name": "Roof Slates 03",
+   "group": "roofing",
+   "dims": [
+    3000,
+    3000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/roof_slates_03.png?width=256&height=256&format=webp&v=2e9176ac",
+   "maps": {
+    "diff": "tex/roof_slates_03/diff_1k.jpg",
+    "nor": "tex/roof_slates_03/nor_1k.jpg",
+    "rough": "tex/roof_slates_03/rough_1k.jpg"
+   },
+   "popularity": 82501
+  },
+  {
+   "id": "roofing:grey_roof_01",
+   "assetId": "grey_roof_01",
+   "name": "Grey Roof 01",
+   "group": "roofing",
+   "dims": [
+    8000,
+    8000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/grey_roof_01.png?width=256&height=256&format=webp&v=03d0466a",
+   "maps": {
+    "diff": "tex/grey_roof_01/diff_1k.jpg",
+    "nor": "tex/grey_roof_01/nor_1k.jpg",
+    "rough": "tex/grey_roof_01/rough_1k.jpg"
+   },
+   "popularity": 72696
+  },
+  {
+   "id": "roofing:ceramic_roof_01",
+   "assetId": "ceramic_roof_01",
+   "name": "Ceramic Roof 01",
+   "group": "roofing",
+   "dims": [
+    3500.000238418579,
+    3500.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/ceramic_roof_01.png?width=256&height=256&format=webp&v=cb0f49b1",
+   "maps": {
+    "diff": "tex/ceramic_roof_01/diff_1k.jpg",
+    "nor": "tex/ceramic_roof_01/nor_1k.jpg",
+    "rough": "tex/ceramic_roof_01/rough_1k.jpg"
+   },
+   "popularity": 71305
+  },
+  {
+   "id": "facades:concrete_floor_worn_001",
+   "assetId": "concrete_floor_worn_001",
+   "name": "Concrete Floor Worn 001",
+   "group": "facades",
+   "dims": [
+    3000,
+    3000.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_floor_worn_001.png?width=256&height=256&format=webp&v=87815d37",
+   "maps": {
+    "diff": "tex/concrete_floor_worn_001/diff_1k.jpg",
+    "nor": "tex/concrete_floor_worn_001/nor_1k.jpg",
+    "rough": "tex/concrete_floor_worn_001/rough_1k.jpg"
+   },
+   "popularity": 451614
+  },
+  {
+   "id": "facades:beige_wall_001",
+   "assetId": "beige_wall_001",
+   "name": "Beige Wall 001",
+   "group": "facades",
+   "dims": [
+    3000,
+    3000.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/beige_wall_001.png?width=256&height=256&format=webp&v=3c72ed3c",
+   "maps": {
+    "diff": "tex/beige_wall_001/diff_1k.jpg",
+    "nor": "tex/beige_wall_001/nor_1k.jpg",
+    "rough": "tex/beige_wall_001/rough_1k.jpg"
+   },
+   "popularity": 431114
+  },
+  {
+   "id": "facades:painted_plaster_wall",
+   "assetId": "painted_plaster_wall",
+   "name": "Painted Plaster Wall",
+   "group": "facades",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/painted_plaster_wall.png?width=256&height=256&format=webp&v=13b70c43",
+   "maps": {
+    "diff": "tex/painted_plaster_wall/diff_1k.jpg",
+    "nor": "tex/painted_plaster_wall/nor_1k.jpg",
+    "rough": "tex/painted_plaster_wall/rough_1k.jpg"
+   },
+   "popularity": 313215
+  },
+  {
+   "id": "facades:white_plaster_02",
+   "assetId": "white_plaster_02",
+   "name": "White Plaster 02",
+   "group": "facades",
+   "dims": [
+    1000,
+    1000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/white_plaster_02.png?width=256&height=256&format=webp&v=fa5c48d2",
+   "maps": {
+    "diff": "tex/white_plaster_02/diff_1k.jpg",
+    "nor": "tex/white_plaster_02/nor_1k.jpg",
+    "rough": "tex/white_plaster_02/rough_1k.jpg"
+   },
+   "popularity": 229004
+  },
+  {
+   "id": "facades:concrete_floor_02",
+   "assetId": "concrete_floor_02",
+   "name": "Concrete Floor 02",
+   "group": "facades",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_floor_02.png?width=256&height=256&format=webp&v=18eb52c0",
+   "maps": {
+    "diff": "tex/concrete_floor_02/diff_1k.jpg",
+    "nor": "tex/concrete_floor_02/nor_1k.jpg",
+    "rough": "tex/concrete_floor_02/rough_1k.jpg"
+   },
+   "popularity": 195592
+  },
+  {
+   "id": "facades:concrete_layers_02",
+   "assetId": "concrete_layers_02",
+   "name": "Concrete Layers 02",
+   "group": "facades",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_layers_02.png?width=256&height=256&format=webp&v=f6393652",
+   "maps": {
+    "diff": "tex/concrete_layers_02/diff_1k.jpg",
+    "nor": "tex/concrete_layers_02/nor_1k.jpg",
+    "rough": "tex/concrete_layers_02/rough_1k.jpg"
+   },
+   "popularity": 137938
+  },
+  {
+   "id": "facades:cracked_concrete_wall",
+   "assetId": "cracked_concrete_wall",
+   "name": "Cracked Concrete Wall",
+   "group": "facades",
+   "dims": [
+    1000,
+    1000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/cracked_concrete_wall.png?width=256&height=256&format=webp&v=9be6dcb6",
+   "maps": {
+    "diff": "tex/cracked_concrete_wall/diff_1k.jpg",
+    "nor": "tex/cracked_concrete_wall/nor_1k.jpg",
+    "rough": "tex/cracked_concrete_wall/rough_1k.jpg"
+   },
+   "popularity": 137193
+  },
+  {
+   "id": "facades:grey_plaster",
+   "assetId": "grey_plaster",
+   "name": "Grey Plaster",
+   "group": "facades",
+   "dims": [
+    1000,
+    1000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/grey_plaster.png?width=256&height=256&format=webp&v=367870e9",
+   "maps": {
+    "diff": "tex/grey_plaster/diff_1k.jpg",
+    "nor": "tex/grey_plaster/nor_1k.jpg",
+    "rough": "tex/grey_plaster/rough_1k.jpg"
+   },
+   "popularity": 126484
+  },
+  {
+   "id": "floors:plywood",
+   "assetId": "plywood",
+   "name": "Plywood",
+   "group": "floors",
+   "dims": [
+    499.999940395355,
+    499.999940395355
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/plywood.png?width=256&height=256&format=webp&v=4fd30a5c",
+   "maps": {
+    "diff": "tex/plywood/diff_1k.jpg",
+    "nor": "tex/plywood/nor_1k.jpg",
+    "rough": "tex/plywood/rough_1k.jpg"
+   },
+   "popularity": 733857
+  },
+  {
+   "id": "floors:laminate_floor_02",
+   "assetId": "laminate_floor_02",
+   "name": "Laminate Floor 02",
+   "group": "floors",
+   "dims": [
+    1699.9999284744263,
+    1700.0000476837158
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/laminate_floor_02.png?width=256&height=256&format=webp&v=ac2f3a73",
+   "maps": {
+    "diff": "tex/laminate_floor_02/diff_1k.jpg",
+    "nor": "tex/laminate_floor_02/nor_1k.jpg",
+    "rough": "tex/laminate_floor_02/rough_1k.jpg"
+   },
+   "popularity": 507701
+  },
+  {
+   "id": "floors:wood_table_001",
+   "assetId": "wood_table_001",
+   "name": "Wood Table 001",
+   "group": "floors",
+   "dims": [
+    1500,
+    1500.0001192092896
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/wood_table_001.png?width=256&height=256&format=webp&v=d00ea8d5",
+   "maps": {
+    "diff": "tex/wood_table_001/diff_1k.jpg",
+    "nor": "tex/wood_table_001/nor_1k.jpg",
+    "rough": "tex/wood_table_001/rough_1k.jpg"
+   },
+   "popularity": 468050
+  },
+  {
+   "id": "floors:concrete_floor_worn_001",
+   "assetId": "concrete_floor_worn_001",
+   "name": "Concrete Floor Worn 001",
+   "group": "floors",
+   "dims": [
+    3000,
+    3000.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_floor_worn_001.png?width=256&height=256&format=webp&v=87815d37",
+   "maps": {
+    "diff": "tex/concrete_floor_worn_001/diff_1k.jpg",
+    "nor": "tex/concrete_floor_worn_001/nor_1k.jpg",
+    "rough": "tex/concrete_floor_worn_001/rough_1k.jpg"
+   },
+   "popularity": 451614
+  },
+  {
+   "id": "floors:oak_veneer_01",
+   "assetId": "oak_veneer_01",
+   "name": "Oak Veneer 01",
+   "group": "floors",
+   "dims": [
+    1830.0000429153442,
+    1830.0000429153442
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/oak_veneer_01.png?width=256&height=256&format=webp&v=bd35f4bb",
+   "maps": {
+    "diff": "tex/oak_veneer_01/diff_1k.jpg",
+    "nor": "tex/oak_veneer_01/nor_1k.jpg",
+    "rough": "tex/oak_veneer_01/rough_1k.jpg"
+   },
+   "popularity": 430704
+  },
+  {
+   "id": "floors:wood_table_worn",
+   "assetId": "wood_table_worn",
+   "name": "Wood Table Worn",
+   "group": "floors",
+   "dims": [
+    549.9999523162842,
+    550.0000715255737
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/wood_table_worn.png?width=256&height=256&format=webp&v=ba59696d",
+   "maps": {
+    "diff": "tex/wood_table_worn/diff_1k.jpg",
+    "nor": "tex/wood_table_worn/nor_1k.jpg",
+    "rough": "tex/wood_table_worn/rough_1k.jpg"
+   },
+   "popularity": 420286
+  },
+  {
+   "id": "floors:asphalt_02",
+   "assetId": "asphalt_02",
+   "name": "Asphalt 02",
+   "group": "floors",
+   "dims": [
+    3000.000238418579,
+    3000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/asphalt_02.png?width=256&height=256&format=webp&v=6af3d04c",
+   "maps": {
+    "diff": "tex/asphalt_02/diff_1k.jpg",
+    "nor": "tex/asphalt_02/nor_1k.jpg",
+    "rough": "tex/asphalt_02/rough_1k.jpg"
+   },
+   "popularity": 403459
+  },
+  {
+   "id": "floors:marble_01",
+   "assetId": "marble_01",
+   "name": "Marble 01",
+   "group": "floors",
+   "dims": [
+    1500,
+    1500
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/marble_01.png?width=256&height=256&format=webp&v=57534022",
+   "maps": {
+    "diff": "tex/marble_01/diff_1k.jpg",
+    "nor": "tex/marble_01/nor_1k.jpg",
+    "rough": "tex/marble_01/rough_1k.jpg"
+   },
+   "popularity": 316371
+  },
+  {
+   "id": "paint:plywood",
+   "assetId": "plywood",
+   "name": "Plywood",
+   "group": "paint",
+   "dims": [
+    499.999940395355,
+    499.999940395355
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/plywood.png?width=256&height=256&format=webp&v=4fd30a5c",
+   "maps": {
+    "diff": "tex/plywood/diff_1k.jpg",
+    "nor": "tex/plywood/nor_1k.jpg",
+    "rough": "tex/plywood/rough_1k.jpg"
+   },
+   "popularity": 733857
+  },
+  {
+   "id": "paint:laminate_floor_02",
+   "assetId": "laminate_floor_02",
+   "name": "Laminate Floor 02",
+   "group": "paint",
+   "dims": [
+    1699.9999284744263,
+    1700.0000476837158
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/laminate_floor_02.png?width=256&height=256&format=webp&v=ac2f3a73",
+   "maps": {
+    "diff": "tex/laminate_floor_02/diff_1k.jpg",
+    "nor": "tex/laminate_floor_02/nor_1k.jpg",
+    "rough": "tex/laminate_floor_02/rough_1k.jpg"
+   },
+   "popularity": 507701
+  },
+  {
+   "id": "paint:wood_table_001",
+   "assetId": "wood_table_001",
+   "name": "Wood Table 001",
+   "group": "paint",
+   "dims": [
+    1500,
+    1500.0001192092896
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/wood_table_001.png?width=256&height=256&format=webp&v=d00ea8d5",
+   "maps": {
+    "diff": "tex/wood_table_001/diff_1k.jpg",
+    "nor": "tex/wood_table_001/nor_1k.jpg",
+    "rough": "tex/wood_table_001/rough_1k.jpg"
+   },
+   "popularity": 468050
+  },
+  {
+   "id": "paint:beige_wall_001",
+   "assetId": "beige_wall_001",
+   "name": "Beige Wall 001",
+   "group": "paint",
+   "dims": [
+    3000,
+    3000.000238418579
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/beige_wall_001.png?width=256&height=256&format=webp&v=3c72ed3c",
+   "maps": {
+    "diff": "tex/beige_wall_001/diff_1k.jpg",
+    "nor": "tex/beige_wall_001/nor_1k.jpg",
+    "rough": "tex/beige_wall_001/rough_1k.jpg"
+   },
+   "popularity": 431114
+  },
+  {
+   "id": "paint:marble_01",
+   "assetId": "marble_01",
+   "name": "Marble 01",
+   "group": "paint",
+   "dims": [
+    1500,
+    1500
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/marble_01.png?width=256&height=256&format=webp&v=57534022",
+   "maps": {
+    "diff": "tex/marble_01/diff_1k.jpg",
+    "nor": "tex/marble_01/nor_1k.jpg",
+    "rough": "tex/marble_01/rough_1k.jpg"
+   },
+   "popularity": 316371
+  },
+  {
+   "id": "paint:painted_plaster_wall",
+   "assetId": "painted_plaster_wall",
+   "name": "Painted Plaster Wall",
+   "group": "paint",
+   "dims": [
+    2000,
+    2000
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/painted_plaster_wall.png?width=256&height=256&format=webp&v=13b70c43",
+   "maps": {
+    "diff": "tex/painted_plaster_wall/diff_1k.jpg",
+    "nor": "tex/painted_plaster_wall/nor_1k.jpg",
+    "rough": "tex/painted_plaster_wall/rough_1k.jpg"
+   },
+   "popularity": 313215
+  },
+  {
+   "id": "paint:weathered_brown_planks",
+   "assetId": "weathered_brown_planks",
+   "name": "Weathered Brown Planks",
+   "group": "paint",
+   "dims": [
+    1799.9999523162842,
+    1799.9999523162842
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/weathered_brown_planks.png?width=256&height=256&format=webp&v=e0e529a5",
+   "maps": {
+    "diff": "tex/weathered_brown_planks/diff_1k.jpg",
+    "nor": "tex/weathered_brown_planks/nor_1k.jpg",
+    "rough": "tex/weathered_brown_planks/rough_1k.jpg"
+   },
+   "popularity": 301012
+  },
+  {
+   "id": "paint:wood_floor",
+   "assetId": "wood_floor",
+   "name": "Wood Floor",
+   "group": "paint",
+   "dims": [
+    1699.9996900558472,
+    1699.9996900558472
+   ],
+   "thumb": "https://cdn.polyhaven.com/asset_img/thumbs/wood_floor.png?width=256&height=256&format=webp&v=4c14fcdb",
+   "maps": {
+    "diff": "tex/wood_floor/diff_1k.jpg",
+    "nor": "tex/wood_floor/nor_1k.jpg",
+    "rough": "tex/wood_floor/rough_1k.jpg"
+   },
+   "popularity": 296557
+  }
+ ],
+ "hdris": [
+  {
+   "id": "hdri:studio_small_09",
+   "assetId": "studio_small_09",
+   "group": "studio",
+   "label": "Studio (produkt)",
+   "name": "Studio Small 09",
+   "file": "hdri/studio_small_09_1k.hdr",
+   "size": 1615248
+  },
+  {
+   "id": "hdri:kloofendal_43d_clear_puresky",
+   "assetId": "kloofendal_43d_clear_puresky",
+   "group": "morning",
+   "label": "Rano",
+   "name": "Kloofendal 43d Clear (Pure Sky)",
+   "file": "hdri/kloofendal_43d_clear_puresky_1k.hdr",
+   "size": 1184531
+  },
+  {
+   "id": "hdri:kloppenheim_06_puresky",
+   "assetId": "kloppenheim_06_puresky",
+   "group": "noon",
+   "label": "Południe",
+   "name": "Kloppenheim 06 (Pure Sky)",
+   "file": "hdri/kloppenheim_06_puresky_1k.hdr",
+   "size": 1173154
+  },
+  {
+   "id": "hdri:sunset_jhbcentral",
+   "assetId": "sunset_jhbcentral",
+   "group": "evening",
+   "label": "Wieczór",
+   "name": "Joburg Central Sunset",
+   "file": "hdri/sunset_jhbcentral_1k.hdr",
+   "size": 1573705
+  },
+  {
+   "id": "hdri:moonless_golf",
+   "assetId": "moonless_golf",
+   "group": "night",
+   "label": "Noc",
+   "name": "Moonless Golf",
+   "file": "hdri/moonless_golf_1k.hdr",
+   "size": 1672754
+  },
+  {
+   "id": "hdri:kloofendal_48d_partly_cloudy_puresky",
+   "assetId": "kloofendal_48d_partly_cloudy_puresky",
+   "group": "overcast",
+   "label": "Zachmurzenie",
+   "name": "Kloofendal 48d Partly Cloudy (Pure Sky)",
+   "file": "hdri/kloofendal_48d_partly_cloudy_puresky_1k.hdr",
+   "size": 1435119
+  }
+ ],
+ "models": [
+  {
+   "id": "nature-plants:grass_medium_01",
+   "assetId": "grass_medium_01",
+   "name": "Grass Medium 01",
+   "group": "nature-plants",
+   "file": "models/grass_medium_01.gltf",
+   "size": 27110
+  },
+  {
+   "id": "nature-plants:tree_small_02",
+   "assetId": "tree_small_02",
+   "name": "Tree Small 02",
+   "group": "nature-plants",
+   "file": "models/tree_small_02.gltf",
+   "size": 9075
+  },
+  {
+   "id": "nature-plants:jacaranda_tree",
+   "assetId": "jacaranda_tree",
+   "name": "Jacaranda Tree",
+   "group": "nature-plants",
+   "file": "models/jacaranda_tree.gltf",
+   "size": 9526
+  },
+  {
+   "id": "nature-plants:potted_plant_02",
+   "assetId": "potted_plant_02",
+   "name": "Potted Plant 02",
+   "group": "nature-plants",
+   "file": "models/potted_plant_02.gltf",
+   "size": 6653
+  },
+  {
+   "id": "nature-plants:grass_bermuda_01",
+   "assetId": "grass_bermuda_01",
+   "name": "Grass Bermuda 01",
+   "group": "nature-plants",
+   "file": "models/grass_bermuda_01.gltf",
+   "size": 32912
+  },
+  {
+   "id": "nature-plants:island_tree_02",
+   "assetId": "island_tree_02",
+   "name": "Island Tree 02",
+   "group": "nature-plants",
+   "file": "models/island_tree_02.gltf",
+   "size": 8545
+  },
+  {
+   "id": "nature-plants:potted_plant_04",
+   "assetId": "potted_plant_04",
+   "name": "Potted Plant 04",
+   "group": "nature-plants",
+   "file": "models/potted_plant_04.gltf",
+   "size": 7081
+  },
+  {
+   "id": "nature-plants:fern_02",
+   "assetId": "fern_02",
+   "name": "Fern 02",
+   "group": "nature-plants",
+   "file": "models/fern_02.gltf",
+   "size": 6899
+  },
+  {
+   "id": "nature-rocks:rock_moss_set_02",
+   "assetId": "rock_moss_set_02",
+   "name": "Rock Moss Set 02",
+   "group": "nature-rocks",
+   "file": "models/rock_moss_set_02.gltf",
+   "size": 11608
+  },
+  {
+   "id": "nature-rocks:rock_moss_set_01",
+   "assetId": "rock_moss_set_01",
+   "name": "Rock Moss Set 01",
+   "group": "nature-rocks",
+   "file": "models/rock_moss_set_01.gltf",
+   "size": 9987
+  },
+  {
+   "id": "nature-rocks:boulder_01",
+   "assetId": "boulder_01",
+   "name": "Boulder 01",
+   "group": "nature-rocks",
+   "file": "models/boulder_01.gltf",
+   "size": 2773
+  },
+  {
+   "id": "nature-rocks:namaqualand_boulder_02",
+   "assetId": "namaqualand_boulder_02",
+   "name": "Namaqualand Boulder 02",
+   "group": "nature-rocks",
+   "file": "models/namaqualand_boulder_02.gltf",
+   "size": 2818
+  },
+  {
+   "id": "nature-rocks:coastal_cliff_04",
+   "assetId": "coastal_cliff_04",
+   "name": "Coastal Cliff 04",
+   "group": "nature-rocks",
+   "file": "models/coastal_cliff_04.gltf",
+   "size": 2828
+  },
+  {
+   "id": "nature-rocks:coast_land_rocks_04",
+   "assetId": "coast_land_rocks_04",
+   "name": "Coast Land Rocks 04",
+   "group": "nature-rocks",
+   "file": "models/coast_land_rocks_04.gltf",
+   "size": 2855
+  }
+ ]
+}
