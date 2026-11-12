@@ -73,6 +73,9 @@ public enum SceneBuilder {
         if !skipHardware, let hardware = hardwareEntity(cabinets: cabinets) {
             root.addChild(hardware)
         }
+        if !skipHardware, let accessories = accessoryEntity(cabinets: cabinets) {
+            root.addChild(accessories)
+        }
 
         // magiczne gwiazdki nad podglądem strefy (cień szafek)
         root.addChild(Sparkles.entity(cabinets: cabinets))
@@ -113,6 +116,93 @@ public enum SceneBuilder {
         )
     }
 
+    /// Kosze, drążki, organizery i LED — proste bryły w układzie szafki.
+    @MainActor
+    private static func accessoryEntity(cabinets: [Cabinet]) -> Entity? {
+        let root = Entity()
+        root.name = "accessories"
+        var added = false
+
+        for c in cabinets where c.preview != true {
+            guard let accessories = c.accessories, !accessories.isEmpty else { continue }
+            let group = Entity()
+            group.position = [meters(c.x), 0, meters(c.z)]
+            group.orientation = simd_quatf(angle: Float(c.rotation * .pi / 180), axis: [0, 1, 0])
+            let baseY = c.type == .base ? c.plinth : c.mountHeight
+
+            func material(_ hex: String, metallic: Double = 0, alpha: Double = 1) -> PhysicallyBasedMaterial {
+                var m = PhysicallyBasedMaterial()
+                m.baseColor = .init(tint: color(hex))
+                m.metallic = .init(floatLiteral: Float(metallic))
+                m.roughness = .init(floatLiteral: 0.45)
+                if alpha < 1 { m.blending = .transparent(opacity: .init(floatLiteral: Float(alpha))) }
+                return m
+            }
+
+            func box(_ w: Double, _ h: Double, _ d: Double, _ color: String,
+                     _ x: Double, _ y: Double, _ z: Double, metallic: Double = 0,
+                     alpha: Double = 1, name: String) {
+                let e = ModelEntity(mesh: .generateBox(width: meters(w), height: meters(h),
+                                                       depth: meters(d), cornerRadius: 0.004),
+                                    materials: [material(color, metallic: metallic, alpha: alpha)])
+                e.position = [meters(x), meters(baseY + y), meters(z)]
+                e.name = name
+                group.addChild(e)
+                added = true
+            }
+
+            func cylinder(_ radius: Double, _ height: Double, _ color: String,
+                          _ x: Double, _ y: Double, _ z: Double, name: String) {
+                let e = ModelEntity(mesh: .generateCylinder(height: meters(height), radius: meters(radius)),
+                                    materials: [material(color, metallic: 0.8)])
+                e.position = [meters(x), meters(baseY + y), meters(z)]
+                e.name = name
+                group.addChild(e)
+                added = true
+            }
+
+            for a in accessories {
+                let w = max(200, c.width - 100)
+                let d = max(160, c.depth - 100)
+                switch a.kind {
+                case .basket:
+                    box(w, 180, d, "#3b3f43", 0, a.y + 90, 0, name: "acc-basket")
+                    for x in stride(from: -w / 2, through: w / 2, by: 80) {
+                        box(3, 190, d, "#8d9499", x, a.y + 95, 0, name: "acc-basket-bar")
+                    }
+                case .rail:
+                    let e = ModelEntity(mesh: .generateCylinder(height: meters(w), radius: 0.012),
+                                        materials: [material("#c8ccd0", metallic: 0.9)])
+                    e.position = [0, meters(baseY + a.y), 0]
+                    e.orientation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1])
+                    e.name = "acc-rail"
+                    group.addChild(e)
+                    added = true
+                case .cutleryTray:
+                    box(w, 45, d, "#b9b4a8", 0, a.y + 22, 0, name: "acc-cutlery")
+                    for x in stride(from: -w / 3, through: w / 3, by: w / 3) {
+                        box(4, 55, d, "#8f8a7e", x, a.y + 28, 0, name: "acc-cutlery-div")
+                    }
+                case .wasteBin:
+                    cylinder(160, 380, "#6f7478", 0, a.y + 190, 0, name: "acc-bin")
+                case .organizer:
+                    box(w, 80, d, "#a9a49a", 0, a.y + 40, 0, name: "acc-organizer")
+                    for x in [-w / 4, 0, w / 4] {
+                        box(4, 90, d, "#7f7a70", x, a.y + 45, 0, name: "acc-organizer-div")
+                    }
+                case .glassShelf:
+                    box(w, 10, d, "#9fc3d0", 0, a.y, 0, alpha: 0.45, name: "acc-glass")
+                case .led:
+                    box(w * 0.9, 8, 12, "#fff4d0", 0, min(a.y, c.bodyHeight - 20), c.depth / 2 - 40,
+                        name: "acc-led")
+                }
+            }
+
+            if !group.children.isEmpty { root.addChild(group) }
+        }
+        return added ? root : nil
+    }
+
     /// Zawiasy, prowadnice i uchwyty jako modele GLB w układzie szafki.
     @MainActor
     private static func hardwareEntity(cabinets: [Cabinet]) -> Entity? {
@@ -128,13 +218,17 @@ public enum SceneBuilder {
             let bodyH = c.type == .base ? max(0, c.height - c.plinth) : c.height
             let hasDrawers = c.elements.contains { $0.kind == .drawer }
 
-            // zawiasy na skrzydłach (2 na skrzydło)
-            if !hasDrawers, c.type != .panel {
-                for frac in [0.22, 0.78] {
-                    if let hinge = ModelLibrary.entity(named: "hardware_hinge_35", targetSize: 0.07) {
-                        hinge.position = [meters(c.width / 2 - 70), meters(baseY + bodyH * frac), meters(c.depth / 2)]
-                        group.addChild(hinge)
-                        added = true
+            // zawiasy na skrzydłach (2 na skrzydło, po obu stronach przy 2 drzwiach)
+            if !hasDrawers, c.type != .panel, c.hinge != .none {
+                let sides: [Double] = (c.doorCount ?? 1) == 2 ? [-1, 1] : [1]
+                for side in sides {
+                    for frac in [0.22, 0.78] {
+                        if let hinge = ModelLibrary.entity(named: "hardware_hinge_35", targetSize: 0.07) {
+                            hinge.position = [meters(side * (c.width / 2 - 70)),
+                                              meters(baseY + bodyH * frac), meters(c.depth / 2)]
+                            group.addChild(hinge)
+                            added = true
+                        }
                     }
                 }
             }
@@ -167,6 +261,22 @@ public enum SceneBuilder {
                         group.addChild(slide)
                         added = true
                     }
+                }
+            }
+
+            // wkłady szuflad: mata / stojak na talerze / segregator / organizer…
+            // Rysujemy też samą „wannę" szuflady, żeby wkład nie wisiał w powietrzu.
+            for drawer in c.elements where drawer.kind == .drawer && drawer.insert != nil {
+                guard let spec = DrawerInsertCatalog.insert(id: drawer.insert) else { continue }
+                let innerW = DrawerInsertCatalog.innerWidth(cabinetWidth: c.width)
+                let innerD = DrawerInsertCatalog.innerDepth(cabinetDepth: c.depth)
+                let innerH = DrawerInsertCatalog.innerHeight(drawerFrontHeight: drawer.height)
+
+                if let insertEntity = DrawerInsertBuilder.entity(insert: spec, innerWidth: innerW,
+                                                                innerDepth: innerD, available: innerH) {
+                    insertEntity.position = [0, meters(baseY + drawer.y + 12), 0]
+                    group.addChild(insertEntity)
+                    added = true
                 }
             }
 

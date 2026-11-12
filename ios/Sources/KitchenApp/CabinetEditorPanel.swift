@@ -347,6 +347,62 @@ struct CabinetEditorPanel: View {
                     .font(.caption)
             }
 
+            section("Zawiasy") {
+                Picker("Rodzaj zawiasu", selection: Binding(get: { draft.hinge ?? .standard },
+                                                             set: { draft.hinge = $0; commit() })) {
+                    ForEach(HingeType.allCases) { h in
+                        Label(h.label, systemImage: h.symbol).tag(h)
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(.cyan)
+                Text("\(max(1, draft.doorCount ?? 1) * 2) szt. na szafkę (2 na skrzydło)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            section("Akcesoria wnętrza") {
+                if let accessories = draft.accessories, !accessories.isEmpty {
+                    ForEach(accessories) { accessory in
+                        HStack(spacing: 8) {
+                            Image(systemName: accessory.kind.symbol)
+                                .foregroundStyle(.cyan)
+                                .frame(width: 20)
+                            Text(accessory.kind.label).font(.caption)
+                            Spacer()
+                            Text("y = \(Int(accessory.y))").font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Button(role: .destructive) {
+                                draft.accessories?.removeAll { $0.id == accessory.id }
+                                commit()
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.red)
+                        }
+                    }
+                }
+                Menu {
+                    ForEach(CabinetAccessoryKind.allCases) { kind in
+                        Button {
+                            var list = draft.accessories ?? []
+                            list.append(CabinetAccessory(kind: kind))
+                            draft.accessories = list
+                            commit()
+                        } label: {
+                            Label(kind.label, systemImage: kind.symbol)
+                        }
+                    }
+                } label: {
+                    Label("Dodaj akcesorium", systemImage: "plus")
+                        .font(.caption)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 9))
+                }
+            }
+
             if draft.purpose == .wardrobe {
                 Text("Garderoba: dodaj drążek lub półki na ubrania w zakładce Wnętrze.")
                     .font(.caption2)
@@ -380,6 +436,17 @@ struct CabinetEditorPanel: View {
                 Text("\(draft.elements.count) elementów")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+            }
+
+            section("Półki") {
+                stepperRow("Liczba półek", value: Binding(
+                    get: { Double(draft.elements.filter { $0.kind == .shelf }.count) },
+                    set: { draft.setShelfCount(Int($0.rounded())); commit() }
+                ), range: 0...12, step: 1, suffix: "szt.")
+                stepperRow("Rozstaw półek", value: Binding(
+                    get: { draft.shelfSpacing },
+                    set: { draft.setShelfSpacing($0); commit() }
+                ), range: 120...600, step: 10)
             }
 
             HStack(spacing: 8) {
@@ -438,12 +505,38 @@ struct CabinetEditorPanel: View {
                          ? "Szuflada \(element.drawer?.rawValue ?? "")"
                          : "Półka")
                         .font(.caption.weight(.semibold))
-                    Text("y = \(Int(element.y)) mm · \(element.storage?.label ?? "brak asortymentu")")
+                    Text("y = \(Int(element.y)) mm · \(element.storage?.label ?? "brak asortymentu")"
+                         + (DrawerInsertCatalog.insert(id: element.insert).map { " · \($0.kind.label)" } ?? ""))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
+
+                if element.kind == .drawer {
+                    Menu {
+                        let available = DrawerInsertCatalog.available(
+                            cabinetWidth: draft.width,
+                            cabinetDepth: draft.depth,
+                            drawerFrontHeight: element.height
+                        )
+                        ForEach(available) { insert in
+                            Button {
+                                setInsert(insert.id, for: element.id)
+                            } label: {
+                                Label("\(insert.kind.label) \(insert.width == 0 ? "na wymiar" : "\(Int(insert.width)) mm")",
+                                      systemImage: insert.kind.symbol)
+                            }
+                        }
+                        Divider()
+                        Button("— bez wkładu —") { setInsert(nil, for: element.id) }
+                    } label: {
+                        Image(systemName: element.insert != nil ? "square.grid.2x2.fill" : "square.grid.2x2")
+                            .font(.body)
+                            .padding(7)
+                            .background(.white.opacity(0.10), in: Circle())
+                    }
+                }
 
                 Menu {
                     ForEach(StorageKind.allCases) { kind in
@@ -533,7 +626,8 @@ struct CabinetEditorPanel: View {
     }
 
     private func stepperRow(_ title: String, value: Binding<Double>,
-                            range: ClosedRange<Double>, step: Double) -> some View {
+                            range: ClosedRange<Double>, step: Double,
+                            suffix: String = "mm") -> some View {
         HStack {
             Text(title).font(.caption)
             Spacer()
@@ -543,7 +637,7 @@ struct CabinetEditorPanel: View {
                 Image(systemName: "minus.circle")
             }
             .buttonStyle(.plain)
-            Text("\(Int(value.wrappedValue)) mm")
+            Text("\(Int(value.wrappedValue)) \(suffix)")
                 .font(.caption.monospacedDigit())
                 .frame(width: 78)
             Button {
@@ -666,6 +760,13 @@ struct CabinetEditorPanel: View {
             draft.elements[i].height = kind.drawerSystem.frontHeight
         }
         autoLayout()
+    }
+
+    /// Ustawia wkład szuflady. `nil` = bez wkładu.
+    private func setInsert(_ insertID: String?, for id: UUID) {
+        guard let i = draft.elements.firstIndex(where: { $0.id == id }) else { return }
+        draft.elements[i].insert = insertID
+        commit()
     }
 
     private func move(_ id: UUID, by delta: Double) {

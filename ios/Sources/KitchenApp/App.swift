@@ -389,6 +389,21 @@ struct ContentView: View {
                     showPlanMethod = true
                 }
             }
+            // hak: szafka z trzema szufladami i wkładami (weryfikacja 3D wkładów)
+            if UserDefaults.standard.bool(forKey: "demoInserts") {
+                interiorView = true
+                useScanHouse = false
+                var cabinet = Cabinet(name: "Szuflady wkłady", type: .base, width: 600, height: 720,
+                                      depth: 560, plinth: 100, x: 0, z: -4520, rotation: 0)
+                cabinet.elements = [
+                    CabinetElement(kind: .drawer, y: 0, height: 66.5, drawer: .n, storage: .cutlery, insert: "cutlery-300"),
+                    CabinetElement(kind: .drawer, y: 66.5, height: 90.5, drawer: .m, storage: .cups, insert: "cups-400"),
+                    CabinetElement(kind: .drawer, y: 157, height: 128.5, drawer: .k, storage: .plates, insert: "plates-300"),
+                ]
+                model.updateCabinets([cabinet])
+                model.persist()
+            }
+
             if UserDefaults.standard.bool(forKey: "demoInterior") {
                 interiorView = true
             }

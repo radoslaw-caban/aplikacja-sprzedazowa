@@ -60,15 +60,19 @@ public struct CabinetElement: Identifiable, Codable, Sendable, Equatable {
     public var drawer: DrawerSystem?
     /// co będzie przechowywane — dobiera wysokość i modele towarów
     public var storage: StorageKind?
+    /// wkład szuflady: `DrawerInsert.id` z katalogu (mata, stojak na talerze, segregator…)
+    public var insert: String?
 
     public init(id: UUID = UUID(), kind: ElementKind, y: Double, height: Double,
-                drawer: DrawerSystem? = nil, storage: StorageKind? = nil) {
+                drawer: DrawerSystem? = nil, storage: StorageKind? = nil,
+                insert: String? = nil) {
         self.id = id
         self.kind = kind
         self.y = y
         self.height = height
         self.drawer = drawer
         self.storage = storage
+        self.insert = insert
     }
 }
 
@@ -109,6 +113,10 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
     public var cutouts: [CabinetCutout]?
     /// liczba skrzydeł frontu (1 lub 2); nil = 1
     public var doorCount: Int?
+    /// rodzaj zawiasów; nil = standardowy clip
+    public var hinge: HingeType?
+    /// akcesoria wnętrza (kosz, drążek, organizer, LED…)
+    public var accessories: [CabinetAccessory]?
 
     public init(
         id: UUID = UUID(),
@@ -134,7 +142,9 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
         preview: Bool? = nil,
         purpose: CabinetPurpose? = nil,
         cutouts: [CabinetCutout]? = nil,
-        doorCount: Int? = nil
+        doorCount: Int? = nil,
+        hinge: HingeType? = nil,
+        accessories: [CabinetAccessory]? = nil
     ) {
         self.id = id
         self.name = name
@@ -160,6 +170,8 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
         self.purpose = purpose
         self.cutouts = cutouts
         self.doorCount = doorCount
+        self.hinge = hinge
+        self.accessories = accessories
     }
 }
 
