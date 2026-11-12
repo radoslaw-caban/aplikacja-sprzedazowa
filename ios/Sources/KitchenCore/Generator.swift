@@ -165,18 +165,35 @@ public enum Generator {
         if c.slidingPanels == nil {
             let hasDrawers = c.elements.contains { $0.kind == .drawer }
             if !hasDrawers {
-                out.append(Box(
-                    id: "\(c.id):front",
-                    role: .front,
-                    cabinetID: c.id,
-                    size: SIMD3(
-                        max(0, c.width - 2 * Standards.gap),
-                        max(0, bodyH - 2 * Standards.gap),
-                        p
-                    ),
-                    position: SIMD3(0, baseY + bodyH / 2, c.depth / 2 + Standards.gap + p / 2),
-                    color: c.color
-                ))
+                let doors = max(1, min(2, c.doorCount ?? 1))
+                if doors == 1 {
+                    out.append(Box(
+                        id: "\(c.id):front",
+                        role: .front,
+                        cabinetID: c.id,
+                        size: SIMD3(
+                            max(0, c.width - 2 * Standards.gap),
+                            max(0, bodyH - 2 * Standards.gap),
+                            p
+                        ),
+                        position: SIMD3(0, baseY + bodyH / 2, c.depth / 2 + Standards.gap + p / 2),
+                        color: c.color
+                    ))
+                } else {
+                    let gap = Standards.gap
+                    let doorW = max(0, (c.width - gap * 3) / 2)
+                    for i in 0..<2 {
+                        let x = (doorW + gap) * (Double(i) - 0.5)
+                        out.append(Box(
+                            id: "\(c.id):front:\(i)",
+                            role: .front,
+                            cabinetID: c.id,
+                            size: SIMD3(doorW, max(0, bodyH - 2 * gap), p),
+                            position: SIMD3(x, baseY + bodyH / 2, c.depth / 2 + gap + p / 2),
+                            color: c.color
+                        ))
+                    }
+                }
             }
         }
 

@@ -877,6 +877,18 @@ func runCutoutChecks() {
         r.check("uchwyt: y = 772", abs(b.position.y - 772) < 0.5)
     }
 
+    var d = Cabinet(name: "drzwi", type: .base, width: 600, height: 862, depth: 560, plinth: 142)
+    d.doorCount = 1
+    r.check("drzwi: jedno skrzydło", Generator.build(d).filter { $0.role == .front }.count == 1)
+    d.doorCount = 2
+    let doors = Generator.build(d).filter { $0.role == .front }
+    r.check("drzwi: dwa skrzydła", doors.count == 2)
+    if doors.count == 2 {
+        r.check("drzwi: równe szerokości", abs(doors[0].size.x - doors[1].size.x) < 0.5)
+        r.check("drzwi: mieszczą się w szafce", doors.reduce(0) { $0 + $1.size.x } < 600)
+        r.check("drzwi: różne środki", abs(doors[0].position.x - doors[1].position.x) > 100)
+    }
+
     let cut = CabinetCutout(plane: .side, purpose: .cable, x: 20, y: 100, width: 60, height: 60)
     let data = try! JSONEncoder().encode(cut)
     let back = try! JSONDecoder().decode(CabinetCutout.self, from: data)

@@ -60,6 +60,19 @@ każdej zmianie. Zmiany zapisują się od razu przez `AppModel.updateCabinet`.
 - Zakładka „Projekt 3D kuchnia”: kadr wewnętrzny liczony z zabudowy (nie ze
   skanu); widać czarne wycięcie zlewu na blacie oraz uchwyty na frontach.
 
+## Edytor szafek (bez FPS)
+
+Menu boczne → **Projekt** → **Szafki — edytor**.
+
+- lista wszystkich szafek z wymiarami, typem i przeznaczeniem,
+- wymiary, położenie w budynku, obrót, przyciąganie do ściany,
+- rodzaj (dolna/wisząca/stojąca/zaślepka), szablon z biblioteki, przeznaczenie,
+- **wygląd frontu**: 6 kolorów i tekstura z biblioteki,
+- **liczba drzwi**: 1 lub 2 skrzydła (Generator dzieli front z 3 mm szczeliną),
+- wnętrze: półki/szuflady i asortyment,
+- duplikowanie, usuwanie, odłączanie szafki od strefy,
+- dodawanie nowej szafki z biblioteki (stawiana przy ścianie).
+
 ## Modele okuć i akcesoriów
 
 Pobrane i dodane do `ios/Resources/Models`:

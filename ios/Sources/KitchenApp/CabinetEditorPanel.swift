@@ -14,12 +14,14 @@ struct CabinetEditorPanel: View {
     let room: Room
     let mode: CabinetEditorMode
     let isOpen: Bool
+    let canDrag: Bool
     let dragArmed: Bool
     var onArmDrag: (Bool) -> Void
     var onLiveChange: (Cabinet) -> Void
     var onSave: (Cabinet) -> Void
     var onClose: () -> Void
     var onDelete: (() -> Void)?
+    var onDetach: (() -> Void)?
     var onOpenFront: (Bool) -> Void
     var onModeChange: (CabinetEditorMode) -> Void
 
@@ -30,24 +32,28 @@ struct CabinetEditorPanel: View {
          room: Room,
          mode: CabinetEditorMode,
          isOpen: Bool,
+         canDrag: Bool = true,
          dragArmed: Bool,
          onArmDrag: @escaping (Bool) -> Void,
          onLiveChange: @escaping (Cabinet) -> Void,
          onSave: @escaping (Cabinet) -> Void,
          onClose: @escaping () -> Void,
          onDelete: (() -> Void)? = nil,
+         onDetach: (() -> Void)? = nil,
          onOpenFront: @escaping (Bool) -> Void,
          onModeChange: @escaping (CabinetEditorMode) -> Void) {
         self.cabinet = cabinet
         self.room = room
         self.mode = mode
         self.isOpen = isOpen
+        self.canDrag = canDrag
         self.dragArmed = dragArmed
         self.onArmDrag = onArmDrag
         self.onLiveChange = onLiveChange
         self.onSave = onSave
         self.onClose = onClose
         self.onDelete = onDelete
+        self.onDetach = onDetach
         self.onOpenFront = onOpenFront
         self.onModeChange = onModeChange
         _draft = State(initialValue: cabinet)
@@ -147,10 +153,25 @@ struct CabinetEditorPanel: View {
     private var bodyEditor: some View {
         VStack(alignment: .leading, spacing: 18) {
             if draft.zoneID != nil {
-                Label("Szafka ze strefy — zmiana odpowiedzi w strefie może nadpisać ręczną edycję.",
-                      systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Szafka ze strefy — zmiana odpowiedzi w strefie może nadpisać ręczną edycję.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                    if onDetach != nil {
+                        Button {
+                            draft.zoneID = nil
+                            draft.zoneRole = nil
+                            onDetach?()
+                            commit()
+                        } label: {
+                            Label("Odłącz od strefy i edytuj ręcznie", systemImage: "link.badge.plus")
+                                .font(.caption2)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.orange)
+                    }
+                }
             }
 
             section("Wymiary") {
@@ -193,6 +214,7 @@ struct CabinetEditorPanel: View {
                 }
                 .buttonStyle(.plain)
 
+                if canDrag {
                 Button {
                     onArmDrag(!dragArmed)
                 } label: {
@@ -206,9 +228,60 @@ struct CabinetEditorPanel: View {
                                     in: RoundedRectangle(cornerRadius: 9))
                 }
                 .buttonStyle(.plain)
+                }
+            }
+
+            section("Wygląd frontu") {
+                HStack(spacing: 8) {
+                    ForEach(["#c8bca9", "#f2efe9", "#8fa6b8", "#6b7280", "#2f3437", "#c9a227"], id: \.self) { hex in
+                        Button {
+                            draft.color = hex
+                            draft.texture = nil
+                            commit()
+                        } label: {
+                            Circle()
+                                .fill(Color(hex: hex))
+                                .frame(width: 32, height: 32)
+                                .overlay(Circle().stroke(Color.white.opacity(draft.color == hex ? 0.9 : 0.2),
+                                                          lineWidth: draft.color == hex ? 2 : 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Menu {
+                    Button("Bez tekstury") {
+                        draft.texture = nil
+                        commit()
+                    }
+                    Divider()
+                    ForEach(TextureStore.shared.textures) { texture in
+                        Button(texture.name) {
+                            draft.texture = texture.name
+                            commit()
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Label(draft.texture == nil ? "Tekstura z biblioteki" : "Tekstura: \(draft.texture!)",
+                              systemImage: "square.grid.3x3")
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                    }
+                    .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
+                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 9))
+                }
             }
 
             section("Rodzaj i przeznaczenie") {
+                Picker("Liczba drzwi", selection: Binding(get: { draft.doorCount ?? 1 },
+                                                         set: { draft.doorCount = $0; commit() })) {
+                    Text("1 skrzydło").tag(1)
+                    Text("2 skrzydła").tag(2)
+                }
+                .pickerStyle(.segmented)
+
                 Picker("Typ", selection: Binding(get: { draft.type }, set: { setType($0) })) {
                     Text("Dolna").tag(CabinetType.base)
                     Text("Wisząca").tag(CabinetType.wall)

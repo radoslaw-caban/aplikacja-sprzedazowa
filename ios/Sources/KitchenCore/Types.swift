@@ -107,6 +107,8 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
     public var purpose: CabinetPurpose?
     /// wycięcia w blacie / froncie / boku
     public var cutouts: [CabinetCutout]?
+    /// liczba skrzydeł frontu (1 lub 2); nil = 1
+    public var doorCount: Int?
 
     public init(
         id: UUID = UUID(),
@@ -131,7 +133,8 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
         worktopShift: Double? = nil,
         preview: Bool? = nil,
         purpose: CabinetPurpose? = nil,
-        cutouts: [CabinetCutout]? = nil
+        cutouts: [CabinetCutout]? = nil,
+        doorCount: Int? = nil
     ) {
         self.id = id
         self.name = name
@@ -156,6 +159,7 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
         self.preview = preview
         self.purpose = purpose
         self.cutouts = cutouts
+        self.doorCount = doorCount
     }
 }
 

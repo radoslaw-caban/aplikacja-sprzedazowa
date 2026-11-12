@@ -226,6 +226,9 @@ struct SceneView: View {
             hasher.combine(cabinet.x); hasher.combine(cabinet.z)
             hasher.combine(cabinet.width); hasher.combine(cabinet.height); hasher.combine(cabinet.depth)
             hasher.combine(cabinet.rotation)
+            hasher.combine(cabinet.doorCount ?? 1)
+            hasher.combine(cabinet.color)
+            hasher.combine(cabinet.texture)
             hasher.combine(cabinet.elements.count)
             for e in cabinet.elements {
                 hasher.combine(e.kind.rawValue)

@@ -47,6 +47,7 @@ struct ContentView: View {
     @State private var showZones = false
     @State private var showCutouts = false
     @State private var showCabinets = false
+    @State private var showCabinets = false
     @State private var zoneWall = 0
     @State private var showTextures = false
     @State private var showSettings = false
@@ -219,6 +220,7 @@ struct ContentView: View {
         }
         .modifier(CutoutPresenter(isPresented: $showCutouts, model: model))
         .modifier(CabinetManagerPresenter(isPresented: $showCabinets, model: model))
+        .modifier(CabinetManagerPresenter(isPresented: $showCabinets, model: model))
         .sheet(isPresented: $showZones) {
             ZoneDesignerView(model: model, initialWall: zoneWall)
         }
@@ -303,6 +305,10 @@ struct ContentView: View {
 
             // hak diagnostyczny: widok FPS na podjeździe
             #if DEBUG
+            if UserDefaults.standard.bool(forKey: "demoCabinets") {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                showCabinets = true
+            }
             if UserDefaults.standard.bool(forKey: "demoCutouts") {
                 var cabinets = model.current.cabinets
                 if let index = cabinets.firstIndex(where: { $0.type == .base }) {
@@ -488,6 +494,12 @@ struct ContentView: View {
                     drawerOpen = false
                 } label: {
                     Label("Wycięcia w szafkach (zlew, płyta, uchwyty)", systemImage: "scissors")
+                }
+                Button {
+                    showCabinets = true
+                    drawerOpen = false
+                } label: {
+                    Label("Szafki — edytor (wymiary, front, wnętrze)", systemImage: "cabinet.fill")
                 }
                 Button {
                     showCabinets = true
