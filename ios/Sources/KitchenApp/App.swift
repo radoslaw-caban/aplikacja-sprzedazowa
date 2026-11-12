@@ -89,7 +89,8 @@ struct ContentView: View {
             }
 
             // Biblioteka / edytor wysuwany z lewej krawędzi.
-            LibraryDock(model: model, open: $dockOpen)
+            LibraryDock(model: model, open: $dockOpen,
+                        onOpenZoneDesigner: { openZones(wall: 0) })
                 .zIndex(3)
 
             // Menu wyciągane z lewej krawędzi — zamiast stałego panelu.
