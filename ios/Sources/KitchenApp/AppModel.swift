@@ -298,6 +298,27 @@ final class AppModel {
         projects[currentIndex].updatedAt = Date()
     }
 
+    /// Akcesorium dodane magicznym ołówkiem w trybie FPS.
+    func addElement(to cabinetID: UUID, element: CabinetElement) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var cabinets = projects[currentIndex].cabinets
+        guard let i = cabinets.firstIndex(where: { $0.id == cabinetID }) else { return }
+        cabinets[i].elements.append(element)
+        projects[currentIndex].cabinets = cabinets
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        status = "Dodano akcesorium do szafki"
+    }
+
+    /// Kolor ściany wybrany w FPS — zapis w projekcie.
+    func updateWallColor(_ hex: String) {
+        guard projects.indices.contains(currentIndex) else { return }
+        projects[currentIndex].wallColor = hex
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        status = "Kolor ściany: \(hex)"
+    }
+
     func updateRoom(_ room: Room) {
         guard projects.indices.contains(currentIndex) else { return }
         projects[currentIndex].room = room

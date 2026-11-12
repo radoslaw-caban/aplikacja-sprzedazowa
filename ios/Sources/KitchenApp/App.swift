@@ -41,6 +41,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showNewClient = false
     @State private var showContract = false
+    @State private var showFPS = false
     @State private var showClientProjects = false
     @State private var planDraft = FloorPlan.rectangle()
     /// Projekt zablokowany: na ekranie tylko 3D i kłódka (przeciąganie przesuwa).
@@ -118,11 +119,30 @@ struct ContentView: View {
                 .padding(.leading, 14)
             }
         }
+        .planPresentation(isPresented: $showFPS) {
+            FirstPersonView(
+                room: model.current.room,
+                cabinets: model.current.cabinets,
+                wallColor: model.current.wallColor,
+                onExit: { showFPS = false },
+                onAddElement: { id, element in
+                    model.addElement(to: id, element: element)
+                },
+                onWallColor: { hex in
+                    model.updateWallColor(hex)
+                }
+            )
+        }
         .planPresentation(isPresented: $showNewClient) {
             NewClientFlow { firstName, lastName, address, phone, email in
                 let project = model.createClient(firstName: firstName, lastName: lastName,
                                                  address: address, phone: phone, email: email)
                 model.addToWorkingSet(project.id)
+                // po kreatorze stajemy na podjeździe w widoku pierwszoosobowym
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    showFPS = true
+                }
             }
         }
         .sheet(isPresented: $showContract) {
@@ -216,6 +236,30 @@ struct ContentView: View {
                 if model.projects.indices.contains(index) { model.selectProject(index) }
             }
 
+            // hak diagnostyczny: widok FPS na podjeździe
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "demoZoneInsert") {
+                // weryfikacja 3D: jedna strefa gotowania, bez otwierania kreatora
+                for z in model.currentZones { model.deleteZone(z.id) }
+                let z = model.addZone(kind: .kitchenCook, wallIndex: 0)
+                if UserDefaults.standard.bool(forKey: "demoZoneFinal") {
+                    model.finalizeZone(z.id)
+                }
+                print("[ui] strefa wstawiona: \(model.current.cabinets.count) szafek, stref \(model.currentZones.count)")
+            }
+            if UserDefaults.standard.bool(forKey: "demoZones") {
+                locked = false
+                zoneWall = 0
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                showZones = true
+                print("[ui] strefy otwarte: ściana 1, stref \(model.currentZones.count)")
+            }
+            #endif
+            if UserDefaults.standard.bool(forKey: "demoFPS") {
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                showFPS = true
+            }
+
             // haki diagnostyczne: umowa i kreator klienta
             if UserDefaults.standard.bool(forKey: "demoContract") {
                 try? await Task.sleep(nanoseconds: 700_000_000)
@@ -242,21 +286,6 @@ struct ContentView: View {
                     showPlan = true
                 }
             }
-            #if DEBUG
-            if UserDefaults.standard.bool(forKey: "demoZoneInsert") {
-                // weryfikacja 3D: jedna strefa gotowania, bez otwierania kreatora
-                for z in model.currentZones { model.deleteZone(z.id) }
-                _ = model.addZone(kind: .kitchenCook, wallIndex: 3)
-                print("[ui] strefa wstawiona: \(model.current.cabinets.count) szafek, stref \(model.currentZones.count)")
-            }
-            if UserDefaults.standard.bool(forKey: "demoZones") {
-                locked = false
-                zoneWall = 0
-                try? await Task.sleep(nanoseconds: 900_000_000)
-                showZones = true
-                print("[ui] strefy otwarte: ściana 1, stref \(model.currentZones.count)")
-            }
-            #endif
             if UserDefaults.standard.bool(forKey: "demoPlan") {
                 // weryfikacja widoku mapy bez dotykania ekranu
                 planDraft = model.currentPlan
@@ -581,6 +610,9 @@ struct ContentView: View {
             }
             Button { showSettings = true } label: {
                 Label("Ustawienia", systemImage: "gear")
+            }
+            Button { showFPS = true } label: {
+                Label("Wejdź do domu", systemImage: "figure.walk")
             }
             Button { showDocuments = true } label: {
                 Label("Dokumenty", systemImage: "folder")

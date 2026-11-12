@@ -87,6 +87,8 @@ public struct Project: Identifiable, Codable, Sendable {
     public var order: ProjectOrder?
     /// Strefy zabudowy (auto-projekt) — brak pola = projekt bez stref.
     public var zones: [Zone]?
+    /// kolor ścian wybrany magicznym ołówkiem w trybie FPS
+    public var wallColor: String?
 
     public init(
         id: UUID = UUID(),
@@ -98,7 +100,8 @@ public struct Project: Identifiable, Codable, Sendable {
         updatedAt: Date = Date(),
         plan: FloorPlan? = nil,
         order: ProjectOrder? = nil,
-        zones: [Zone]? = nil
+        zones: [Zone]? = nil,
+        wallColor: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -110,6 +113,7 @@ public struct Project: Identifiable, Codable, Sendable {
         self.plan = plan
         self.order = order
         self.zones = zones
+        self.wallColor = wallColor
     }
 }
 
