@@ -819,8 +819,74 @@ func runChecks() {
     print("OK")
 }
 
-if CommandLine.arguments.contains("--sweep") {
+/// Odczyt zabudowy kuchennej ze skanu: `swift run KitchenChecks --kitchen-scan <plik.glb>`
+@MainActor
+func runKitchenScan(_ path: String) {
+    print("\nSkan kuchni → projekt parametryczny")
+    print("plik: \(path)")
+    do {
+        let started = Date()
+        let tris = try GLBLoader.triangles(url: URL(fileURLWithPath: path))
+        let loadTime = Date().timeIntervalSince(started)
+        print(String(format: "trójkątów: %d  (wczytane w %.2f s)", tris.count / 3, loadTime))
+
+        let detectStart = Date()
+        let proposal = ScanKitchen.detect(triangles: tris)
+        let detectTime = Date().timeIntervalSince(detectStart)
+
+        print(String(format: "detekcja: %.2f s", detectTime))
+        print(String(format: "obrót kuchni: %.1f°   blat: %.0f mm   powierzchnia blatów: %.2f m²",
+                     proposal.rotationDeg, proposal.worktopHeightMM, proposal.counterAreaM2))
+        print("biegi: \(proposal.runs.count), moduły: \(proposal.moduleCount), suma: \(Int(proposal.totalLengthMM)) mm")
+
+        for (index, run) in proposal.runs.enumerated() {
+            print(String(format: "  bieg %d: %5.0f × %3.0f mm  kąt %.1f°  start (%.0f, %.0f) mm",
+                         index + 1, run.lengthMM, run.depthMM, run.angleDeg, run.startX, run.startZ))
+            let widths = run.modules.map { Int($0.width) }
+            print("           moduły: \(widths.count) × [\(widths.map(String.init).joined(separator: ", "))]")
+        }
+        for note in proposal.notes { print("  · \(note)") }
+
+        if proposal.isEmpty { exit(1) }
+    } catch {
+        print("BŁĄD: \(error)")
+        exit(1)
+    }
+}
+
+@MainActor
+func runModelChecks() {
+    let wanted = ModelLibrary.catalog.filter {
+        $0.name.hasPrefix("hardware_") || $0.name.hasPrefix("kenney_")
+    }
+    var failures = 0
+    for entry in wanted {
+        guard let dir = ModelLibrary.modelsDirectory() else {
+            print("BŁĄD: brak katalogu modeli"); exit(1)
+        }
+        let url = dir.appendingPathComponent("\(entry.name).glb")
+        do {
+            let loaded = try GLBLoader.load(url: url)
+            let bounds = loaded.entity.visualBounds(relativeTo: nil)
+            print(String(format: "  ✓ %@: %d siatek, %.2f × %.2f × %.2f m (%@)",
+                         entry.name, loaded.meshCount,
+                         bounds.extents.x, bounds.extents.y, bounds.extents.z, entry.license))
+        } catch {
+            failures += 1
+            print("  ✗ \(entry.name): \(error)")
+        }
+    }
+    print(failures == 0 ? "OK" : "NIEPOWODZENIE: \(failures)")
+    if failures > 0 { exit(1) }
+}
+
+if let index = CommandLine.arguments.firstIndex(of: "--kitchen-scan"),
+   CommandLine.arguments.count > index + 1 {
+    runKitchenScan(CommandLine.arguments[index + 1])
+} else if CommandLine.arguments.contains("--sweep") {
     runSweep()
+} else if CommandLine.arguments.contains("--models") {
+    runModelChecks()
 } else if CommandLine.arguments.contains("--zones") {
     // szybki przebieg tylko reguł stref (bez ciężkich testów skanu)
     let r = Reporter()

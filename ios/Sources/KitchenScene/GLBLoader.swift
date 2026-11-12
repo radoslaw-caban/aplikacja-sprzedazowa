@@ -41,6 +41,95 @@ public enum GLBLoader {
         }
     }
 
+    // MARK: - trójkąty (dla detektorów geometrii, bez RealityKit)
+
+    /// Wszystkie trójkąty modelu w **przestrzeni świata** (metry).
+    ///
+    /// Potrzebne modułom, które liczą na geometrii (np. `ScanKitchen`),
+    /// a nie chcą budować encji ani tekstur.
+    public static func triangles(url: URL) throws -> [SIMD3<Float>] {
+        let data = try Data(contentsOf: url)
+        return try triangles(data: data)
+    }
+
+    public static func triangles(data: Data) throws -> [SIMD3<Float>] {
+        let (json, bin) = try splitChunks(data)
+        guard let root = try JSONSerialization.jsonObject(with: json) as? [String: Any] else {
+            throw LoadError.badJSON
+        }
+        let accessors = root["accessors"] as? [[String: Any]] ?? []
+        let bufferViews = root["bufferViews"] as? [[String: Any]] ?? []
+        let meshes = root["meshes"] as? [[String: Any]] ?? []
+        let nodes = root["nodes"] as? [[String: Any]] ?? []
+        let scenes = root["scenes"] as? [[String: Any]] ?? []
+
+        var out: [SIMD3<Float>] = []
+
+        func nodeMatrix(_ node: [String: Any]) -> float4x4 {
+            if let m = node["matrix"] as? [Double], m.count == 16 {
+                return float4x4(columnMajor: m.map(Float.init))
+            }
+            var t = matrix_identity_float4x4
+            if let tr = node["translation"] as? [Double], tr.count == 3 {
+                t.columns.3 = SIMD4<Float>(Float(tr[0]), Float(tr[1]), Float(tr[2]), 1)
+            }
+            var r = matrix_identity_float4x4
+            if let q = node["rotation"] as? [Double], q.count == 4 {
+                r = float4x4(simd_quatf(ix: Float(q[0]), iy: Float(q[1]), iz: Float(q[2]), r: Float(q[3])))
+            }
+            var s = matrix_identity_float4x4
+            if let sc = node["scale"] as? [Double], sc.count == 3 {
+                s.columns.0.x = Float(sc[0])
+                s.columns.1.y = Float(sc[1])
+                s.columns.2.z = Float(sc[2])
+            }
+            return t * r * s
+        }
+
+        func walk(_ index: Int, _ parent: float4x4, _ depth: Int) {
+            guard nodes.indices.contains(index), depth < 12 else { return }
+            let node = nodes[index]
+            let world = parent * nodeMatrix(node)
+            if let meshIndex = node["mesh"] as? Int, meshes.indices.contains(meshIndex),
+               let primitives = meshes[meshIndex]["primitives"] as? [[String: Any]] {
+                for prim in primitives {
+                    guard let attributes = prim["attributes"] as? [String: Int],
+                          let positionAccessor = attributes["POSITION"],
+                          let positions = readVec3(accessor: positionAccessor, accessors: accessors,
+                                                   views: bufferViews, bin: bin) else { continue }
+                    let indices: [UInt32]
+                    if let ia = prim["indices"] as? Int,
+                       let read = readIndices(accessor: ia, accessors: accessors, views: bufferViews, bin: bin) {
+                        indices = read
+                    } else {
+                        indices = Array(0..<UInt32(positions.count))
+                    }
+                    guard indices.count >= 3 else { continue }
+                    var i = 0
+                    while i + 2 < indices.count {
+                        let ia = Int(indices[i]), ib = Int(indices[i + 1]), ic = Int(indices[i + 2])
+                        i += 3
+                        guard ia < positions.count, ib < positions.count, ic < positions.count else { continue }
+                        for p in [positions[ia], positions[ib], positions[ic]] {
+                            let v = world * SIMD4<Float>(p, 1)
+                            out.append(SIMD3(v.x, v.y, v.z))
+                        }
+                    }
+                }
+            }
+            for child in (node["children"] as? [Int] ?? []) {
+                walk(child, world, depth + 1)
+            }
+        }
+
+        for scene in scenes.prefix(1) {
+            for rootIndex in (scene["nodes"] as? [Int] ?? []) {
+                walk(rootIndex, matrix_identity_float4x4, 0)
+            }
+        }
+        return out
+    }
+
     // MARK: - wejście
 
     @MainActor
