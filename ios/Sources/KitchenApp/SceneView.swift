@@ -190,6 +190,19 @@ struct SceneView: View {
             hasher.combine(cabinet.id)
             hasher.combine(cabinet.x); hasher.combine(cabinet.z)
             hasher.combine(cabinet.width); hasher.combine(cabinet.height); hasher.combine(cabinet.depth)
+            hasher.combine(cabinet.rotation)
+            hasher.combine(cabinet.elements.count)
+            for e in cabinet.elements {
+                hasher.combine(e.kind.rawValue)
+                hasher.combine(e.y); hasher.combine(e.height)
+            }
+            hasher.combine(cabinet.cutouts?.count ?? 0)
+            for cut in cabinet.cutouts ?? [] {
+                hasher.combine(cut.id)
+                hasher.combine(cut.plane.rawValue)
+                hasher.combine(cut.x); hasher.combine(cut.y)
+                hasher.combine(cut.width); hasher.combine(cut.height)
+            }
         }
         hasher.combine(showEnvironment)
         hasher.combine(interiorView)

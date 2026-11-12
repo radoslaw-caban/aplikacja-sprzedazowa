@@ -855,7 +855,40 @@ func runKitchenScan(_ path: String) {
 }
 
 @MainActor
-func runModelChecks() {
+func runCutoutChecks() {
+    let r = Reporter()
+    var c = Cabinet(name: "test", type: .base, width: 600, height: 862, depth: 560, plinth: 142)
+    c.cutouts = [CabinetCutout.make(.sink, in: c)]
+    let top = Generator.build(c).filter { $0.role == .cutout }
+    r.check("zlew: jedno wycięcie", top.count == 1)
+    if let b = top.first {
+        r.check("zlew: szerokość 560 (przycięta do szafki)", abs(b.size.x - 560) < 0.5)
+        r.check("zlew: głębokość 460", abs(b.size.z - 460) < 0.5)
+        r.check("zlew: na blacie (901 mm)", abs(b.position.y - 901) < 0.5)
+    }
+
+    var f = Cabinet(name: "uchwyt", type: .base, width: 600, height: 862, depth: 560, plinth: 142)
+    f.cutouts = [CabinetCutout.make(.handle, in: f)]
+    let front = Generator.build(f).filter { $0.role == .cutout }
+    r.check("uchwyt: jedno wycięcie", front.count == 1)
+    if let b = front.first {
+        r.check("uchwyt: 160 × 26", abs(b.size.x - 160) < 0.5 && abs(b.size.y - 26) < 0.5)
+        r.check("uchwyt: na froncie", b.position.z > 280)
+        r.check("uchwyt: y = 772", abs(b.position.y - 772) < 0.5)
+    }
+
+    let cut = CabinetCutout(plane: .side, purpose: .cable, x: 20, y: 100, width: 60, height: 60)
+    let data = try! JSONEncoder().encode(cut)
+    let back = try! JSONDecoder().decode(CabinetCutout.self, from: data)
+    r.check("wycięcie: Codable", back == cut)
+
+    let passed = r.checks - r.failures
+    print("\n\(passed)/\(r.checks) warunków wycięć")
+    if r.failures > 0 { exit(1) }
+    print("OK")
+}
+
+@MainActor func runModelChecks() {
     let wanted = ModelLibrary.catalog.filter {
         $0.name.hasPrefix("hardware_") || $0.name.hasPrefix("kenney_")
     }
@@ -885,6 +918,8 @@ if let index = CommandLine.arguments.firstIndex(of: "--kitchen-scan"),
     runKitchenScan(CommandLine.arguments[index + 1])
 } else if CommandLine.arguments.contains("--sweep") {
     runSweep()
+} else if CommandLine.arguments.contains("--cutouts") {
+    runCutoutChecks()
 } else if CommandLine.arguments.contains("--models") {
     runModelChecks()
 } else if CommandLine.arguments.contains("--zones") {

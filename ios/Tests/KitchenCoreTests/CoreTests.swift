@@ -980,4 +980,33 @@ final class GestureNavTests: XCTestCase {
         XCTAssertTrue(order.isContractSigned)
         XCTAssertEqual(order.contractSignatureFile, "abc-podpis.png")
     }
+
+    func testCutoutTopBox() {
+        var c = Cabinet(name: "zlew", type: .base, width: 600, height: 862, depth: 560, plinth: 142)
+        c.cutouts = [CabinetCutout.make(.sink, in: c)]
+        let boxes = Generator.build(c).filter { $0.role == .cutout }
+        XCTAssertEqual(boxes.count, 1)
+        XCTAssertEqual(boxes[0].size.x, 560)
+        XCTAssertEqual(boxes[0].size.y, 2)
+        XCTAssertEqual(boxes[0].size.z, 460)
+        XCTAssertEqual(boxes[0].position.y, 901, accuracy: 0.5)
+    }
+
+    func testCutoutFrontHandle() {
+        var c = Cabinet(name: "uchwyt", type: .base, width: 600, height: 862, depth: 560, plinth: 142)
+        c.cutouts = [CabinetCutout.make(.handle, in: c)]
+        let boxes = Generator.build(c).filter { $0.role == .cutout }
+        XCTAssertEqual(boxes.count, 1)
+        XCTAssertEqual(boxes[0].size.x, 160)
+        XCTAssertEqual(boxes[0].size.y, 26)
+        XCTAssertGreaterThan(boxes[0].position.z, 280)
+        XCTAssertEqual(boxes[0].position.y, 772, accuracy: 0.5)
+    }
+
+    func testCutoutCodableRoundTrip() throws {
+        let cut = CabinetCutout(plane: .side, purpose: .cable, x: 20, y: 100, width: 60, height: 60)
+        let data = try JSONEncoder().encode(cut)
+        let back = try JSONDecoder().decode(CabinetCutout.self, from: data)
+        XCTAssertEqual(back, cut)
+    }
 }

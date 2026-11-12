@@ -106,6 +106,45 @@ public enum Generator {
             }
         }
 
+        // ---- wycięcia (blat / front / bok) ----
+        for cut in c.cutouts ?? [] {
+            let color = "#101418"
+            switch cut.plane {
+            case .top:
+                let topY = c.type == .base
+                    ? c.height + Standards.worktopThickness + 1
+                    : baseY + bodyH + 1
+                out.append(Box(
+                    id: "\(c.id):cutout:\(cut.id)",
+                    role: .cutout,
+                    cabinetID: c.id,
+                    size: SIMD3(cut.width, 2, cut.height),
+                    position: SIMD3(cut.x, topY, cut.y),
+                    color: color
+                ))
+            case .front:
+                out.append(Box(
+                    id: "\(c.id):cutout:\(cut.id)",
+                    role: .cutout,
+                    cabinetID: c.id,
+                    size: SIMD3(cut.width, cut.height, 2),
+                    position: SIMD3(cut.x, baseY + min(max(cut.y, cut.height / 2), bodyH - cut.height / 2),
+                                    c.depth / 2 + 22),
+                    color: color
+                ))
+            case .side:
+                out.append(Box(
+                    id: "\(c.id):cutout:\(cut.id)",
+                    role: .cutout,
+                    cabinetID: c.id,
+                    size: SIMD3(2, cut.height, cut.width),
+                    position: SIMD3(c.width / 2 + 1, baseY + min(max(cut.y, cut.height / 2), bodyH - cut.height / 2),
+                                    cut.x),
+                    color: color
+                ))
+            }
+        }
+
         // ---- szafa przesuwna: panele w płaszczyźnie frontu ----
         if let panels = c.slidingPanels, panels > 1 {
             let pw = c.width / Double(panels) + 30
@@ -219,13 +258,64 @@ public enum Generator {
         return out
     }
 
+    /// Stawia szafkę POD ŚCIANĄ, TYŁEM DO NIEJ, frontem do wnętrza pomieszczenia.
+    ///
+    /// ZASADA (wymóg produkcyjny): szafka stoi tyłem do ściany. Front korpusu
+    /// jest w układzie lokalnym na +Z (`Generator.build`: elementy `.front`
+    /// mają `z = +depth/2`), więc obrót dobieramy tak, żeby lokalne +Z
+    /// wskazywało W GŁĄB pomieszczenia:
+    ///
+    ///   ściana 0 (północ, −Z) → obrót   0°  (przód w +Z, do środka)
+    ///   ściana 1 (południe, +Z) → obrót 180° (przód w −Z, do środka)
+    ///   ściana 2 (zachód, −X) → obrót  90°
+    ///   ściana 3 (wschód, +X) → obrót 270°
+    ///
+    /// Gdyby zostawić obrót 0 dla każdej ściany, szafka na ścianie południowej
+    /// stałaby frontem w ścianę — dokładnie ten błąd został zgłoszony.
+    public static func placedAgainstWall(_ cabinet: Cabinet, wall: Int,
+                                         room: Room) -> Cabinet {
+        var c = cabinet
+        let halfW = room.width / 2
+        let halfD = room.depth / 2
+        // odstęp ściany, żeby korpus nie wchodził w geometrię ściany
+        let gap: Double = 5
+        // przy szafkach wiszących dochodzi grubość korpusu — liczymy głębię
+        let d = c.depth
+
+        switch wall {
+        case 0:  // północ: tył do −Z
+            c.rotation = 0
+            c.z = -halfD + gap + d / 2
+        case 1:  // południe: tył do +Z
+            c.rotation = 180
+            c.z = halfD - gap - d / 2
+        case 2:  // zachód: tył do −X
+            c.rotation = 90
+            c.x = -halfW + gap + d / 2
+        default: // wschód: tył do +X
+            c.rotation = 270
+            c.x = halfW - gap - d / 2
+        }
+        return c
+    }
+
     /// Dokłada szafkę w tym samym rzędzie co sąsiad (bez kolizji), zwraca nową pozycję.
     public static func placeNext(to existing: [Cabinet], new: Cabinet, tolerance: Double = 20) -> Cabinet? {
         guard let ref = existing.last else { return new }
         var candidate = new
         candidate.rotation = ref.rotation
-        candidate.z = ref.z
-        candidate.x = ref.x + (ref.width + new.width) / 2
+        // UWAGA: przy obrocie 90°/270° szafka jest przekręcona, więc jej
+        // szerokość biegnie wzdłuż Z, a nie X. Wcześniej sąsiad dokładał się
+        // zawsze w X, więc na ścianach zachodniej i wschodniej szafki
+        // wskakiwały na siebie.
+        let rotated = abs(ref.rotation.truncatingRemainder(dividingBy: 180) - 90) < 1
+        if rotated {
+            candidate.z = ref.z + (ref.width + new.width) / 2
+            candidate.x = ref.x
+        } else {
+            candidate.z = ref.z
+            candidate.x = ref.x + (ref.width + new.width) / 2
+        }
         let others = existing.filter { $0.id != new.id }
         if others.contains(where: { Collision.overlaps($0, candidate, tolerance: tolerance) }) { return nil }
         return candidate

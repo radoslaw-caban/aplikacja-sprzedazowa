@@ -29,6 +29,15 @@ public enum ModelLibrary {
         Entry(name: "nettle_plant", license: "CC0", author: "Poly Haven · Nettle Plant"),
         Entry(name: "shrub_01", license: "CC0", author: "Poly Haven · Shrub 01"),
         Entry(name: "grass_medium_01", license: "CC0", author: "Poly Haven · Grass Medium 01"),
+        Entry(name: "kenney_kitchen_cabinet", license: "CC0-1.0", author: "Kenney · Furniture Kit"),
+        Entry(name: "kenney_drawer", license: "CC0-1.0", author: "Kenney · Furniture Kit"),
+        Entry(name: "kenney_cabinet_bed_drawer", license: "CC0-1.0", author: "Kenney · Furniture Kit"),
+        Entry(name: "hardware_hinge_35", license: "CC0-1.0",
+              author: "Innerscene (STEP 35 mm concealed hinge) · GLB proxy: Karpatia"),
+        Entry(name: "hardware_slide_250", license: "CC0-1.0",
+              author: "Innerscene (STEP 250 mm ball-bearing slide) · GLB proxy: Karpatia"),
+        Entry(name: "hardware_handle_160", license: "CC0-1.0",
+              author: "Karpatia (proceduralny uchwyt 160 mm)"),
     ]
 
     private static var cache: [String: Entity] = [:]

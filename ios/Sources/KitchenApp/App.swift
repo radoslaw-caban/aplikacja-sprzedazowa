@@ -41,6 +41,7 @@ struct ContentView: View {
     @State private var planStartPresets = false
     @State private var planStartImport = false
     @State private var showZones = false
+    @State private var showCutouts = false
     @State private var zoneWall = 0
     @State private var showTextures = false
     @State private var showSettings = false
@@ -235,6 +236,7 @@ struct ContentView: View {
             .presentationSizing(.page)
             #endif
         }
+        .modifier(CutoutPresenter(isPresented: $showCutouts, model: model))
         .sheet(isPresented: $showZones) {
             ZoneDesignerView(model: model, initialWall: zoneWall)
         }
@@ -290,6 +292,19 @@ struct ContentView: View {
 
             // hak diagnostyczny: widok FPS na podjeździe
             #if DEBUG
+            if UserDefaults.standard.bool(forKey: "demoCutouts") {
+                var cabinets = model.current.cabinets
+                if let index = cabinets.firstIndex(where: { $0.type == .base }) {
+                    let cut = CabinetCutout.make(.sink, in: cabinets[index])
+                    cabinets[index].cutouts = [cut]
+                    model.updateCabinets(cabinets)
+                    print("[ui] wycięcie zlewu dodane do: \(cabinets[index].name)")
+                }
+                if !UserDefaults.standard.bool(forKey: "demoCutout3D") {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                    showCutouts = true
+                }
+            }
             if UserDefaults.standard.bool(forKey: "demoZoneInsert") {
                 // weryfikacja 3D: jedna strefa gotowania, bez otwierania kreatora
                 for z in model.currentZones { model.deleteZone(z.id) }
@@ -439,6 +454,12 @@ struct ContentView: View {
                     drawerOpen = false
                 } label: {
                     Label("Strefy zabudowy (auto-projekt)", systemImage: "sparkles")
+                }
+                Button {
+                    showCutouts = true
+                    drawerOpen = false
+                } label: {
+                    Label("Wycięcia w szafkach (zlew, płyta, uchwyty)", systemImage: "scissors")
                 }
             }
 

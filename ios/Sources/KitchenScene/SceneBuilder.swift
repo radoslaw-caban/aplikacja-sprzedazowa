@@ -61,6 +61,11 @@ public enum SceneBuilder {
         for b in boxes {
             root.addChild(entity(for: b))
         }
+        // okucia i akcesoria (modele GLB: zawiasy, prowadnice, uchwyty)
+        if let hardware = hardwareEntity(cabinets: cabinets) {
+            root.addChild(hardware)
+        }
+
         // magiczne gwiazdki nad podglądem strefy (cień szafek)
         root.addChild(Sparkles.entity(cabinets: cabinets))
 
@@ -98,6 +103,68 @@ public enum SceneBuilder {
             center: center,
             extents: extents
         )
+    }
+
+    /// Zawiasy, prowadnice i uchwyty jako modele GLB w układzie szafki.
+    @MainActor
+    private static func hardwareEntity(cabinets: [Cabinet]) -> Entity? {
+        let root = Entity()
+        root.name = "hardware"
+        var added = false
+
+        for c in cabinets where c.preview != true {
+            let group = Entity()
+            group.position = [meters(c.x), 0, meters(c.z)]
+            group.orientation = simd_quatf(angle: Float(c.rotation * .pi / 180), axis: [0, 1, 0])
+            let baseY = c.type == .base ? c.plinth : c.mountHeight
+            let bodyH = c.type == .base ? max(0, c.height - c.plinth) : c.height
+            let hasDrawers = c.elements.contains { $0.kind == .drawer }
+
+            // zawiasy na skrzydłach (2 na skrzydło)
+            if !hasDrawers, c.type != .panel {
+                for frac in [0.22, 0.78] {
+                    if let hinge = ModelLibrary.entity(named: "hardware_hinge_35", targetSize: 0.07) {
+                        hinge.position = [meters(c.width / 2 - 70), meters(baseY + bodyH * frac), meters(c.depth / 2)]
+                        group.addChild(hinge)
+                        added = true
+                    }
+                }
+            }
+
+            // uchwyty: po jednym na szufladę, inaczej jeden na skrzydło
+            let handleZ = c.depth / 2 + 24
+            if hasDrawers {
+                for drawer in c.elements where drawer.kind == .drawer {
+                    if let handle = ModelLibrary.entity(named: "hardware_handle_160", targetSize: 0.16) {
+                        handle.position = [0, meters(baseY + drawer.y + drawer.height / 2), meters(handleZ)]
+                        group.addChild(handle)
+                        added = true
+                    }
+                }
+            } else if c.type != .panel,
+                      let handle = ModelLibrary.entity(named: "hardware_handle_160", targetSize: 0.16) {
+                handle.position = [0, meters(baseY + bodyH * 0.5), meters(handleZ)]
+                group.addChild(handle)
+                added = true
+            }
+
+            // prowadnice szuflad po obu stronach
+            for drawer in c.elements where drawer.kind == .drawer {
+                for side in [-1.0, 1.0] {
+                    let length = Float(max(250, c.depth * 0.8) / 1000)
+                    if let slide = ModelLibrary.entity(named: "hardware_slide_250", targetLength: length, axis: 0) {
+                        slide.position = [meters(side * (c.width / 2 - 25)),
+                                          meters(baseY + drawer.y + drawer.height / 2),
+                                          0]
+                        group.addChild(slide)
+                        added = true
+                    }
+                }
+            }
+
+            if !group.children.isEmpty { root.addChild(group) }
+        }
+        return added ? root : nil
     }
 
     /// Pojedyncza bryła: siatka w metrach, materiał PBR, obrót wokół Y.

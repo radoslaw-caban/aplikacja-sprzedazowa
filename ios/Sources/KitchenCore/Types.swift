@@ -105,6 +105,8 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
     public var preview: Bool?
     /// przeznaczenie szafki wybrane w edytorze
     public var purpose: CabinetPurpose?
+    /// wycięcia w blacie / froncie / boku
+    public var cutouts: [CabinetCutout]?
 
     public init(
         id: UUID = UUID(),
@@ -128,7 +130,8 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
         worktopDepth: Double? = nil,
         worktopShift: Double? = nil,
         preview: Bool? = nil,
-        purpose: CabinetPurpose? = nil
+        purpose: CabinetPurpose? = nil,
+        cutouts: [CabinetCutout]? = nil
     ) {
         self.id = id
         self.name = name
@@ -152,13 +155,14 @@ public struct Cabinet: Identifiable, Codable, Sendable, Equatable {
         self.worktopShift = worktopShift
         self.preview = preview
         self.purpose = purpose
+        self.cutouts = cutouts
     }
 }
 
 /// Bryła do wygenerowania w scenie (mm, względem środka szafki).
 public struct Box: Identifiable, Sendable {
     public enum Role: String, Sendable {
-        case side, bottom, top, back, shelf, divider, front, drawerFront, plinth, worktop, scene, appliance
+        case side, bottom, top, back, shelf, divider, front, drawerFront, plinth, worktop, scene, appliance, cutout
     }
 
     public let id: String
