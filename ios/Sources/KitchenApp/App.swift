@@ -168,6 +168,12 @@ struct ContentView: View {
                 },
                 onWallColor: { hex in
                     model.updateWallColor(hex)
+                },
+                onSaveCabinet: { cabinet in
+                    model.updateCabinet(cabinet)
+                },
+                onDeleteCabinet: { id in
+                    model.deleteCabinet(id)
                 }
             )
         }

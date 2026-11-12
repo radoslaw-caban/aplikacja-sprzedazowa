@@ -36,6 +36,10 @@ public final class FirstPersonWorld {
     private var cabinetFronts: [UUID: [(entity: ModelEntity, rest: Transform)]] = [:]
     private var openCabinets: Set<UUID> = []
     private let accessoryRoot = Entity()
+    private var cabinetRoot: Entity?
+    private var storageRoot: Entity?
+    private var selectionBox: Entity?
+    private var selectedCabinetID: UUID?
     private var wallColorHex: String
     /// zawias drzwi — obrót o kąt otwiera je
     public private(set) var doorPivot: Entity?
@@ -62,10 +66,11 @@ public final class FirstPersonWorld {
         buildHouse(room: room)
         buildDoor()
         buildInterior()
-        buildCabinets(cabinets)
-        NSLog("[fps] szafek w scenie: %d", cabinets.count)
         accessoryRoot.name = "fps-accessories"
         root.addChild(accessoryRoot)
+        storageRoot = accessoryRoot
+        buildCabinets(cabinets)
+        NSLog("[fps] szafek w scenie: %d", cabinets.count)
         buildDog()
         buildFence()
     }
@@ -503,11 +508,21 @@ public final class FirstPersonWorld {
 
     /// Wstawia zabudowę projektu do wnętrza (te same mm, ten sam układ).
     private func buildCabinets(_ cabinets: [Cabinet]) {
-        guard !cabinets.isEmpty else { return }
+        cabinetRoot?.removeFromParent()
+        cabinetRoot = nil
+        cabinetFronts.removeAll()
         cabinetsByID = Dictionary(uniqueKeysWithValues: cabinets.map { ($0.id, $0) })
+
+        guard !cabinets.isEmpty else {
+            rebuildStorageProps()
+            refreshSelection()
+            return
+        }
+
         let built = SceneBuilder.build(cabinets: cabinets, includeFloor: false)
         built.root.name = "fps-cabinets"
         root.addChild(built.root)
+        cabinetRoot = built.root
 
         for entity in built.root.children {
             let name = entity.name
@@ -517,6 +532,210 @@ public final class FirstPersonWorld {
             if isFront, let mesh = entity as? ModelEntity {
                 cabinetFronts[cabID, default: []].append((mesh, mesh.transform))
             }
+        }
+
+        // otwarte szafki zostają otwarte po przebudowie
+        for id in openCabinets {
+            moveFronts(id, opening: true, animated: false)
+        }
+        rebuildStorageProps()
+        refreshSelection()
+    }
+
+    /// Podmiana całej listy szafek (edycja wymiarów, położenia, typu).
+    public func updateCabinets(_ cabinets: [Cabinet]) {
+        buildCabinets(cabinets)
+    }
+
+    /// Podświetlenie wybranej szafki (jedno dotknięcie).
+    public func setSelected(_ id: UUID?) {
+        selectedCabinetID = id
+        refreshSelection()
+    }
+
+    public var selected: UUID? { selectedCabinetID }
+
+    private func refreshSelection() {
+        selectionBox?.removeFromParent()
+        selectionBox = nil
+        guard let id = selectedCabinetID, let c = cabinetsByID[id] else { return }
+
+        let rotated = c.rotation == 90 || c.rotation == 270
+        let w = Float((rotated ? c.depth : c.width) / 1000) + 0.02
+        let d = Float((rotated ? c.width : c.depth) / 1000) + 0.02
+        let h = Float(c.height / 1000) + 0.02
+        let material = UnlitMaterial(color: WorldColor(red: 0.15, green: 0.85, blue: 1.0, alpha: 1))
+        let group = Entity()
+        group.name = "fps-selection"
+        group.position = [Float(c.x / 1000), Float(c.height / 2000), Float(c.z / 1000)]
+        group.orientation = simd_quatf(angle: Float(c.rotation * .pi / 180), axis: [0, 1, 0])
+
+        let t: Float = 0.012
+        func bar(_ bw: Float, _ bh: Float, _ bd: Float, _ x: Float, _ y: Float, _ z: Float) {
+            let e = ModelEntity(mesh: .generateBox(width: bw, height: bh, depth: bd), materials: [material])
+            e.position = [x, y, z]
+            group.addChild(e)
+        }
+        // cztery pionowe krawędzie
+        for sx in [-1.0, 1.0] as [Float] {
+            for sz in [-1.0, 1.0] as [Float] {
+                bar(t, h, t, sx * w / 2, 0, sz * d / 2)
+            }
+        }
+        // poziome krawędzie góra/dół
+        for sy in [-1.0, 1.0] as [Float] {
+            for sz in [-1.0, 1.0] as [Float] { bar(w, t, t, 0, sy * h / 2, sz * d / 2) }
+            for sx in [-1.0, 1.0] as [Float] { bar(t, t, d, sx * w / 2, sy * h / 2, 0) }
+        }
+        root.addChild(group)
+        selectionBox = group
+    }
+
+    /// Otwiera lub zamyka fronty wybranej szafki.
+    public func setCabinetOpen(_ id: UUID, open: Bool) {
+        let isOpen = openCabinets.contains(id)
+        guard isOpen != open else { return }
+        if open { openCabinets.insert(id) } else { openCabinets.remove(id) }
+        moveFronts(id, opening: open, animated: true)
+    }
+
+    private func moveFronts(_ id: UUID, opening: Bool, animated: Bool) {
+        guard let fronts = cabinetFronts[id], let c = cabinetsByID[id] else { return }
+        let rad = Float(c.rotation * .pi / 180)
+        let normal = SIMD3<Float>(sin(rad), 0, cos(rad))
+        let right = SIMD3<Float>(cos(rad), 0, -sin(rad))
+        for (entity, rest) in fronts {
+            var target = rest
+            if opening {
+                let isDrawer = entity.name.contains(":drawer:")
+                if isDrawer {
+                    target.translation += normal * 0.34
+                } else {
+                    // skrzydło odjeżdża w bok i obraca się o 90° — odsłania wnętrze
+                    target.translation += right * Float(c.width / 1000) * 0.46 + normal * 0.04
+                    target.rotation = rest.rotation * simd_quatf(angle: .pi / 2, axis: [0, 1, 0])
+                }
+            }
+            if animated {
+                entity.move(to: target, relativeTo: entity.parent,
+                            duration: opening ? 0.45 : 0.35, timingFunction: .easeInOut)
+            } else {
+                entity.transform = target
+            }
+        }
+    }
+
+    // MARK: - modele towarów na półkach
+
+    private func localToWorld(_ c: Cabinet, x: Double, y: Double, z: Double) -> SIMD3<Float> {
+        let rad = c.rotation * .pi / 180
+        let wx = c.x + x * cos(rad) + z * sin(rad)
+        let wz = c.z - x * sin(rad) + z * cos(rad)
+        return [Float(wx / 1000), Float(y / 1000), Float(wz / 1000)]
+    }
+
+    private func rebuildStorageProps() {
+        guard let storageRoot else { return }
+        for child in storageRoot.children { child.removeFromParent() }
+        for c in cabinetsByID.values {
+            let baseY = c.type == .base ? c.plinth : 0
+            for e in c.elements {
+                guard let kind = e.storage else { continue }
+                let top = baseY + e.y + (e.kind == .drawer ? 30 : Standards.panel)
+                addStorageProps(kind, cabinet: c, y: top, elementID: e.id)
+            }
+        }
+    }
+
+    private func addStorageProps(_ kind: StorageKind, cabinet c: Cabinet, y: Double, elementID: UUID) {
+        let innerW = max(180, c.width - 80)
+        let innerD = max(160, c.depth - 100)
+        let rot = simd_quatf(angle: Float(c.rotation * .pi / 180), axis: [0, 1, 0])
+
+        func add(_ mesh: MeshResource, color: WorldColor, lx: Double, ly: Double, lz: Double, name: String) {
+            var m = PhysicallyBasedMaterial()
+            m.baseColor = .init(tint: color)
+            m.roughness = .init(floatLiteral: 0.6)
+            let e = ModelEntity(mesh: mesh, materials: [m])
+            e.position = localToWorld(c, x: lx, y: y + ly, z: lz)
+            e.orientation = rot
+            e.name = "storage:\(c.id):\(elementID):\(name)"
+            storageRoot?.addChild(e)
+        }
+
+        let white = WorldColor(red: 0.78, green: 0.85, blue: 0.87, alpha: 1)
+        let grey = WorldColor(red: 0.62, green: 0.62, blue: 0.60, alpha: 1)
+        let dark = WorldColor(red: 0.22, green: 0.23, blue: 0.24, alpha: 1)
+        let green = WorldColor(red: 0.32, green: 0.48, blue: 0.28, alpha: 1)
+        let amber = WorldColor(red: 0.62, green: 0.44, blue: 0.18, alpha: 1)
+        let brown = WorldColor(red: 0.52, green: 0.36, blue: 0.22, alpha: 1)
+        let pastel = WorldColor(red: 0.74, green: 0.80, blue: 0.78, alpha: 1)
+        _ = grey
+
+        func box(_ w: Double, _ h: Double, _ d: Double, _ color: WorldColor,
+                 _ i: Int, count: Int, _ label: String) {
+            let span = min(innerW * 0.7, 520)
+            let step = count > 1 ? span / Double(count - 1) : 0
+            let lx = count > 1 ? -span / 2 + step * Double(i) : 0
+            let z = Double(i % 2 == 0 ? -1 : 1) * min(40, innerD * 0.12)
+            add(.generateBox(width: Float(w / 1000), height: Float(h / 1000), depth: Float(d / 1000), cornerRadius: 0.004),
+                color: color, lx: lx, ly: h / 2, lz: z, name: "\(label)\(i)")
+        }
+
+        switch kind {
+        case .plates:
+            add(.generateCylinder(height: 0.055, radius: 0.105), color: white,
+                lx: 0, ly: 0.028, lz: 0, name: "plates")
+            add(.generateCylinder(height: 0.045, radius: 0.085), color: white,
+                lx: 0, ly: 0.078, lz: 0, name: "plates2")
+        case .cups:
+            for i in 0..<3 {
+                add(.generateCylinder(height: 0.085, radius: 0.038), color: i == 1 ? pastel : white,
+                    lx: Double(i - 1) * 0.11, ly: 0.043, lz: 0, name: "cup\(i)")
+            }
+        case .pots:
+            for i in 0..<2 {
+                add(.generateCylinder(height: 0.11, radius: 0.12), color: i == 0 ? dark : grey,
+                    lx: Double(i) * 0.28 - 0.14, ly: 0.055, lz: 0, name: "pot\(i)")
+            }
+        case .cutlery:
+            add(.generateBox(width: 0.30, height: 0.03, depth: 0.18, cornerRadius: 0.005),
+                color: grey, lx: 0, ly: 0.015, lz: 0, name: "cutlery-tray")
+            for i in 0..<3 {
+                add(.generateBox(width: 0.02, height: 0.05, depth: 0.14, cornerRadius: 0.002),
+                    color: grey, lx: Double(i - 1) * 0.08, ly: 0.04, lz: 0, name: "cutlery\(i)")
+            }
+        case .bottles:
+            for i in 0..<4 {
+                add(.generateCylinder(height: 0.22, radius: 0.033), color: i % 2 == 0 ? green : amber,
+                    lx: Double(i - 1) * 0.09, ly: 0.11, lz: 0, name: "bottle\(i)")
+            }
+        case .food:
+            for i in 0..<4 { box(120, 150, 110, i % 2 == 0 ? brown : pastel, i, count: 4, "food") }
+        case .bread:
+            for i in 0..<2 { box(180, 120, 140, brown, i, count: 2, "bread") }
+        case .towels:
+            for i in 0..<3 { box(180, 70, 240, pastel, i, count: 3, "towel") }
+        case .cosmetics:
+            for i in 0..<4 {
+                add(.generateCylinder(height: 0.09, radius: 0.032), color: i % 2 == 0 ? white : pastel,
+                    lx: (Double(i) - 1.5) * 0.075, ly: 0.045, lz: 0, name: "cosmetic\(i)")
+            }
+        case .clothes:
+            for i in 0..<3 { box(260, 300, 25, i == 1 ? pastel : white, i, count: 3, "clothes") }
+        case .shoes:
+            for i in 0..<2 { box(100, 90, 250, i == 0 ? brown : dark, i, count: 2, "shoe") }
+        case .books:
+            for i in 0..<5 { box(28, 210, 160, i % 2 == 0 ? green : amber, i, count: 5, "book") }
+        case .electronics:
+            for i in 0..<2 { box(250, 40, 180, dark, i, count: 2, "tv") }
+        case .cleaning:
+            for i in 0..<3 {
+                add(.generateCylinder(height: 0.24, radius: 0.045), color: i == 1 ? green : amber,
+                    lx: Double(i - 1) * 0.10, ly: 0.12, lz: 0, name: "clean\(i)")
+            }
+        case .other:
+            for i in 0..<3 { box(140, 140, 140, pastel, i, count: 3, "item") }
         }
     }
 
@@ -602,18 +821,7 @@ public final class FirstPersonWorld {
 
     /// Otwiera/zamyka fronty szafki animacją.
     public func toggleCabinet(_ id: UUID) {
-        guard let fronts = cabinetFronts[id] else { return }
-        let opening = !openCabinets.contains(id)
-        if opening { openCabinets.insert(id) } else { openCabinets.remove(id) }
-        let c = cabinetsByID[id]
-        let rad = Float((c?.rotation ?? 0) * .pi / 180)
-        let normal = SIMD3<Float>(sin(rad), 0, cos(rad))
-        for (entity, rest) in fronts {
-            var target = rest
-            if opening { target.translation += normal * 0.34 }
-            entity.move(to: target, relativeTo: entity.parent, duration: opening ? 0.45 : 0.35,
-                        timingFunction: .easeInOut)
-        }
+        setCabinetOpen(id, open: !isCabinetOpen(id))
     }
 
     public func isCabinetOpen(_ id: UUID) -> Bool { openCabinets.contains(id) }

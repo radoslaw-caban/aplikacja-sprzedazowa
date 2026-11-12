@@ -25,6 +25,8 @@ struct FirstPersonView: View {
     var onExit: (() -> Void)? = nil
     var onAddElement: ((UUID, CabinetElement) -> Void)? = nil
     var onWallColor: ((String) -> Void)? = nil
+    var onSaveCabinet: ((Cabinet) -> Void)? = nil
+    var onDeleteCabinet: ((UUID) -> Void)? = nil
 
     @State private var world: FirstPersonWorld?
     @State private var yaw: Float = 0.10         // lekko z boku, żeby kadr nie był symetryczny
@@ -45,6 +47,8 @@ struct FirstPersonView: View {
     @State private var pencil: Entity?
     @State private var editingWall: RoomSide?
     @State private var editingCabinet: UUID?
+    @State private var editorMode: CabinetEditorMode = .body
+    @State private var workingCabinets: [Cabinet] = []
     @State private var accessoryNote: String?
     @State private var flourishUntil: Date = .distantPast
 
@@ -123,9 +127,8 @@ struct FirstPersonView: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .gesture(lookGesture)
-                    .onTapGesture { location in
-                        tap(at: location)
-                    }
+                    .onTapGesture(count: 2) { doubleTap() }
+                    .onTapGesture { singleTap() }
             }
 
             VStack {
@@ -178,8 +181,29 @@ struct FirstPersonView: View {
             if let side = editingWall {
                 wallPalette(side)
             }
-            if let id = editingCabinet {
-                accessoryPicker(id)
+            if let id = editingCabinet, let cab = workingCabinets.first(where: { $0.id == id }) {
+                HStack {
+                    Spacer()
+                    CabinetEditorPanel(
+                        cabinet: cab,
+                        room: room,
+                        mode: editorMode,
+                        isOpen: world?.isCabinetOpen(id) ?? false,
+                        onLiveChange: { applyLive($0) },
+                        onSave: { onSaveCabinet?($0) },
+                        onClose: { closeEditor() },
+                        onDelete: {
+                            deleteCabinet(id)
+                        },
+                        onOpenFront: { open in
+                            world?.setCabinetOpen(id, open: open)
+                        },
+                        onModeChange: { editorMode = $0 }
+                    )
+                    .id(id)
+                }
+                .padding(.top, 64)
+                .padding(.bottom, 26)
             }
             if let note = accessoryNote {
                 VStack {
@@ -194,6 +218,16 @@ struct FirstPersonView: View {
                 .allowsHitTesting(false)
             }
         }
+        .onAppear {
+            if workingCabinets.isEmpty { workingCabinets = cabinets }
+            #if DEBUG
+            if let match = UserDefaults.standard.string(forKey: "demoSelectCabinet"), !match.isEmpty {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    debugSelectCabinet(match)
+                }
+            }
+            #endif
+        }
         .background(Color.black)
         #if os(iOS)
         .statusBarHidden()
@@ -206,7 +240,13 @@ struct FirstPersonView: View {
         lastFrame = Date()
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "demoFPSPoint") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { tap(at: .zero) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                if UserDefaults.standard.bool(forKey: "demoFPSDouble") {
+                    doubleTap()
+                } else {
+                    singleTap()
+                }
+            }
         }
         #endif
         _ = content.subscribe(to: SceneEvents.Update.self) { _ in
@@ -291,53 +331,107 @@ struct FirstPersonView: View {
         return p
     }
 
-    /// Dotknięcie = czubek ołówka w środku ekranu. Promień z kamery wskazuje
-    /// ścianę (kolor), szafkę (otwarcie + akcesoria) albo drzwi/psa.
-    private func tap(at location: CGPoint) {
+    /// Jedno dotknięcie: zaznaczenie szafki i edycja bryły.
+    private func singleTap() {
         flourishUntil = Date().addingTimeInterval(0.85)
-        guard let world, let camera = cameraEntity else { return }
-        // RealityKit: kamera patrzy w lokalne −Z
+        guard let target = pickTarget() else { return }
+        switch target {
+        case .wall(let side):
+            world?.setSelected(nil)
+            editingWall = side
+            editingCabinet = nil
+        case .cabinet(let id):
+            editingWall = nil
+            editingCabinet = id
+            editorMode = .body
+            accessoryNote = nil
+            world?.setSelected(id)
+        case .none:
+            closeEditor()
+            if dogClose {
+                pettingUntil = Date().addingTimeInterval(2.4)
+            } else {
+                world?.setDoor(open: !(world?.isDoorOpen ?? false))
+            }
+        }
+    }
+
+    /// Dwa dotknięcia: otwarcie frontu i edycja wnętrza (półki, szuflady, asortyment).
+    private func doubleTap() {
+        flourishUntil = Date().addingTimeInterval(0.85)
+        guard let target = pickTarget() else { return }
+        switch target {
+        case .cabinet(let id):
+            editingWall = nil
+            editingCabinet = id
+            editorMode = .interior
+            accessoryNote = nil
+            world?.setSelected(id)
+            world?.setCabinetOpen(id, open: true)
+        case .wall(let side):
+            world?.setSelected(nil)
+            editingWall = side
+            editingCabinet = nil
+        case .none:
+            if dogClose {
+                pettingUntil = Date().addingTimeInterval(2.4)
+            } else {
+                world?.setDoor(open: !(world?.isDoorOpen ?? false))
+            }
+        }
+    }
+
+    private func debugSelectCabinet(_ match: String) {
+        guard let c = workingCabinets.first(where: { $0.name.localizedCaseInsensitiveContains(match) }),
+              let world, let cam = cameraEntity else { return }
+        editingCabinet = c.id
+        editorMode = .interior
+        accessoryNote = nil
+        world.setSelected(c.id)
+        world.setCabinetOpen(c.id, open: true)
+        let rad = Float(c.rotation * .pi / 180)
+        let normal = SIMD3<Float>(sin(rad), 0, cos(rad))
+        let distance = UserDefaults.standard.object(forKey: "demoSelectDistance") != nil
+            ? UserDefaults.standard.double(forKey: "demoSelectDistance") : 2.6
+        cam.position = [Float(c.x / 1000) + normal.x * Float(distance),
+                        Float((c.mountHeight > 0 ? c.mountHeight : 1500) / 1000),
+                        Float(c.z / 1000) + normal.z * Float(distance)]
+        yaw = atan2(normal.x, normal.z)
+        pitch = -0.35
+    }
+
+    private func pickTarget() -> FPSPick? {
+        guard let world, let camera = cameraEntity else { return nil }
         let dir = SIMD3<Float>(
             -sin(yaw) * cos(pitch),
             sin(pitch),
             -cos(yaw) * cos(pitch)
         )
-        switch world.pick(origin: camera.position, direction: dir) {
-        case .wall(let side):
-            editingWall = side
-            editingCabinet = nil
-            #if DEBUG
-            if UserDefaults.standard.bool(forKey: "demoFPSAutoColor") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    world.setWallColor("#b7c4b0", side: side)
-                    onWallColor?("#b7c4b0")
-                    editingWall = nil
-                    accessoryNote = "Kolor ściany zmieniony"
-                }
-            }
-            #endif
-        case .cabinet(let id):
-            world.toggleCabinet(id)
-            editingCabinet = id
-            editingWall = nil
-            accessoryNote = nil
-            #if DEBUG
-            if UserDefaults.standard.bool(forKey: "demoFPSAutoShelf") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                    if world.addAccessory(id, kind: "shelf") {
-                        onAddElement?(id, element(for: "shelf"))
-                        accessoryNote = "Dodano: Półka"
-                    }
-                }
-            }
-            #endif
-        case .none:
-            if dogClose {
-                pettingUntil = Date().addingTimeInterval(2.4)
-            } else {
-                world.setDoor(open: !world.isDoorOpen)
-            }
+        return world.pick(origin: camera.position, direction: dir)
+    }
+
+    private func applyLive(_ cab: Cabinet) {
+        if let i = workingCabinets.firstIndex(where: { $0.id == cab.id }) {
+            workingCabinets[i] = cab
+        } else {
+            workingCabinets.append(cab)
         }
+        world?.updateCabinets(workingCabinets)
+    }
+
+    private func closeEditor() {
+        if let id = editingCabinet { world?.setSelected(nil) }
+        editingCabinet = nil
+        editingWall = nil
+    }
+
+    private func deleteCabinet(_ id: UUID) {
+        workingCabinets.removeAll { $0.id == id }
+        world?.updateCabinets(workingCabinets)
+        world?.setSelected(nil)
+        onDeleteCabinet?(id)
+        editingCabinet = nil
+        accessoryNote = "Usunięto szafkę"
     }
 
     private func world0DoorDistance() -> Float {

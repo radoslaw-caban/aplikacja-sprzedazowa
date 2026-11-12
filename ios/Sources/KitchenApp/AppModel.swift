@@ -298,6 +298,28 @@ final class AppModel {
         projects[currentIndex].updatedAt = Date()
     }
 
+    /// Zapis edytowanej szafki (wymiary, położenie, typ, przeznaczenie, wnętrze).
+    func updateCabinet(_ cabinet: Cabinet) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var cabinets = projects[currentIndex].cabinets
+        guard let i = cabinets.firstIndex(where: { $0.id == cabinet.id }) else { return }
+        cabinets[i] = cabinet
+        projects[currentIndex].cabinets = cabinets
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        status = "Zapisano szafkę: \(cabinet.name)"
+    }
+
+    func deleteCabinet(_ id: UUID) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var cabinets = projects[currentIndex].cabinets
+        cabinets.removeAll { $0.id == id }
+        projects[currentIndex].cabinets = cabinets
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        status = "Usunięto szafkę"
+    }
+
     /// Akcesorium dodane magicznym ołówkiem w trybie FPS.
     func addElement(to cabinetID: UUID, element: CabinetElement) {
         guard projects.indices.contains(currentIndex) else { return }

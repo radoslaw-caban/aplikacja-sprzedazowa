@@ -58,13 +58,17 @@ public struct CabinetElement: Identifiable, Codable, Sendable {
     /// wysokość elementu (mm)
     public var height: Double
     public var drawer: DrawerSystem?
+    /// co będzie przechowywane — dobiera wysokość i modele towarów
+    public var storage: StorageKind?
 
-    public init(id: UUID = UUID(), kind: ElementKind, y: Double, height: Double, drawer: DrawerSystem? = nil) {
+    public init(id: UUID = UUID(), kind: ElementKind, y: Double, height: Double,
+                drawer: DrawerSystem? = nil, storage: StorageKind? = nil) {
         self.id = id
         self.kind = kind
         self.y = y
         self.height = height
         self.drawer = drawer
+        self.storage = storage
     }
 }
 
@@ -99,6 +103,8 @@ public struct Cabinet: Identifiable, Codable, Sendable {
     public var worktopShift: Double?
     /// podgląd strefy: cień szafki (półprzezroczysty) zamiast materiału
     public var preview: Bool?
+    /// przeznaczenie szafki wybrane w edytorze
+    public var purpose: CabinetPurpose?
 
     public init(
         id: UUID = UUID(),
@@ -121,7 +127,8 @@ public struct Cabinet: Identifiable, Codable, Sendable {
         slidingPanels: Int? = nil,
         worktopDepth: Double? = nil,
         worktopShift: Double? = nil,
-        preview: Bool? = nil
+        preview: Bool? = nil,
+        purpose: CabinetPurpose? = nil
     ) {
         self.id = id
         self.name = name
@@ -144,6 +151,7 @@ public struct Cabinet: Identifiable, Codable, Sendable {
         self.worktopDepth = worktopDepth
         self.worktopShift = worktopShift
         self.preview = preview
+        self.purpose = purpose
     }
 }
 
