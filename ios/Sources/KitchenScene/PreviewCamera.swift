@@ -44,6 +44,48 @@ public struct PreviewCamera: Sendable {
         return PreviewCamera(position: [px, eyeY, pz], target: target)
     }
 
+    /// Kadr dopasowany do bryły zabudowy (lub strefy): kamera staje w pokoju
+    /// naprzeciw mebla, w odległości, przy której cały mebel mieści się w kadrze.
+    ///
+    /// Wcześniej kamera celowała w środek wszystkich szafek, więc przy zabudowie
+    /// na jednej ścianie stała bokiem albo poza pokojem.
+    public static func fitting(center: SIMD3<Float>, extents: SIMD3<Float>,
+                               room: Room, verticalFOVDegrees: Float = 47) -> PreviewCamera {
+        let halfW = Float(room.width / 1000) / 2
+        let halfD = Float(room.depth / 1000) / 2
+        let roomH = Float(room.height / 1000)
+
+        // im większa zabudowa, tym dalej trzeba stanąć (FOV pionowy → poziomy z proporcji 4:3)
+        let fovH = verticalFOVDegrees * .pi / 180 * 1.25
+        let needX = (extents.x / 2) / max(0.1, tan(fovH / 2))
+        let needY = (extents.y / 2) / max(0.1, tan(verticalFOVDegrees * .pi / 180 / 2))
+        // NIE wciskamy kamery na siłę do pokoju: przy długim biegu trzeba stanąć
+        // dalej, a ściany i tak stają się przezroczyste, gdy zasłaniają widok.
+        let distance = max(2.2, max(needX, needY) * 1.15 + 0.6)
+
+        // stoimy „naprzeciw" zabudowy: od środka pokoju w stronę jego wnętrza,
+        // lekko z boku, żeby widać było także boki
+        var eye = SIMD3<Float>(center.x * 0.25, min(roomH - 0.25, max(1.55, center.y + 0.3)),
+                               center.z * 0.25)
+        eye.x = max(-halfW * 1.2, min(halfW * 1.2, eye.x))
+        eye.z = max(-halfD * 1.2, min(halfD * 1.2, eye.z))
+        // odsuwamy kamerę od mebla wzdłuż osi Z (do środka pokoju)
+        let dir = SIMD3<Float>(center.x, 0, center.z)
+        let dirLen = max(0.001, simd_length(SIMD2(dir.x, dir.z)))
+        let inward = SIMD3<Float>(-dir.x / dirLen, 0, -dir.z / dirLen)
+        var pos = eye + inward * distance
+        // lekko z boku, żeby widać było także boki zabudowy (kadr 3/4)
+        let side = SIMD3<Float>(-inward.z, 0, inward.x)
+        pos += side * (distance * 0.18)
+        let limit = max(halfW, halfD) * 4
+        pos.x = max(-limit, min(limit, pos.x))
+        pos.z = max(-limit, min(limit, pos.z))
+        pos.y = eye.y
+
+        let target = SIMD3<Float>(center.x, max(0.55, center.y), center.z)
+        return PreviewCamera(position: pos, target: target)
+    }
+
     /// Kadr zewnętrzny: dom z podjazdem i otoczeniem, kamera 3/4 z góry.
     public static func exterior(room: Room) -> PreviewCamera {
         let w = Float(room.width / 1000)

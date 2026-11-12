@@ -44,7 +44,10 @@ struct ContentView: View {
     @State private var planStartMode: PlanEditorView.Mode? = nil
     @State private var planStartPresets = false
     @State private var planStartImport = false
-    @State private var showZones = false
+    /// co pokazuje szuflada: lista projektów czy kreator stref
+    @State private var drawerPane: DrawerPane = .list
+
+    enum DrawerPane { case list, zones }
     @State private var showCutouts = false
     @State private var showCabinets = false
     @State private var zoneWall = 0
@@ -199,12 +202,8 @@ struct ContentView: View {
                     fillWall(wallIndex)
                 },
                 onZoneWall: { wallIndex in
-                    zoneWall = wallIndex
+                    openZones(wall: wallIndex)
                     showPlan = false
-                    // najpierw zamknij plan, potem otwórz kreator stref
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                        showZones = true
-                    }
                 },
                 startMode: planStartMode,
                 startWithPresets: planStartPresets,
@@ -219,9 +218,6 @@ struct ContentView: View {
         }
         .modifier(CutoutPresenter(isPresented: $showCutouts, model: model))
         .modifier(CabinetManagerPresenter(isPresented: $showCabinets, model: model))
-        .sheet(isPresented: $showZones) {
-            ZoneDesignerView(model: model, initialWall: zoneWall)
-        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -333,7 +329,7 @@ struct ContentView: View {
                 locked = false
                 zoneWall = 0
                 try? await Task.sleep(nanoseconds: 900_000_000)
-                showZones = true
+                openZones(wall: 0)
                 print("[ui] strefy otwarte: ściana 1, stref \(model.currentZones.count)")
             }
             #endif
@@ -448,6 +444,13 @@ struct ContentView: View {
         return "\(text) zł"
     }
 
+    /// Otwiera kreator stref w szufladzie (nie na środku ekranu).
+    private func openZones(wall: Int) {
+        zoneWall = wall
+        drawerPane = .zones
+        drawerOpen = true
+    }
+
     private var sidebar: some View {
         List {
             Section("Projekty") {
@@ -481,9 +484,7 @@ struct ContentView: View {
 
             Section("Projekt") {
                 Button {
-                    zoneWall = 0
-                    showZones = true
-                    drawerOpen = false
+                    openZones(wall: 0)
                 } label: {
                     Label("Strefy zabudowy (auto-projekt)", systemImage: "sparkles")
                 }
@@ -579,6 +580,16 @@ struct ContentView: View {
         }
         cabinets.append(contentsOf: result.cabinets)
         cabinets.append(contentsOf: result.panels)
+        if let first = result.cabinets.first {
+            let xs = result.cabinets.map { $0.x }
+            let zs = result.cabinets.map { $0.z }
+            NSLog("[fill] ściana %d: %d szafek, x %.0f…%.0f, z %.0f…%.0f, pokój %.0f×%.0f, plan %.0f×%.0f",
+                  index, result.cabinets.count, xs.min()!, xs.max()!, zs.min()!, zs.max()!,
+                  model.current.room.width, model.current.room.depth,
+                  planDraft.bounds.max.x - planDraft.bounds.min.x,
+                  planDraft.bounds.max.y - planDraft.bounds.min.y)
+            _ = first
+        }
         model.updateCabinets(cabinets)
         model.persist()
         model.status = "Ściana \(index + 1): " + result.note
@@ -650,10 +661,21 @@ struct ContentView: View {
     /// Panel projektów i biblioteki wysuwany z lewej krawędzi.
     /// Stały pasek boczny zjadał miejsce na pole robocze — teraz jest schowany.
     private var drawerPanel: some View {
-        NavigationStack { sidebar }
-            .frame(width: 340)
-            .background(.regularMaterial)
-            .ignoresSafeArea(edges: .vertical)
+        Group {
+            switch drawerPane {
+            case .list:
+                NavigationStack { sidebar }
+            case .zones:
+                // Kreator stref siedzi w szufladzie, a nie na środku ekranu —
+                // dzięki temu 3D jest widoczne obok i widać efekt od razu.
+                ZoneDesignerView(model: model, initialWall: zoneWall, embedded: true,
+                                 onClose: { drawerPane = .list })
+                    .background(.regularMaterial)
+            }
+        }
+        .frame(width: drawerPane == .zones ? 400 : 340)
+        .background(.regularMaterial)
+        .ignoresSafeArea(edges: .vertical)
     }
 
     /// Uchwyt przy lewej krawędzi: przeciągnięcie w prawo otwiera menu.

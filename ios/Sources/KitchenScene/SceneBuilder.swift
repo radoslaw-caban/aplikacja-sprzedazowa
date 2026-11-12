@@ -238,7 +238,8 @@ public enum SceneBuilder {
     /// Wnętrze (podłoga, ściany, listwy) jest potrzebne do widoku kuchni;
     /// elewacja, dachy, przeszklenia, taras i basen powstają w `VillaBuilder`.
     @MainActor
-    public static func buildRoom(_ room: Room, walls: Bool = true, scanPlan: ScanPlan? = nil, scanCloud: Bool = false) -> Entity {
+    public static func buildRoom(_ room: Room, walls: Bool = true, scanPlan: ScanPlan? = nil,
+                                 scanCloud: Bool = false, includeShell: Bool = true) -> Entity {
         let root = Entity()
         root.name = "room"
 
@@ -305,8 +306,12 @@ public enum SceneBuilder {
             root.addChild(wall)
         }
 
-        // skorupa willi: elewacja, płaskie dachy, przeszklenia, taras, basen
-        root.addChild(VillaBuilder.shell(room: room))
+        // skorupa willi: elewacja, płaskie dachy, przeszklenia, taras, basen.
+        // W widoku WNĘTRZA jej nie dodajemy — zamknięte pudło zasłaniało
+        // zabudowę od środka i „prześwitywało" przez ściany.
+        if includeShell {
+            root.addChild(VillaBuilder.shell(room: room))
+        }
 
         // listwy przypodłogowe 80 × 20 mm
         let skirting = SimpleMaterial(color: color("#f4f1ea"), isMetallic: false)

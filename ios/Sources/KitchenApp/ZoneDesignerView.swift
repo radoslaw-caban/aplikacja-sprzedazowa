@@ -7,6 +7,9 @@ import KitchenCore
 struct ZoneDesignerView: View {
     @Bindable var model: AppModel
     var initialWall: Int = 0
+    /// true = kreator działa w szufladzie (bez arkusza i bez „Zamknij" z dismiss)
+    var embedded: Bool = false
+    var onClose: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var wallIndex: Int
@@ -14,9 +17,11 @@ struct ZoneDesignerView: View {
     @State private var step = 0
     @State private var detent: PresentationDetent = .large
 
-    init(model: AppModel, initialWall: Int = 0) {
+    init(model: AppModel, initialWall: Int = 0, embedded: Bool = false, onClose: (() -> Void)? = nil) {
         self.model = model
         self.initialWall = initialWall
+        self.embedded = embedded
+        self.onClose = onClose
         _wallIndex = State(initialValue: max(0, initialWall))
     }
 
@@ -45,9 +50,9 @@ struct ZoneDesignerView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Zamknij") {
+                    Button(embedded ? "Projekty" : "Zamknij") {
                         if let z = draft { model.finalizeZone(z.id) }
-                        dismiss()
+                        if let onClose { onClose() } else { dismiss() }
                     }
                 }
             }
@@ -56,6 +61,7 @@ struct ZoneDesignerView: View {
         .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         #endif
+        .modifier(EmbeddedChrome(embedded: embedded))
         .onAppear {
             wallIndex = min(max(0, wallIndex), max(0, plan.wallCount - 1))
             #if DEBUG
@@ -359,5 +365,18 @@ struct ZoneDesignerView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.caption)
+    }
+}
+
+
+/// W szufladzie chowamy rzeczy charakterystyczne dla arkusza (tło, detenty).
+private struct EmbeddedChrome: ViewModifier {
+    var embedded: Bool
+    func body(content: Content) -> some View {
+        if embedded {
+            content.background(Color.clear)
+        } else {
+            content
+        }
     }
 }

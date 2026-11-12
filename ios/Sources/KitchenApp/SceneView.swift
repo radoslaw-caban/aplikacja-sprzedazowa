@@ -72,6 +72,9 @@ struct SceneView: View {
         var cabinetFocus: SIMD3<Float>?
         /// gwiazdki podglądu strefy (mrugają co klatkę)
         var sparkles: Entity?
+        /// ściany pokoju — do przezroczystości, gdy zasłaniają kamerę
+        var walls: [ModelEntity] = []
+        var wallAlphas: [Float] = []
     }
     @State private var cache = SceneCache()
     /// Ustawienia: ogniskowa (domyślnie 47°), czułości gestów.
@@ -139,6 +142,9 @@ struct SceneView: View {
                 if let environment = cache.environment, let camera = cache.camera {
                     DetailLOD.update(root: environment, cameraPosition: camera.position(relativeTo: nil))
                 }
+                if let camera = cache.camera {
+                    updateWallTransparency(cameraPosition: camera.position(relativeTo: nil))
+                }
                 #if DEBUG
                 frames += 1
                 let now = Date()
@@ -157,8 +163,14 @@ struct SceneView: View {
                 content.entities.removeAll()
                 content.add(SceneBuilder.sunlight())
                 if showBuilding {
-                    content.add(SceneBuilder.buildRoom(room, walls: true, scanPlan: scanPlan,
-                                                       scanCloud: showScanCloud))
+                    let roomEntity = SceneBuilder.buildRoom(room, walls: true, scanPlan: scanPlan,
+                                                            scanCloud: showScanCloud,
+                                                            includeShell: !interiorView)
+                    content.add(roomEntity)
+                    cache.walls = (0..<4).compactMap { roomEntity.findEntity(named: "wall-\($0)") as? ModelEntity }
+                    cache.wallAlphas = Array(repeating: -1, count: cache.walls.count)
+                } else {
+                    cache.walls = []
                 }
                 if showEnvironment, !showScan {
                     let environment = EnvironmentBuilder.makeEntity(room: room)
@@ -175,7 +187,19 @@ struct SceneView: View {
                 if let scanEntity { content.add(scanEntity) }
 
                 let base = baseCamera(scanEntity: scanEntity, built: built)
+                NSLog("[kamera] kadr pos=(%.2f, %.2f, %.2f) cel=(%.2f, %.2f, %.2f) obrys=(%.2f x %.2f x %.2f) wnetrze=%@",
+                      base.position.x, base.position.y, base.position.z,
+                      base.target.x, base.target.y, base.target.z,
+                      built.extents.x, built.extents.y, built.extents.z,
+                      interiorView ? "tak" : "nie")
                 cache.fitted = base
+                // po każdej zmianie projektu kamera WRACA do kadru na zabudowę
+                // (wcześniej zostawała tam, gdzie ją użytkownik obrócił —
+                // wstawiona szafka była poza ekranem)
+                cache.pan = .zero; cache.panTarget = .zero; cache.panVelocity = .zero
+                cache.yaw = 0; cache.yawTarget = 0; cache.yawVelocity = 0
+                cache.pitch = 0; cache.pitchTarget = 0
+                cache.zoom = 1; cache.zoomTarget = 1
                 let cam = makeCamera(base: base)
                 cache.camera = cam
                 content.add(cam)
@@ -220,6 +244,9 @@ struct SceneView: View {
     private var sceneSignature: Int {
         var hasher = Hasher()
         hasher.combine(room.width); hasher.combine(room.depth); hasher.combine(room.height)
+        // tryb widoku zmienia CAŁĄ scenę (skorupa willi vs same ściany),
+        // więc musi być w sygnaturze — inaczej przełączenie nie przebudowywało
+        hasher.combine(interiorView); hasher.combine(showBuilding); hasher.combine(showScan)
         hasher.combine(cabinets.count)
         for cabinet in cabinets {
             hasher.combine(cabinet.id)
@@ -322,6 +349,42 @@ struct SceneView: View {
         return nil
     }
 
+    /// Ściany, które stoją między kamerą a pomieszczeniem, robią się przezroczyste.
+    /// Dzięki temu widok z zewnątrz (i kamera cofnięta przed elewację) nie jest
+    /// „zasłonięty białym murem", a wnętrze z zabudową pozostaje widoczne.
+    private func updateWallTransparency(cameraPosition: SIMD3<Float>) {
+        guard !cache.walls.isEmpty else { return }
+        let halfW = Float(room.width / 1000) / 2
+        let halfD = Float(room.depth / 1000) / 2
+        for (index, wall) in cache.walls.enumerated() {
+            let pos = room.wallPosition(index)
+            let center = SIMD3<Float>(Float(pos.x) / 1000, 0, Float(pos.z) / 1000)
+            // normalna zewnętrzna: ściana leży na ±W/2 albo ±D/2
+            var normal = SIMD3<Float>(0, 0, 0)
+            if abs(center.x) > abs(center.z) {
+                normal.x = center.x > 0 ? 1 : -1
+            } else {
+                normal.z = center.z > 0 ? 1 : -1
+            }
+            // kamera po zewnętrznej stronie ściany = ta ściana zasłania widok
+            let side = simd_dot(cameraPosition - center, normal)
+            let blocked = interiorView && side > 0.05
+            let target: Float = blocked ? 0.16 : 1.0
+            let current = cache.wallAlphas[index]
+            guard abs(current - target) > 0.01 else { continue }
+            cache.wallAlphas[index] = target
+            guard var model = wall.model,
+                  var material = model.materials.first as? PhysicallyBasedMaterial else { continue }
+            if target < 0.99 {
+                material.blending = .transparent(opacity: .init(floatLiteral: target))
+            } else {
+                material.blending = .opaque
+            }
+            model.materials[0] = material
+            wall.model = model
+        }
+    }
+
     private func makeCamera(base: PreviewCamera) -> Entity {
         let cam = controlled(base)
 
@@ -346,16 +409,12 @@ struct SceneView: View {
         // Kadr wewnętrzny liczony z zabudowy, nie ze skanu — skan potrafi
         // otoczyć kamerę chmurą i zasłonić meble.
         if !built.extents.x.isZero {
-            let c = built.center
-            let e = built.extents
-            let halfW = Float(room.width / 1000) / 2 - 0.45
-            let halfD = Float(room.depth / 1000) / 2 - 0.45
-            let eye = SIMD3<Float>(
-                min(halfW, max(-halfW, c.x)),
-                min(Float(room.height / 1000) - 0.3, max(1.55, c.y + 0.35)),
-                min(halfD, max(-halfD, c.z + max(2.6, e.z * 0.75)))
-            )
-            return PreviewCamera(position: eye, target: [c.x, max(0.7, c.y), c.z])
+            // kadr dopasowany do bryły zabudowy: kamera staje naprzeciw mebla
+            // i cofa się tak, żeby cały bieg był w kadrze
+            return PreviewCamera.fitting(center: built.center,
+                                         extents: built.extents,
+                                         room: room,
+                                         verticalFOVDegrees: Float(settings.clampedFieldOfView))
         }
         if let scanEntity, scanEntity.children.count > 0 {
             return PreviewCamera.fit(center: built.center, extents: built.extents)
