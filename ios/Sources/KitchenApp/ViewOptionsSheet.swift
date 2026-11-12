@@ -18,6 +18,12 @@ struct ViewOptionsSheet: View {
     @Binding var showScan: Bool
     /// Warstwa budynku (ściany, podłoga, sufit) — niezależnie od skanu.
     @Binding var showBuilding: Bool
+    /// Siatka pomieszczenia z modelu LiDAR (ściany z otworami).
+    @Binding var showRoomMesh: Bool
+    /// Czy model pomieszczenia został już rozpoznany (decyduje o aktywności kafelka).
+    var hasRoomModel: Bool
+    /// Komunikat o stanie modelu (np. „4 narożniki, 4 ściany · 12,0 m²").
+    var roomModelStatus: String?
 
     /// Skan dostępny w projekcie? Decyduje, czy kafelki chmury są aktywne.
     var hasScan: Bool
@@ -56,6 +62,11 @@ struct ViewOptionsSheet: View {
                     }
                     tile("Budynek", "cube.transparent", active: showBuilding) {
                         showBuilding.toggle(); onPersist()
+                    }
+                    tile("Siatka pomieszczenia", "square.grid.3x3.fill", active: showRoomMesh,
+                         enabled: hasRoomModel,
+                         subtitle: hasRoomModel ? roomModelStatus : "Najpierw zeskanuj pomieszczenie") {
+                        showRoomMesh.toggle(); onPersist()
                     }
                 }
 
