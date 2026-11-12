@@ -1,0 +1,8 @@
+{
+  "//": "Pyright ma wskazywać na .venv-e57, bo tam są pye57 i numpy. Bez tego linter bierze systemowy Python i zgłasza reportMissingImports dla obu bibliotek.",
+  "venvPath": ".",
+  "venv": ".venv-e57",
+  "pythonVersion": "3.14",
+  "include": ["tools", "app/tools"],
+  "exclude": ["**/node_modules", "**/.build", "**/dist", ".venv-e57"]
+}

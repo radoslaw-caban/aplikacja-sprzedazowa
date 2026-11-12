@@ -143,15 +143,42 @@ public extension RoomModel {
     // MARK: - kontur pomieszczenia
 
     /// Kontur pomieszczenia: siatka zajętości → śledzenie brzegu → dopracowanie.
+    ///
+    /// USZCZELNIENIE ADAPTACYJNE: grubość ściany w siatce zależy od gęstości
+    /// chmury w paśmie. Skan z iPada ma punkty wszędzie, więc 1 komórka
+    /// dylatacji wystarcza. Skan X9 to cienkie linie (zmierzone: 2,3% zajętych
+    /// komórek 3 cm, choć 762 pkt na komórkę) — przy dylatacji 1 zostają
+    /// szczeliny, zalewanie z zewnątrz wlewa się do środka i kontur wychodzi
+    /// pusty (`nil`). Dlatego próbujemy kolejno grubszych uszczelnień i bierzemy
+    /// pierwsze, które daje spójne wnętrze o sensownym polu.
     static func roomOutline(points: [SIMD2<Float>], options: Options) -> [SIMD2<Float>]? {
         guard points.count > 100 else { return nil }
 
-        let cell: Float = 0.03
-        let grid = OccupancyGrid(points: points, cell: cell, sealRadius: 1)
-        guard let coarse = grid.outline(sealRadius: 1) else { return nil }
+        for (cell, radius) in [(Float(0.03), 1), (0.04, 2), (0.05, 2), (0.05, 3), (0.06, 4)] {
+            let grid = OccupancyGrid(points: points, cell: cell, sealRadius: radius)
+            // wnętrze musi istnieć i mieć sensowne pole (nie 0,1 m² i nie całą siatkę)
+            let interiorFraction = grid.interiorFraction
+            guard interiorFraction > 0.02, interiorFraction < 0.9 else { continue }
+            guard let coarse = grid.outline(sealRadius: radius) else { continue }
 
-        // uproszczenie: kontur siatki ma schodki 3 cm, więc tolerancja 5 cm
-        var poly = douglasPeucker(coarse, tolerance: 0.05, closed: true)
+            // uproszczenie: kontur siatki ma schodki równe komórce
+            var poly = douglasPeucker(coarse, tolerance: cell * 1.6, closed: true)
+            guard poly.count >= 3 else { continue }
+            // dopracowanie na surowych punktach
+            poly = refinePolygon(poly, points: points, tolerance: cell * 3, iterations: 2)
+            poly = removeShortEdges(poly, minLength: options.minWallLength)
+            if poly.count >= 3 { return poly }
+        }
+        return nil
+    }
+
+    /// Kontur z konkretnymi parametrami — do diagnostyki i testów.
+    static func roomOutline(points: [SIMD2<Float>], cell: Float, radius: Int,
+                            options: Options) -> [SIMD2<Float>]? {
+        guard points.count > 100 else { return nil }
+        let grid = OccupancyGrid(points: points, cell: cell, sealRadius: radius)
+        guard let coarse = grid.outline(sealRadius: radius) else { return nil }
+        var poly = douglasPeucker(coarse, tolerance: cell * 1.6, closed: true)
         guard poly.count >= 3 else { return nil }
 
         // dopracowanie na surowych punktach (usuwa obciążenie od pogrubienia siatki)
@@ -165,11 +192,11 @@ public extension RoomModel {
     /// „Wnętrze" to obszar, do którego nie dotarło zalewanie z zewnątrz siatki.
     /// Dzięki temu dziury w chmurze (ciemny kąt, zasłonięty fragment) zostają
     /// wypełnione i nie rozrywają konturu.
-    struct OccupancyGrid {
-        var cell: Float
-        var origin: SIMD2<Float>
-        var width: Int
-        var height: Int
+    public struct OccupancyGrid {
+        public var cell: Float
+        public var origin: SIMD2<Float>
+        public var width: Int
+        public var height: Int
         /// komórki z punktami
         var raw: [Bool]
         /// komórki z punktami po pogrubieniu (do zamknięcia szczelin w ścianach)
@@ -177,7 +204,7 @@ public extension RoomModel {
         /// wnętrze pomieszczenia (nieosiągalne zalewaniem z zewnątrz)
         var interior: [Bool]
 
-        init(points: [SIMD2<Float>], cell: Float, sealRadius: Int) {
+        public init(points: [SIMD2<Float>], cell: Float, sealRadius: Int) {
             self.cell = cell
             guard !points.isEmpty else {
                 origin = .zero; width = 0; height = 0
@@ -248,6 +275,16 @@ public extension RoomModel {
             for i in 0..<(width * height) where !sealed[i] && !outside[i] {
                 interior[i] = true
             }
+        }
+
+        /// Udział komórek wnętrza w całej siatce — miara, czy zalewanie
+        /// domknęło pomieszczenie. 0 = przecieka (wnętrze puste), 1 = nic
+        /// nie zajęte (brak ścian).
+        public var interiorFraction: Float {
+            guard !interior.isEmpty else { return 0 }
+            var c = 0
+            for v in interior where v { c += 1 }
+            return Float(c) / Float(interior.count)
         }
 
         /// Bryła pomieszczenia: wnętrze + punkty (bez pogrubienia — kontur ma

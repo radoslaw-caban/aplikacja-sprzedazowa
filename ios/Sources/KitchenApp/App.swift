@@ -35,6 +35,11 @@ struct ContentView: View {
     @State private var showScanCloud = UserDefaults.standard.bool(forKey: "showScanCloud")
     @State private var showScan = false
     @State private var showPlan = false
+    /// pierwszy krok: pytanie „jak określimy budynek?"
+    @State private var showPlanMethod = false
+    @State private var planStartMode: PlanEditorView.Mode? = nil
+    @State private var planStartPresets = false
+    @State private var planStartImport = false
     @State private var showZones = false
     @State private var zoneWall = 0
     @State private var showTextures = false
@@ -119,6 +124,39 @@ struct ContentView: View {
                 .padding(.leading, 14)
             }
         }
+        .planPresentation(isPresented: $showPlanMethod) {
+            PlanMethodChooser(
+                onPick: { method in
+                    showPlanMethod = false
+                    planStartMode = nil
+                    planStartPresets = false
+                    planStartImport = false
+                    switch method {
+                    case .presets:
+                        planStartPresets = true
+                        planStartMode = .dimensions
+                    case .dimensions:
+                        planStartMode = .dimensions
+                    case .rectangle:
+                        planStartMode = .rectangle
+                    case .lines:
+                        planStartMode = .lines
+                    case .image:
+                        planStartMode = .rectangle
+                        planStartImport = true
+                    case .scan:
+                        showScan = true
+                        return
+                    }
+                    planDraft = model.currentPlan
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                        showPlan = true
+                    }
+                },
+                onCancel: { showPlanMethod = false },
+                projectName: ClientDirectory.displayName(model.current)
+            )
+        }
         .planPresentation(isPresented: $showFPS) {
             FirstPersonView(
                 room: model.current.room,
@@ -175,6 +213,9 @@ struct ContentView: View {
                         showZones = true
                     }
                 },
+                startMode: planStartMode,
+                startWithPresets: planStartPresets,
+                startWithImport: planStartImport,
                 onOpen3D: {
                     showPlan = false
                 }
@@ -278,12 +319,27 @@ struct ContentView: View {
                 try? await Task.sleep(nanoseconds: 800_000_000)
                 showTextures = true
             }
-            // Start aplikacji = edycja planu, nie oglądanie bryły domu.
+            // hak diagnostyczny: od razu edytor w zadanym trybie (bez pytania)
+            if let method = UserDefaults.standard.string(forKey: "demoPlanMethod") {
+                switch method {
+                case "dimensions": planStartMode = .dimensions
+                case "rectangle": planStartMode = .rectangle
+                case "lines": planStartMode = .lines
+                case "presets": planStartMode = .dimensions; planStartPresets = true
+                case "image": planStartMode = .rectangle; planStartImport = true
+                default: planStartMode = .dimensions
+                }
+                planDraft = model.currentPlan
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                showPlan = true
+            }
+
+            // Start aplikacji = pytanie „jak określimy budynek?", nie od razu edytor.
             if UserDefaults.standard.object(forKey: "startWithPlan") == nil || UserDefaults.standard.bool(forKey: "startWithPlan") {
-                if !showPlan {
+                if !showPlan, !showPlanMethod {
                     planDraft = model.currentPlan
                     try? await Task.sleep(nanoseconds: 400_000_000)
-                    showPlan = true
+                    showPlanMethod = true
                 }
             }
             if UserDefaults.standard.bool(forKey: "demoPlan") {

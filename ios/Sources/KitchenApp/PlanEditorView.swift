@@ -16,6 +16,12 @@ struct PlanEditorView: View {
     var onFillWall: ((Int) -> Void)? = nil
     /// wywoływane po kliknięciu „Strefa…" — auto-projekt zabudowy na ścianie
     var onZoneWall: ((Int) -> Void)? = nil
+    /// tryb wybrany w pytaniu „jak określimy budynek?"
+    var startMode: Mode? = nil
+    /// od razu otwórz listę gotowych planów
+    var startWithPresets: Bool = false
+    /// od razu otwórz import planu z obrazu
+    var startWithImport: Bool = false
 
     /// Sposób wprowadzania planu.
     enum Mode: String, CaseIterable, Identifiable {
@@ -145,9 +151,13 @@ struct PlanEditorView: View {
         .onAppear {
             syncFields(from: plan)
             // hak diagnostyczny: `defaults write ... planMode Wymiary` otwiera panel wymiarów
-            if let saved = UserDefaults.standard.string(forKey: "planMode"), let savedMode = Mode(rawValue: saved) {
+            if let startMode {
+                mode = startMode
+            } else if let saved = UserDefaults.standard.string(forKey: "planMode"), let savedMode = Mode(rawValue: saved) {
                 mode = savedMode
             }
+            if startWithPresets { showPresets = true }
+            if startWithImport { showImport = true }
             // hak diagnostyczny: zbliżenie kartki z Ustawień (weryfikacja widoku notesu)
             if UserDefaults.standard.object(forKey: "planZoom") != nil {
                 zoom = CGFloat(UserDefaults.standard.double(forKey: "planZoom"))
@@ -186,6 +196,13 @@ struct PlanEditorView: View {
                     .font(.caption)
             }
             .buttonStyle(.bordered)
+            Button {
+                onOpen3D?()
+            } label: {
+                Label("Przejdź do 3D", systemImage: "cube.transparent")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
             Button {
                 showTakeoff = true
             } label: {
@@ -647,6 +664,14 @@ struct PlanEditorView: View {
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
             }
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            Button {
+                onOpen3D?()
+            } label: {
+                Label("Przejdź do projektu 3D", systemImage: "cube.transparent")
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
+            }
+            .buttonStyle(.borderedProminent)
         }
         .padding(14)
         .background(.ultraThinMaterial)
