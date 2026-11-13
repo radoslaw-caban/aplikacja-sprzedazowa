@@ -1095,20 +1095,15 @@ public enum EnvironmentBuilder {
         return root
     }
 
-    /// Samochód na podjeździe: model Tesla Model 3 (CC-BY-4.0, Ameer Studio),
-    /// a gdy pliku nie ma — bryła proceduralna.
+    /// Samochód na podjeździe — bryła proceduralna.
     ///
-    /// UWAGA LICENCYJNA: CC-BY wymaga podania autora w aplikacji (stopka/„o
-    /// programie”). Model jest fanowski, nie pochodzi od Tesli.
+    /// ŚWIADOMA DECYZJA: usunięto model GLB (CC-BY-4.0, Ameer Studio), bo
+    /// licencja CC-BY wymaga widocznej atrybucji w aplikacji, a model był
+    /// fanowski (nie od Tesli) — czyli dodatkowe ryzyko przy publikacji
+    /// bez realnej korzyści. Proceduralna bryła czyta się z 20 m tak samo,
+    /// jest w 100% nasza i waży zero bajtów.
     static func tesla(position: SIMD3<Float>) -> Entity {
-        if let model = ModelLibrary.entity(named: "TeslaModel3", targetLength: 4.7, axis: 2) {
-            let root = Entity()
-            root.name = "tesla"
-            root.addChild(model)
-            root.position = position
-            return root
-        }
-        return teslaProcedural(position: position)
+        teslaProcedural(position: position)
     }
 
     /// Zapas, gdy modelu nie da się wczytać: bryła czytelna z 20 m.
