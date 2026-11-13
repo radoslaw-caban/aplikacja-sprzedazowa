@@ -62,6 +62,19 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: false
+        # Uprawnienia: lokalizacja jest potrzebna, żeby ARKit ustawił północ
+        # geograficzną (.gravityAndHeading) i żeby policzyć pozycję słońca.
+        # Bez tych kluczy system po cichu odmawia — skan działa, ale północ
+        # jest umowna, więc nasłonecznienie wychodzi błędne.
+        NSLocationWhenInUseUsageDescription: >-
+          Aplikacja używa lokalizacji, aby ustawić północ geograficzną skanu
+          i wyliczyć nasłonecznienie działki dla podanego adresu.
+        NSLocationUsageDescription: >-
+          Lokalizacja jest potrzebna do ustawienia północy geograficznej skanu
+          i obliczenia pozycji słońca.
+        NSCameraUsageDescription: >-
+          Kamera i LiDAR służą do skanowania pomieszczeń w 3D — z pomiaru
+          powstaje model, na który nakładamy projekt.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: pl.karpatia.konfigurator
