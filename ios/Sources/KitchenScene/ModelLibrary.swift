@@ -17,9 +17,6 @@ public enum ModelLibrary {
 
     /// Spis modeli z licencjami (wymóg CC-BY: podanie autora).
     public static let catalog: [Entry] = [
-        Entry(name: "IslandTree", license: "CC0", author: "Poly Haven"),
-        Entry(name: "IslandTree_LOD1", license: "CC0", author: "Poly Haven"),
-        Entry(name: "IslandTree_LOD2", license: "CC0", author: "Poly Haven"),
         Entry(name: "TerraceSofa", license: "CC0", author: "Poly Haven · Sofa 01"),
         Entry(name: "TerracePlant", license: "CC0", author: "Poly Haven · Anthurium Botany 01"),
         Entry(name: "boulder_01", license: "CC0", author: "Poly Haven · Boulder 01"),
@@ -28,9 +25,6 @@ public enum ModelLibrary {
         Entry(name: "nettle_plant", license: "CC0", author: "Poly Haven · Nettle Plant"),
         Entry(name: "shrub_01", license: "CC0", author: "Poly Haven · Shrub 01"),
         Entry(name: "grass_medium_01", license: "CC0", author: "Poly Haven · Grass Medium 01"),
-        Entry(name: "kenney_kitchen_cabinet", license: "CC0-1.0", author: "Kenney · Furniture Kit"),
-        Entry(name: "kenney_drawer", license: "CC0-1.0", author: "Kenney · Furniture Kit"),
-        Entry(name: "kenney_cabinet_bed_drawer", license: "CC0-1.0", author: "Kenney · Furniture Kit"),
         Entry(name: "hardware_hinge_35", license: "CC0-1.0",
               author: "Innerscene (STEP 35 mm concealed hinge) · GLB proxy: Karpatia"),
         Entry(name: "hardware_slide_250", license: "CC0-1.0",
