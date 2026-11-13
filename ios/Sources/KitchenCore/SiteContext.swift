@@ -281,3 +281,54 @@ public enum EnvironmentClass: String, Codable, Sendable, CaseIterable, Identifia
         return .city
     }
 }
+
+/// KONTEKST DZIAŁKI — wszystko, co wiemy o miejscu, zapisane przy projekcie.
+///
+/// Trzymamy to razem, bo te dane zawsze idą w parze: adres bez współrzędnych
+/// nie da słońca, współrzędne bez klasy otoczenia nie dadzą scenografii.
+/// Zapis w projekcie = brak ponownego geokodowania przy każdym otwarciu.
+public struct SiteContext: Codable, Sendable, Equatable {
+    /// adres w formie wpisanej przez użytkownika
+    public var address: String
+    public var latitude: Double
+    public var longitude: Double
+    /// rozpoznana klasa otoczenia (miasto / wieś / las / woda)
+    public var environment: EnvironmentClass
+    /// nazwa miejscowości z reverse geocodingu (do wyświetlenia)
+    public var locality: String
+    /// kiedy rozwiązano — żeby wiedzieć, czy dane nie są przestarzałe
+    public var resolvedAt: Date
+
+    public init(address: String, latitude: Double, longitude: Double,
+                environment: EnvironmentClass, locality: String = "",
+                resolvedAt: Date = Date()) {
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+        self.environment = environment
+        self.locality = locality
+        self.resolvedAt = resolvedAt
+    }
+
+    /// Pozycja słońca dla tego miejsca i podanego momentu.
+    public func sun(at date: Date, timeZone: TimeZone = .current) -> SolarPosition.Result {
+        SolarPosition.compute(latitude: latitude, longitude: longitude,
+                              date: date, timeZone: timeZone)
+    }
+
+    /// Pora dnia wynikająca z pozycji słońca.
+    public func timeOfDay(at date: Date, timeZone: TimeZone = .current) -> TimeOfDay {
+        let sun = sun(at: date, timeZone: timeZone)
+        let cal = Calendar(identifier: .gregorian)
+        var local = cal
+        local.timeZone = timeZone
+        let hour = local.component(.hour, from: date)
+        return TimeOfDay.from(elevation: sun.elevation, isBeforeNoon: hour < 12)
+    }
+
+    /// Wschód i zachód słońca tego dnia (godziny lokalne).
+    public func daylight(on date: Date, timeZone: TimeZone = .current) -> (sunrise: Double, sunset: Double)? {
+        SolarPosition.sunriseSunset(latitude: latitude, longitude: longitude,
+                                    date: date, timeZone: timeZone)
+    }
+}
