@@ -25,6 +25,12 @@
 		<key>UIColorName</key>
 		<string></string>
 	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Aplikacja używa lokalizacji, aby ustawić północ geograficzną skanu i wyliczyć nasłonecznienie działki dla podanego adresu.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Lokalizacja jest potrzebna do ustawienia północy geograficznej skanu i obliczenia pozycji słońca.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Kamera i LiDAR służą do skanowania pomieszczeń w 3D — z pomiaru powstaje model, na który nakładamy projekt.</string>
 	<key>UIRequiresFullScreen</key>
 	<false/>
 	<key>UISupportedInterfaceOrientations</key>

@@ -139,7 +139,17 @@ public final class RoomScanSession: NSObject, ObservableObject {
             return
         }
         let cfg = ARWorldTrackingConfiguration()
-        cfg.worldAlignment = .gravity
+        // PÓŁNOC GEOGRAFICZNA, nie umowna.
+        //
+        // `.gravityAndHeading` ustawia (0,0,-1) na północ geograficzną, a osie
+        // X/Z na wschód/południe — dzięki temu skan ma orientację zgodną
+        // z rzeczywistością, więc można na nim liczyć nasłonecznienie
+        // i wstawiać otoczenie zgodne z adresem.
+        //
+        // Wymaga zgody lokalizacyjnej (NSLocationWhenInUseUsageDescription).
+        // Bez zgody ARKit degraduje się do `.gravity` — kod działa dalej,
+        // tylko północ jest wtedy umowna, więc nie blokujemy startu skanu.
+        cfg.worldAlignment = LocationAuthorization.isGranted ? .gravityAndHeading : .gravity
 
         if ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification) {
             cfg.sceneReconstruction = .meshWithClassification
