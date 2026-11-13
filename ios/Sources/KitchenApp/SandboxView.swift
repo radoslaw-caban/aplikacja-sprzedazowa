@@ -21,6 +21,8 @@ struct SandboxView: View {
     @State private var cursorPoint: CGPoint = .zero
     /// faza pstryknięcia 0…1
     @State private var snapPhase: Double = 0
+    /// czy miejsce pod kursorem jest wolne — decyduje o kolorze konturu
+    @State private var spotFree = true
     /// zaznaczony obiekt do edycji
     @State private var editingID: UUID?
     /// kategoria biblioteki
@@ -40,7 +42,8 @@ struct SandboxView: View {
                     point: cursorPoint,
                     trade: armed?.trade,
                     snapPhase: snapPhase,
-                    tint: Color(hex: armed?.defaultColor ?? "#ffffff")
+                    tint: Color(hex: armed?.defaultColor ?? "#ffffff"),
+                    valid: spotFree
                 )
                 .position(cursorPoint)
                 .allowsHitTesting(false)
@@ -165,9 +168,11 @@ struct SandboxView: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
                         cursorPoint = v.location
+                        updateSpotFree(at: v.location, cx: cx, cy: cy, pxPerMm: pxPerMm)
                     }
                     .onEnded { v in
                         cursorPoint = v.location
+                        updateSpotFree(at: v.location, cx: cx, cy: cy, pxPerMm: pxPerMm)
                         if armed != nil {
                             place(at: v.location, cx: cx, cy: cy, pxPerMm: pxPerMm)
                         }
@@ -427,6 +432,31 @@ struct SandboxView: View {
 
         var obj = SandboxObject(kind: kind, position: SIMD3(worldX, 0, worldZ))
         obj.grounded = true
+
+        // KOLIZJA: obiekty się nie przenikają. Jeśli miejsce jest zajęte,
+        // obiekt odsuwa się na najbliższe wolne — tak jak na realnej działce,
+        // gdzie nie da się postawić drzewa w pniu innego drzewa.
+        let existing = model.currentSandbox
+        if !SandboxPhysics.canPlace(obj, in: existing) {
+            guard let moved = SandboxPhysics.nearestFreeSpot(for: obj, in: existing) else {
+                model.status = "Brak wolnego miejsca w pobliżu"
+                audio.play(.tap, volume: 0.7, channel: .ui)
+                Haptics.warning()
+                return
+            }
+            obj = moved
+            model.status = "Miejsce zajęte — obiekt odsunięty obok"
+        } else {
+            // wolne miejsce: sprawdź, czy dotyka czegoś → interakcja pary
+            let touching = existing.first { SandboxPhysics.collides(obj, $0, tolerance: 30) }
+            if let other = touching {
+                let result = SandboxPhysics.interaction(obj, other)
+                if let s = result.sound {
+                    audio.play(s, volume: 0.75, channel: .object)
+                }
+            }
+        }
+
         model.addSandboxObject(obj)
         editingID = nil
 
@@ -439,6 +469,19 @@ struct SandboxView: View {
             audio.play(kind.defaultSound, volume: 0.8, channel: .object)
         }
         Haptics.success()
+    }
+
+    /// Sprawdza, czy pod kursorem jest wolne miejsce — kontur kursora
+    /// zmienia kolor: zielony = można wstawić, czerwony = kolizja.
+    private func updateSpotFree(at point: CGPoint, cx: CGFloat, cy: CGFloat, pxPerMm: CGFloat) {
+        guard let kind = armed else {
+            spotFree = true
+            return
+        }
+        let worldX = Double((point.x - cx) / pxPerMm)
+        let worldZ = Double((point.y - cy) / pxPerMm)
+        let probe = SandboxObject(kind: kind, position: SIMD3(worldX, 0, worldZ))
+        spotFree = SandboxPhysics.canPlace(probe, in: model.currentSandbox)
     }
 
     /// Animacja pstryknięcia: 0 → 1 → 0 w ~0,35 s.

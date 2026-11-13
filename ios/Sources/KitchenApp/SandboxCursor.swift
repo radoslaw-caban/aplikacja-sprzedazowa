@@ -21,6 +21,8 @@ struct SandboxCursor: View {
     let snapPhase: Double
     /// kolor wstawianego obiektu
     let tint: Color
+    /// czy miejsce jest wolne — kontur zielony (można) albo czerwony (kolizja)
+    var valid: Bool = true
 
     /// Koniuszek palca względem środka rysunku. Ręka jest rysowana tak,
     /// żeby palec wskazujący sięgał w lewo-górę; te przesunięcia kładą
@@ -31,14 +33,25 @@ struct SandboxCursor: View {
 
     var body: some View {
         ZStack {
-            // poświata: „tu wstawisz"
+            // poświata: zielona gdy można wstawić, czerwona przy kolizji.
+            // To ten sam sygnał co kontur w edytorze mebli — bez niego
+            // użytkownik dowiaduje się o kolizji dopiero po fakcie.
             Circle()
                 .fill(RadialGradient(
-                    colors: [tint.opacity(0.45), tint.opacity(0)],
+                    colors: [(valid ? Color.green : Color.red).opacity(0.45),
+                             (valid ? Color.green : Color.red).opacity(0)],
                     center: .center, startRadius: 0, endRadius: 46))
                 .frame(width: 92, height: 92)
                 .offset(tip)
                 .blendMode(.plusLighter)
+
+            // pierścień walidacji wokół koniuszka palca
+            Circle()
+                .strokeBorder(valid ? Color.green : Color.red,
+                              lineWidth: 2)
+                .frame(width: 34, height: 34)
+                .offset(tip)
+                .opacity(0.9)
 
             hand
                 .offset(tip)
