@@ -1,7 +1,11 @@
 import SwiftUI
-import UIKit
 import UniformTypeIdentifiers
 import KitchenCore
+// UIKit tylko na iOS — bez tego warunku pakiet nie kompiluje się na macOS
+// (ten sam wzorzec co w ContractSheet i DocumentsView).
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Wysuwana z lewej biblioteka / edytor.
 ///

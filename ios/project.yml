@@ -97,3 +97,27 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: pl.karpatia.konfigurator.mac
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: ""
+
+  KitchenCoreTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/KitchenCoreTests
+    dependencies:
+      - package: KitchenCore
+        product: KitchenCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: pl.karpatia.konfigurator.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  KitchenConfigurator:
+    build:
+      targets:
+        KitchenConfigurator: all
+        KitchenCoreTests: [test]
+    test:
+      targets:
+        - KitchenCoreTests
+      gatherCoverageData: true

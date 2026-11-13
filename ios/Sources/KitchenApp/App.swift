@@ -116,37 +116,50 @@ struct ContentView: View {
                 bottomNavigation
             }
         }
+        // JEDYNE WEJŚCIE do pomiaru i planu — kategorie, parametry, oferta.
         .planPresentation(isPresented: $showPlanMethod) {
-            PlanMethodChooser(
-                onPick: { method in
+            MeasurementChooser(
+                onOffer: { offer, option in
+                    showPlanMethod = false
+                    handleOffer(offer, option: option)
+                },
+                canScan: RoomScanSession.isSupported,
+                projectName: ClientDirectory.displayName(model.current),
+                onCancel: { showPlanMethod = false },
+                onPick: { option in
                     showPlanMethod = false
                     planStartMode = nil
                     planStartPresets = false
                     planStartImport = false
-                    switch method {
-                    case .presets:
-                        planStartPresets = true
-                        planStartMode = .dimensions
-                    case .dimensions:
-                        planStartMode = .dimensions
-                    case .rectangle:
-                        planStartMode = .rectangle
-                    case .lines:
+                    switch option {
+                    case .quickScan, .proScan:
+                        // Skan pomieszczenia: LiDAR z iPada (szybki) albo plik
+                        // ze skanera wykonawczego (profesjonalny). Oba wchodzą
+                        // do tego samego okna skanowania.
+                        showScan = true
+                        return
+                    case .lockedLines:
                         planStartMode = .lines
-                    case .image:
+                    case .roomRectangles:
+                        planStartMode = .rectangle
+                    case .importPlan:
                         planStartMode = .rectangle
                         planStartImport = true
-                    case .scan:
-                        showScan = true
+                    case .laserMeter:
+                        // dalmierz sterujący rysuje układ linii, więc startujemy
+                        // od trybu kresek (linie po osiach)
+                        planStartMode = .lines
+                    case .neuralChat, .humanChat, .inviteFriend:
+                        // rozmowa nie zmienia planu — wracamy do projektu
+                        handleOffer(option == .neuralChat ? .subscribeModule : .meetCudotworcy,
+                                    option: option)
                         return
                     }
                     planDraft = model.currentPlan
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                         showPlan = true
                     }
-                },
-                onCancel: { showPlanMethod = false },
-                projectName: ClientDirectory.displayName(model.current)
+                }
             )
         }
         .planPresentation(isPresented: $showFPS) {
@@ -235,9 +248,18 @@ struct ContentView: View {
         // Piaskownica na PEŁNYM ekranie, nie w arkuszu: arkusz na iPadzie
         // to małe okno formularza, a piaskownica potrzebuje całej planszy
         // (kursor i pole robocze nie mieściły się w arkuszu).
+        // `fullScreenCover` NIE ISTNIEJE na macOS — potrzebny warunek
+        // platformy. Bez tego pakiet nie kompilował się na Macu
+        // (błąd z commita Piaskownicy, nie z tego modułu).
+        #if os(iOS)
         .fullScreenCover(isPresented: $showSandbox) {
             SandboxView(model: model, initialArmed: sandboxArmed)
         }
+        #else
+        .sheet(isPresented: $showSandbox) {
+            SandboxView(model: model, initialArmed: sandboxArmed)
+        }
+        #endif
         .sheet(isPresented: $showTextures) {
             TextureLibraryView { texture in
                 applyTexture(named: texture.name)
@@ -572,11 +594,10 @@ struct ContentView: View {
             Section("Biblioteka · stojące") {
                 ForEach(Library.tall) { t in Button { add(t) } label: { templateRow(t) } }
             }
+            // Przycisk „Skanuj LiDAR-em" usunięty: pomiar wybiera się
+            // w JEDNYM miejscu (ekran „Jak zdobędziemy wymiary?"). Trzy wejścia
+            // do tej samej funkcji myliły — ten sam powód co w dolnym pasku.
             Section("Skan pomieszczenia") {
-                Button { showScan = true } label: {
-                    Label("Skanuj LiDAR-em", systemImage: "sensor.tag.radiowaves.forward")
-                }
-                .disabled(!RoomScanSession.isSupported)
                 if let doc = model.scanDocument {
                     Button { model.loadScan(from: doc) } label: {
                         Label("Wczytaj: \(doc.name)", systemImage: "cube.transparent")
@@ -662,6 +683,19 @@ struct ContentView: View {
     /// w tym samym rzędzie (jeśli jest miejsce). Gdy rząd jest pełny, szafka
     /// przeskakuje na następną ścianę — nigdy nie ląduje „w powietrzu"
     /// ani przodem w ścianę.
+    /// Obsługa oferty towarzyszącej (zakup, subskrypcja, spotkanie).
+    ///
+    /// Na tym etapie zapisujemy ZAMIAR i pokazujemy go w statusie — pełny
+    /// przepływ zamówienia (koszyk, płatność, terminarz) jest osobnym modułem.
+    /// Zapis zamiaru jest potrzebny już teraz, bo handlowiec musi wiedzieć,
+    /// że klient pytał o skaner, a nie tylko że „gdzieś kliknął".
+    private func handleOffer(_ offer: MeasurementGuide.Offer,
+                             option: MeasurementGuide.Option) {
+        let note = "\(offer.title) · \(option.title)"
+        model.status = "Zapisane: \(note)"
+        model.recordOfferIntent(offer: offer.id, option: option.rawValue)
+    }
+
     private func add(_ t: Library.Template) {
         var cabinets = model.current.cabinets
         let new = Library.make(t)
@@ -884,12 +918,8 @@ struct ContentView: View {
 
                 Spacer(minLength: 0)
 
-                Button { showScan = true } label: {
-                    Label("Skanuj", systemImage: "sensor.tag.radiowaves.forward")
-                        .font(.footnote)
-                }
-                .buttonStyle(.plain)
-                .disabled(!RoomScanSession.isSupported)
+                // Przycisk „Skanuj" usunięty — pomiar wybiera się w ekranie
+                // „Jak zdobędziemy wymiary?" (jedyne wejście).
             }
             .padding(.horizontal, 16).padding(.vertical, 7)
             .background(.regularMaterial)

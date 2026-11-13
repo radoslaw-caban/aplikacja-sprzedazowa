@@ -137,11 +137,10 @@ struct ActionPanelPage: View {
                     action("Nowy projekt", "plus.rectangle.on.folder", "Dodaje pusty projekt i przełącza na niego") {
                         model.addProject()
                     }
-                    action("Skanuj pomieszczenie", "sensor.tag.radiowaves.forward", "LiDAR: chmura punktów prosto do projektu") {
+                    // „Skanuj pomieszczenie" usunięte — pomiar i plan wybiera
+                    // się w jednym ekranie („Jak zdobędziemy wymiary?").
+                    action("Pomiar i plan", "ruler.and.pencil", "Skaner, dalmierz albo rysowanie — z opisem dokładności") {
                         openScan()
-                    }
-                    action("Plan domu", "map", "Rysuj ściany kreskami i zmieniaj ich długości") {
-                        openPlan()
                     }
                     action("Dokumenty klienta", "folder", "Umowy, zdjęcia, rzuty — \(model.documents.count) plików") {
                         openDocuments()

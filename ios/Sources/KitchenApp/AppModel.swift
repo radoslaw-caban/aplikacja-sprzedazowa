@@ -622,6 +622,30 @@ final class AppModel {
         }
     }
 
+    // MARK: - zamiary ofertowe (zakup, subskrypcja, spotkanie)
+
+    /// Zapisuje, że klient poprosił o ofertę przy danym trybie pomiaru.
+    ///
+    /// Po co trzymać to osobno: handlowiec musi wiedzieć, że klient pytał
+    /// o skaner albo o rozmowę — samo „gdzieś kliknął" nic nie daje.
+    /// Format wpisu: „data|oferta|tryb".
+    func recordOfferIntent(offer: String, option: String) {
+        var list = UserDefaults.standard.stringArray(forKey: Self.offerIntentsKey) ?? []
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        list.append("\(stamp)|\(offer)|\(option)")
+        // ograniczamy historię, żeby nie rosła bez końca
+        if list.count > 200 { list.removeFirst(list.count - 200) }
+        UserDefaults.standard.set(list, forKey: Self.offerIntentsKey)
+        persist()
+    }
+
+    /// Zapisane zamiary ofertowe (do podglądu u handlowca).
+    var offerIntents: [String] {
+        UserDefaults.standard.stringArray(forKey: Self.offerIntentsKey) ?? []
+    }
+
+    static let offerIntentsKey = "aplikacja-sprzedazowa:offerIntents"
+
     // MARK: - model pomieszczenia ze skanu
 
     /// Buduje model pomieszczenia i siatkę ze skanu — w tle, wynik do sceny.
