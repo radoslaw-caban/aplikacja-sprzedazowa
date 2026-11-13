@@ -646,6 +646,26 @@ final class AppModel {
 
     static let offerIntentsKey = "aplikacja-sprzedazowa:offerIntents"
 
+    // MARK: - wycena / koszyk
+
+    /// Zapisuje wynik wyceny w zamówieniu: kwota brutto i liczba pozycji.
+    ///
+    /// Do tego jedno miejsce, bo cena zamówienia (`order.price`) jest polem
+    /// istniejącym od początku — bez tego kroku koszyk byłby osobnym bytem
+    /// i handlowiec musiałby przepisywać kwotę ręcznie.
+    func applyCart(_ summary: CartSummary) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var order = projects[currentIndex].order ?? ProjectOrder()
+        order.price = summary.grossTotal
+        order.updatedAt = Date()
+        projects[currentIndex].order = order
+        cartSummary = summary
+        persist()
+    }
+
+    /// Ostatnio policzona wycena (do podglądu w panelu akcji).
+    var cartSummary: CartSummary?
+
     // MARK: - model pomieszczenia ze skanu
 
     /// Buduje model pomieszczenia i siatkę ze skanu — w tle, wynik do sceny.

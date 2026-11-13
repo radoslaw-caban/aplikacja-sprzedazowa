@@ -62,6 +62,7 @@ struct ContentView: View {
     @State private var showContract = false
     @State private var showFPS = false
     @State private var showViewOptions = false
+    @State private var showCart = false
     @State private var showClientProjects = false
     @State private var planDraft = FloorPlan.rectangle()
     /// Projekt zablokowany: na ekranie tylko 3D i kłódka (przeciąganie przesuwa).
@@ -264,6 +265,9 @@ struct ContentView: View {
             TextureLibraryView { texture in
                 applyTexture(named: texture.name)
             }
+        }
+        .sheet(isPresented: $showCart) {
+            CartSheet(model: model, onClose: { showCart = false })
         }
         .sheet(isPresented: $showViewOptions) {
             ViewOptionsSheet(
@@ -625,10 +629,38 @@ struct ContentView: View {
         #endif
     }
 
+    /// Wiersz biblioteki z ceną — handlowiec musi widzieć koszt, zanim wstawi.
+    ///
+    /// Cena jest wiązana z szablonem przez `library.templateID`, nie przez nazwę,
+    /// bo nazwy się zmieniają, a identyfikatory nie.
     private func templateRow(_ t: Library.Template) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(t.name).font(.callout)
-            Text(t.summary).font(.caption).foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(t.name).font(.callout)
+                Text(t.summary).font(.caption).foregroundStyle(.secondary)
+                // opis „do czego to jest" — handlowiec czyta to klientowi
+                if let item = Pricing.item(forTemplate: t.id) {
+                    Text(item.purpose)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .italic()
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+            if let item = Pricing.item(forTemplate: t.id) {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(shortMoney(item.unitPrice))
+                        .font(.caption.weight(.medium).monospacedDigit())
+                    Text(item.basis.label)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("brak ceny")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.orange)
+            }
         }
     }
 
@@ -689,6 +721,14 @@ struct ContentView: View {
     /// przepływ zamówienia (koszyk, płatność, terminarz) jest osobnym modułem.
     /// Zapis zamiaru jest potrzebny już teraz, bo handlowiec musi wiedzieć,
     /// że klient pytał o skaner, a nie tylko że „gdzieś kliknął".
+    /// Kwota skrócona do przycisku: „12,4 tys." zamiast „12 400 zł".
+    private func shortMoney(_ value: Double) -> String {
+        if value >= 10_000 {
+            return String(format: "%.1f tys.", value / 1000).replacingOccurrences(of: ".", with: ",")
+        }
+        return String(format: "%.0f zł", value)
+    }
+
     private func handleOffer(_ offer: MeasurementGuide.Offer,
                              option: MeasurementGuide.Option) {
         let note = "\(offer.title) · \(option.title)"
@@ -916,10 +956,20 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
 
-                Spacer(minLength: 0)
+                Button { showCart = true } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cart")
+                        // kwota na przycisku — handlowiec widzi ją bez otwierania
+                        if let total = model.cartSummary?.grossTotal, total > 0 {
+                            Text(shortMoney(total))
+                                .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                        }
+                    }
+                    .font(.footnote)
+                }
+                .buttonStyle(.plain)
 
-                // Przycisk „Skanuj" usunięty — pomiar wybiera się w ekranie
-                // „Jak zdobędziemy wymiary?" (jedyne wejście).
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 16).padding(.vertical, 7)
             .background(.regularMaterial)

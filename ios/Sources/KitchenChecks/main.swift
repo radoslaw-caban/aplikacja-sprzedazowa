@@ -809,6 +809,7 @@ func runChecks() {
     runZoneChecks(r)
     runRoomModelChecks(r)
     runRoomMeshChecks(r)
+    runPricingChecks(r)
 
     let passed = r.checks - r.failures
     print("\n\(passed)/\(r.checks) warunków spełnionych")
