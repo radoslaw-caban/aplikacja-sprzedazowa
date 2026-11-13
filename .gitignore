@@ -25,3 +25,5 @@ venv/
 dist/
 build/
 *.log
+# Biblioteka Poly Haven (CC0) — duża, generowana skryptem
+app/public/library/
