@@ -66,10 +66,18 @@ struct ScanBackdrop: View {
         .background(Color.black)
         .ignoresSafeArea()
         .task {
-            // Wczytywanie RAZ. Próbujemy bundla, a gdy go nie ma (podglądy,
-            // uruchomienie z katalogu repo) — ścieżek w repo.
+            // Wczytywanie RAZ, W TLE.
+            //
+            // UWAGA (naprawiony błąd): parsowanie PLY (7,4 MB) na wątku głównym
+            // zawieszało aplikację na kilka sekund przy starcie — ekran
+            // powitalny nie reagował na dotyk. Praca idzie więc do zadania
+            // w tle, a wynik wraca na aktor główny.
             if points.isEmpty {
-                points = Self.loadPoints(named: resourceName)
+                let name = resourceName
+                let loaded = await Task.detached(priority: .utility) {
+                    Self.loadPoints(named: name)
+                }.value
+                points = loaded
             }
         }
     }
@@ -79,7 +87,9 @@ struct ScanBackdrop: View {
     /// Tyle wystarcza, żeby na ekranie 12" wyglądało to jak gęsty skan, a rysuje
     /// się w jednej klatce bez zauważalnego kosztu. 7 MB / 200 tys. punktów
     /// rysowane w całości dawałoby ~10 kl./s na samym tle.
-    static func loadPoints(named name: String) -> [SIMD3<Float>] {
+    /// `nonisolated` — parsowanie PLY musi działać poza aktorem głównym,
+    /// bo to najdroższa operacja w całym ekranie (7,4 MB pliku).
+    nonisolated static func loadPoints(named name: String) -> [SIMD3<Float>] {
         var url: URL?
         if let bundled = Bundle.main.url(forResource: name, withExtension: "ply") {
             url = bundled

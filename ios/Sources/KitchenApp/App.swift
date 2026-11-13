@@ -55,6 +55,9 @@ struct ContentView: View {
     @State private var zoneWall = 0
     @State private var showTextures = false
     @State private var showSettings = false
+    @State private var showSandbox = false
+    /// hak diagnostyczny: obiekt uzbrojony w kursorze piaskownicy
+    @State private var sandboxArmed: SandboxKind?
     @State private var showNewClient = false
     @State private var showContract = false
     @State private var showFPS = false
@@ -227,7 +230,13 @@ struct ContentView: View {
         .modifier(CutoutPresenter(isPresented: $showCutouts, model: model))
         .modifier(CabinetManagerPresenter(isPresented: $showCabinets, model: model))
         .sheet(isPresented: $showSettings) {
-            SettingsView()
+            SettingsView(onOpenSandbox: { showSandbox = true })
+        }
+        // Piaskownica na PEŁNYM ekranie, nie w arkuszu: arkusz na iPadzie
+        // to małe okno formularza, a piaskownica potrzebuje całej planszy
+        // (kursor i pole robocze nie mieściły się w arkuszu).
+        .fullScreenCover(isPresented: $showSandbox) {
+            SandboxView(model: model, initialArmed: sandboxArmed)
         }
         .sheet(isPresented: $showTextures) {
             TextureLibraryView { texture in
@@ -316,6 +325,24 @@ struct ContentView: View {
                    $0.name.localizedCaseInsensitiveContains(name)
                }) {
                 model.selectedCabinetID = cabinet.id
+                try? await Task.sleep(nanoseconds: 400_000_000)
+            }
+            if UserDefaults.standard.bool(forKey: "demoSandbox") {
+                // hak testowy: wstaw po jednym obiekcie z natury i z robót ludzkich
+                if model.currentSandbox.isEmpty {
+                    model.addSandboxObject(SandboxObject(kind: .tree, position: SIMD3(-3000, 0, -2000)))
+                    model.addSandboxObject(SandboxObject(kind: .boulder, position: SIMD3(2500, 0, 1500)))
+                    model.addSandboxObject(SandboxObject(kind: .pavingTile, position: SIMD3(0, 0, 3000)))
+                    model.addSandboxObject(SandboxObject(kind: .wallSegment, position: SIMD3(4000, 0, -3000)))
+                    model.addSandboxObject(SandboxObject(kind: .pipeRun, position: SIMD3(-4500, 0, 2500)))
+                }
+                let demoRaw = UserDefaults.standard.string(forKey: "demoArmed")
+                NSLog("APP demoArmed raw=\(String(describing: demoRaw))")
+                if let demo = demoRaw, let kind = SandboxKind(rawValue: demo) {
+                    sandboxArmed = kind
+                    NSLog("APP sandboxArmed set=\(kind.rawValue)")
+                }
+                showSandbox = true
                 try? await Task.sleep(nanoseconds: 400_000_000)
             }
             if UserDefaults.standard.bool(forKey: "demoCabinets") {

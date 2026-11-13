@@ -86,6 +86,16 @@ struct SceneView: View {
         var cabinetFocus: SIMD3<Float>?
         /// gwiazdki podglądu strefy (mrugają co klatkę)
         var sparkles: Entity?
+        /// gotowa encja chmury punktów — budowana RAZ na skan
+        ///
+        /// UWAGA (naprawiony błąd): `PointCloudRenderer.makeEntity` decymuje
+        /// chmurę (do 400 tys. punktów) na wątku głównym, a `SceneView` buduje
+        /// encje przy KAŻDEJ zmianie sygnatury sceny (przełączenie warstwy,
+        /// widoku wnętrze/otoczenie, dodanie szafki). Efekt: wielosekundowe
+        /// zamrożenie przy każdym kliknięciu. Teraz liczymy raz i trzymamy.
+        var scanEntity: Entity?
+        /// sygnatura danych, dla których zbudowano `scanEntity`
+        var scanEntityKey: String?
         /// ściany pokoju — do przezroczystości, gdy zasłaniają kamerę
         var walls: [ModelEntity] = []
         var wallAlphas: [Float] = []
@@ -439,8 +449,22 @@ struct SceneView: View {
     @MainActor
     private func scanEntityToAdd() -> Entity? {
         if let surfaceEntity, !showPoints { return surfaceEntity }
-        if let scan { return PointCloudRenderer.makeEntity(scan, transform: transform) }
-        return nil
+        guard let scan else { return nil }
+
+        // klucz danych: chmura + transformacja + tryb. Gdy się nie zmienił,
+        // zwracamy gotową encję zamiast decymować chmurę od nowa.
+        // `PointCloud` to struktura, więc nie ma `ObjectIdentifier`.
+        // Klucz z danych: liczba punktów + obrys (tanie, a wystarczy do
+        // rozpoznania zmiany chmury) + transformacja + tryb.
+        let b = scan.bounds
+        let key = "\(scan.count)|\(b.min.x)|\(b.max.x)|\(transform.scale)|\(transform.rotationDeg)|\(transform.offset.x)|\(transform.offset.z)|\(showPoints)"
+        if let cached = cache.scanEntity, cache.scanEntityKey == key {
+            return cached
+        }
+        let built = PointCloudRenderer.makeEntity(scan, transform: transform)
+        cache.scanEntity = built
+        cache.scanEntityKey = key
+        return built
     }
 
     /// Ściany, które stoją między kamerą a pomieszczeniem, robią się przezroczyste.

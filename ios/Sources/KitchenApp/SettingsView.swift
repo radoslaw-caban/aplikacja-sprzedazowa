@@ -8,6 +8,10 @@ struct SettingsView: View {
     @State private var dirty = false
     @Environment(\.dismiss) private var dismiss
 
+    /// Otwiera piaskownicę — osobne pole robocze do swobodnego stawiania
+    /// obiektów (natura, ogród, procesy budowlane, wykończenia).
+    var onOpenSandbox: (() -> Void)? = nil
+
     var body: some View {
         NavigationStack {
             Form {
@@ -75,6 +79,33 @@ struct SettingsView: View {
                 } footer: {
                     Text("Te wartości wchodzą do kalkulacji farby, listew i stolarki.")
                         .font(.caption2)
+                }
+
+                if let onOpenSandbox {
+                    Section {
+                        Button {
+                            dismiss()
+                            // chwila, żeby sheet zdążył się zamknąć przed otwarciem kolejnego
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                onOpenSandbox()
+                            }
+                        } label: {
+                            HStack {
+                                Label("Piaskownica", systemImage: "hand.point.up.left.fill")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } header: {
+                        Text("Narzędzia")
+                    } footer: {
+                        Text("""
+                        Osobne pole robocze: wszystko można dodać z biblioteki i edytować, \u{201E}łącznie z dźwiękiem obiektu. Kursor zmienia się w rękę — \u{201E}dla natury w rękę Boga ze pstryknięciem, dla robót ludzkich w rękę fachowca z narzędziem.
+                        """)
+                            .font(.caption2)
+                    }
                 }
 
                 Section {

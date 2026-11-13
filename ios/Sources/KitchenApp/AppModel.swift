@@ -306,6 +306,53 @@ final class AppModel {
         persist()
     }
 
+    // MARK: - piaskownica
+
+    /// Obiekty piaskownicy bieżącego projektu (brak = pusta).
+    var currentSandbox: [SandboxObject] { current.sandbox ?? [] }
+
+    /// Dodaje obiekt do piaskownicy i zwraca go (do zaznaczenia po wstawieniu).
+    @discardableResult
+    func addSandboxObject(_ object: SandboxObject) -> SandboxObject {
+        guard projects.indices.contains(currentIndex) else { return object }
+        var list = projects[currentIndex].sandbox ?? []
+        list.append(object)
+        projects[currentIndex].sandbox = list
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        return object
+    }
+
+    /// Zapis edytowanego obiektu piaskownicy (parametry, dźwięk, kolor).
+    func updateSandboxObject(_ object: SandboxObject) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var list = projects[currentIndex].sandbox ?? []
+        guard let i = list.firstIndex(where: { $0.id == object.id }) else { return }
+        list[i] = object
+        projects[currentIndex].sandbox = list
+        projects[currentIndex].updatedAt = Date()
+        persist()
+    }
+
+    func deleteSandboxObject(_ id: UUID) {
+        guard projects.indices.contains(currentIndex) else { return }
+        var list = projects[currentIndex].sandbox ?? []
+        list.removeAll { $0.id == id }
+        projects[currentIndex].sandbox = list
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        status = "Usunięto obiekt z piaskownicy"
+    }
+
+    /// Czyści całą piaskownicę (osobno od zabudowy — nie rusza szafek).
+    func clearSandbox() {
+        guard projects.indices.contains(currentIndex) else { return }
+        projects[currentIndex].sandbox = []
+        projects[currentIndex].updatedAt = Date()
+        persist()
+        status = "Piaskownica wyczyszczona"
+    }
+
     // MARK: - szafki i pokój (zapis do aktywnego projektu)
 
     func updateCabinets(_ cabinets: [Cabinet]) {
@@ -587,12 +634,18 @@ final class AppModel {
     /// bez zamiany osi (inaczej niż skan X9, gdzie pion jest w Z).
     func buildRoomModel(from cloud: PointCloud) {
         roomModelStatus = "Liczę model pomieszczenia…"
-        let samples = cloud.positions.map {
-            RoomModel.Sample(position: $0, sigma: 0.004)
-        }
-        let coloredCloud = cloud
 
+        // CAŁA praca idzie do zadania w tle — łącznie z przepisaniem punktów.
+        //
+        // UWAGA (naprawiony błąd): mapowanie `cloud.positions` na `Sample`
+        // było PRZED `Task.detached`, więc wykonywało się na wątku głównym.
+        // Przy skanie z 400 tys. punktów to ~30 MB alokacji i dziesiątki ms,
+        // a przy 2 mln punktów — sekundy blokady interfejsu. Użytkownik widzi
+        // to jako „apka się wiesza po skanie".
         Task.detached(priority: .userInitiated) { [weak self] in
+            let samples = cloud.positions.map {
+                RoomModel.Sample(position: $0, sigma: 0.004)
+            }
             guard let model = RoomModel.build(from: samples) else {
                 await MainActor.run {
                     self?.roomModelStatus = "Model pomieszczenia: nie udało się rozpoznać ścian"
@@ -601,7 +654,7 @@ final class AppModel {
                 return
             }
             let mesh = RoomMesh.build(model: model)
-            let colors = RoomMesh.averageColors(mesh: mesh, cloud: coloredCloud)
+            let colors = RoomMesh.averageColors(mesh: mesh, cloud: cloud)
             let outline = model.corners.map { SIMD2<Float>($0.x, $0.z) }
 
             await MainActor.run {

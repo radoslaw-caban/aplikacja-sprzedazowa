@@ -89,6 +89,9 @@ public struct Project: Identifiable, Codable, Sendable {
     public var zones: [Zone]?
     /// kolor ścian wybrany magicznym ołówkiem w trybie FPS
     public var wallColor: String?
+    /// Obiekty piaskownicy — swobodne, niezależne od zabudowy.
+    /// Brak pola = projekt bez piaskownicy (starsze zapisy czytają się dalej).
+    public var sandbox: [SandboxObject]?
 
     public init(
         id: UUID = UUID(),
@@ -101,7 +104,8 @@ public struct Project: Identifiable, Codable, Sendable {
         plan: FloorPlan? = nil,
         order: ProjectOrder? = nil,
         zones: [Zone]? = nil,
-        wallColor: String? = nil
+        wallColor: String? = nil,
+        sandbox: [SandboxObject]? = nil
     ) {
         self.id = id
         self.name = name
@@ -114,6 +118,7 @@ public struct Project: Identifiable, Codable, Sendable {
         self.order = order
         self.zones = zones
         self.wallColor = wallColor
+        self.sandbox = sandbox
     }
 }
 
