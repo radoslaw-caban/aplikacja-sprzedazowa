@@ -48,6 +48,29 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// to moduł demonstracyjny, nie część przepływu sprzedażowego.
     public var showFirstPersonModule: Bool = false
 
+    // MARK: - dźwięk
+
+    /// Głośność główna — mnożnik dla wszystkich dźwięków w aplikacji.
+    /// 0 = cisza całkowicie (równoważne `soundEnabled = false`).
+    public var masterVolume: Double = 0.8
+    /// Głośność interfejsu: kliknięcia, stuknięcia kategorii, pstryknięcia.
+    /// Osobno od obiektów, bo UI ma być dyskretne, a obiekty mają być słyszalne.
+    public var uiVolume: Double = 0.6
+    /// Głośność dźwięków obiektów (wstawianie, interakcje, otoczenie).
+    public var objectVolume: Double = 0.8
+    /// Głośność otoczenia (szum miasta, las, ptaki) — zwykle tło, więc niżej.
+    public var ambienceVolume: Double = 0.45
+    /// Czy dźwięki w ogóle grają. Wyłączenie nie zeruje suwaków —
+    /// po włączeniu wracają poprzednie wartości.
+    public var soundEnabled: Bool = true
+    /// Cisza nocna: wycisza wszystko w podanych godzinach.
+    public var quietHoursEnabled: Bool = false
+    public var quietHoursFrom: Int = 22
+    public var quietHoursTo: Int = 7
+    /// Haptyka: stuknięcia przy akcjach (osobno od dźwięku — ktoś może
+    /// chcieć wibrację bez dźwięku, np. w słuchawkach).
+    public var hapticsEnabled: Bool = true
+
     /// Domyślna liczba okien/drzwi w zestawieniu.
     public var windowCount: Int = 2
     public var doorCount: Int = 1
@@ -55,7 +78,10 @@ public struct AppSettings: Codable, Sendable, Equatable {
 
     public init() {}
 
-    public static let storageKey = "aplikacja-sprzedazowa:settings:v3"
+    /// v4: dodano parametry dźwięku i haptyki. Bump, bo stary zapis v3
+    /// nie ma tych pól — dekodowanie uzupełniłoby je zerami i dźwięk
+    /// byłby domyślnie wyłączony u każdego, kto już używał aplikacji.
+    public static let storageKey = "aplikacja-sprzedazowa:settings:v4"
 
     public static func load(defaults: UserDefaults = .standard) -> AppSettings {
         guard let data = defaults.data(forKey: storageKey),
@@ -78,5 +104,35 @@ public struct AppSettings: Codable, Sendable, Equatable {
     /// FOV ograniczone do sensownego zakresu — 47° to wartość domyślna.
     public var clampedFieldOfView: Double {
         min(75, max(28, fieldOfView))
+    }
+
+    // MARK: - dźwięk: wartości efektywne
+
+    /// Czy teraz wolno grać (uwzględnia wyłączenie i ciszę nocną).
+    public func soundAllowed(at date: Date = Date(),
+                             calendar: Calendar = .current) -> Bool {
+        guard soundEnabled, masterVolume > 0.01 else { return false }
+        guard quietHoursEnabled else { return true }
+        let hour = calendar.component(.hour, from: date)
+        // zakres może przechodzić przez północ (22 → 7)
+        if quietHoursFrom <= quietHoursTo {
+            return !(hour >= quietHoursFrom && hour < quietHoursTo)
+        }
+        return !(hour >= quietHoursFrom || hour < quietHoursTo)
+    }
+
+    /// Końcowa głośność UI = główna × UI, przycięta do 0…1.
+    public var effectiveUIVolume: Double {
+        min(1, max(0, masterVolume * uiVolume))
+    }
+
+    /// Końcowa głośność obiektów = główna × obiekty.
+    public var effectiveObjectVolume: Double {
+        min(1, max(0, masterVolume * objectVolume))
+    }
+
+    /// Końcowa głośność otoczenia = główna × otoczenie.
+    public var effectiveAmbienceVolume: Double {
+        min(1, max(0, masterVolume * ambienceVolume))
     }
 }

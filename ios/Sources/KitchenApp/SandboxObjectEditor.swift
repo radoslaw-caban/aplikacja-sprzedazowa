@@ -187,7 +187,7 @@ struct SandboxObjectEditor: View {
             .pickerStyle(.menu)
             .onChange(of: object.sound) { _, new in
                 commit()
-                audio.play(new, volume: object.soundVolume)   // odsłuch od razu
+                audio.play(new, volume: object.soundVolume, channel: .object)   // odsłuch od razu
             }
 
             HStack {
@@ -202,7 +202,7 @@ struct SandboxObjectEditor: View {
 
             HStack(spacing: 8) {
                 Button {
-                    audio.play(object.sound, volume: object.soundVolume)
+                    audio.play(object.sound, volume: object.soundVolume, channel: .object)
                 } label: {
                     Label("Odsłuchaj", systemImage: "speaker.wave.2.fill")
                         .font(.caption.weight(.medium))
@@ -217,7 +217,7 @@ struct SandboxObjectEditor: View {
                     object.sound = object.kind.defaultSound
                     object.soundVolume = 0.7
                     commit()
-                    audio.play(object.sound, volume: object.soundVolume)
+                    audio.play(object.sound, volume: object.soundVolume, channel: .object)
                 } label: {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.caption.weight(.medium))

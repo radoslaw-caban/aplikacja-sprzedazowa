@@ -81,6 +81,59 @@ struct SettingsView: View {
                         .font(.caption2)
                 }
 
+                Section {
+                    Toggle("Dźwięk", isOn: Binding(
+                        get: { settings.soundEnabled },
+                        set: { settings.soundEnabled = $0; dirty = true }
+                    ))
+                    Toggle("Haptyka (wibracje)", isOn: Binding(
+                        get: { settings.hapticsEnabled },
+                        set: { settings.hapticsEnabled = $0; dirty = true }
+                    ))
+                } header: {
+                    Text("Dźwięk i wibracje")
+                } footer: {
+                    Text("Haptyka jest osobno od dźwięku — można mieć wibracje bez dźwięku, np. w słuchawkach.")
+                        .font(.caption2)
+                }
+
+                Section {
+                    level("Głośność główna", value: $settings.masterVolume, enabled: settings.soundEnabled)
+                    level("Interfejs", value: $settings.uiVolume, enabled: settings.soundEnabled)
+                    level("Obiekty", value: $settings.objectVolume, enabled: settings.soundEnabled)
+                    level("Otoczenie", value: $settings.ambienceVolume, enabled: settings.soundEnabled)
+
+                    Button {
+                        SandboxAudio.shared.play(.tap, volume: settings.effectiveUIVolume)
+                    } label: {
+                        Label("Odsłuchaj", systemImage: "speaker.wave.2.fill")
+                    }
+                    .disabled(!settings.soundAllowed())
+                } header: {
+                    Text("Poziomy głośności")
+                } footer: {
+                    Text("Głośność efektywna = główna × poziom. Interfejs gra dyskretnie, obiekty wyraźniej, otoczenie zostaje w tle.")
+                        .font(.caption2)
+                }
+
+                Section {
+                    Toggle("Cisza nocna", isOn: Binding(
+                        get: { settings.quietHoursEnabled },
+                        set: { settings.quietHoursEnabled = $0; dirty = true }
+                    ))
+                    if settings.quietHoursEnabled {
+                        Stepper("Od: \(settings.quietHoursFrom):00",
+                                value: $settings.quietHoursFrom, in: 0...23)
+                        Stepper("Do: \(settings.quietHoursTo):00",
+                                value: $settings.quietHoursTo, in: 0...23)
+                    }
+                } header: {
+                    Text("Cisza nocna")
+                } footer: {
+                    Text("W podanych godzinach aplikacja nie gra żadnych dźwięków. Suwaki zostają bez zmian — po zakończeniu ciszy wracają poprzednie poziomy.")
+                        .font(.caption2)
+                }
+
                 if let onOpenSandbox {
                     Section {
                         Button {
@@ -135,6 +188,22 @@ struct SettingsView: View {
             }
             .onChange(of: settings) { _, _ in dirty = true }
         }
+    }
+
+    /// Suwak poziomu 0…100% z etykietą i wartością.
+    private func level(_ title: String, value: Binding<Double>, enabled: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(Int(value.wrappedValue * 100))%")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: value, in: 0...1, step: 0.05) { _ in dirty = true }
+                .disabled(!enabled)
+        }
+        .opacity(enabled ? 1 : 0.45)
     }
 
     private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {

@@ -195,7 +195,7 @@ struct SandboxView: View {
         let selected = editingID == obj.id
         return Button {
             editingID = obj.id
-            audio.play(obj.sound, volume: obj.soundVolume)
+            audio.play(obj.sound, volume: obj.soundVolume, channel: .object)
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: obj.kind.trade?.tool ?? "leaf.fill")
@@ -286,7 +286,7 @@ struct SandboxView: View {
             armed = kind
             Haptics.tap()
             // dźwięk podglądowy — od razu słychać, co to będzie
-            audio.play(kind.defaultSound, volume: 0.6)
+            audio.play(kind.defaultSound, volume: 0.6, channel: .ui)
         } label: {
             HStack(spacing: 9) {
                 Image(systemName: kind.trade?.tool ?? "leaf.fill")
@@ -433,10 +433,10 @@ struct SandboxView: View {
         // dźwięk i efekt
         if kind.isNatural {
             audio.snap(volume: 0.85)             // pstryknięcie palcami
-            audio.play(kind.defaultSound, volume: 0.55)
+            audio.play(kind.defaultSound, volume: 0.55, channel: .object)
             animateSnap()
         } else {
-            audio.play(kind.defaultSound, volume: 0.8)
+            audio.play(kind.defaultSound, volume: 0.8, channel: .object)
         }
         Haptics.success()
     }

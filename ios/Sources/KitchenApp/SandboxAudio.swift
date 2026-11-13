@@ -39,24 +39,59 @@ final class SandboxAudio {
         try? engine.start()
     }
 
-    /// Odtwarza dźwięk wstawienia. `volume` 0…1.
-    func play(_ sound: SandboxSound, volume: Double = 0.7) {
+    /// Ustawienia dźwięku z Ustawień aplikacji.
+    ///
+    /// Trzymane tutaj, żeby każdy dźwięk w apce przechodził przez te same
+    /// poziomy — bez tego każdy widok grałby z inną głośnością i suwaki
+    /// w Ustawieniach byłyby dekoracją.
+    private var settings = AppSettings.load()
+
+    /// Przeładowuje ustawienia (wołane po zamknięciu panelu Ustawień).
+    func reloadSettings() {
+        settings = AppSettings.load()
+    }
+
+    /// Kanał dźwięku — decyduje, który suwak obowiązuje.
+    enum Channel {
+        /// kliknięcia, stuknięcia kategorii, pstryknięcia
+        case ui
+        /// wstawianie i interakcje obiektów
+        case object
+        /// szum tła: miasto, las, ptaki
+        case ambience
+    }
+
+    /// Odtwarza dźwięk. `volume` 0…1 to głośność samego zdarzenia
+    /// (np. głośność obiektu); kanał dokłada poziom z Ustawień.
+    func play(_ sound: SandboxSound, volume: Double = 0.7, channel: Channel = .object) {
         guard sound != .none, volume > 0.01 else { return }
+        guard settings.soundAllowed() else { return }
         if !engine.isRunning { try? engine.start() }
+
+        let channelVolume: Double
+        switch channel {
+        case .ui: channelVolume = settings.effectiveUIVolume
+        case .object: channelVolume = settings.effectiveObjectVolume
+        case .ambience: channelVolume = settings.effectiveAmbienceVolume
+        }
+
+        let final = max(0, min(1, volume * channelVolume))
+        guard final > 0.005 else { return }
 
         let buffer = buffer(for: sound)
         let player = players[nextPlayer]
         nextPlayer = (nextPlayer + 1) % players.count
 
         player.stop()
-        player.volume = Float(max(0, min(1, volume)))
+        player.volume = Float(final)
         player.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
         player.play()
     }
 
-    /// Pstryknięcie palcami — osobne, bo to sygnał „wstawiam", nie dźwięk obiektu.
+    /// Pstryknięcie palcami — kanał UI, bo to sygnał „wstawiam",
+    /// nie dźwięk obiektu.
     func snap(volume: Double = 0.8) {
-        play(.snap, volume: volume)
+        play(.snap, volume: volume, channel: .ui)
     }
 
     // MARK: - synteza

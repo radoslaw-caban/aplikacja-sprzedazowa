@@ -866,19 +866,30 @@ private enum DockCategory: String, CaseIterable, Identifiable {
 // MARK: - haptyka
 
 /// Haptyka iPada — jedno miejsce, żeby nie rozsypać się po widokach.
+///
+/// Respektuje przełącznik „Haptyka" w Ustawieniach: ktoś może chcieć
+/// wibrację bez dźwięku (np. w słuchawkach) albo odwrotnie — ciszę bez
+/// wibracji na spotkaniu. Dlatego te dwa kanały są rozdzielone.
 enum Haptics {
+    private static var enabled: Bool {
+        AppSettings.load().hapticsEnabled
+    }
+
     static func tap() {
         #if os(iOS)
+        guard enabled else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         #endif
     }
     static func success() {
         #if os(iOS)
+        guard enabled else { return }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
     }
     static func warning() {
         #if os(iOS)
+        guard enabled else { return }
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
         #endif
     }

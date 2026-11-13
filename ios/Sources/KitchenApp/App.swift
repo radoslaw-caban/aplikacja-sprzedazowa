@@ -245,6 +245,10 @@ struct ContentView: View {
         .modifier(CabinetManagerPresenter(isPresented: $showCabinets, model: model))
         .sheet(isPresented: $showSettings) {
             SettingsView(onOpenSandbox: { showSandbox = true })
+                .onDisappear {
+                    // suwaki głośności działają od razu po zapisaniu
+                    SandboxAudio.shared.reloadSettings()
+                }
         }
         // Piaskownica na PEŁNYM ekranie, nie w arkuszu: arkusz na iPadzie
         // to małe okno formularza, a piaskownica potrzebuje całej planszy
@@ -352,6 +356,10 @@ struct ContentView: View {
                }) {
                 model.selectedCabinetID = cabinet.id
                 try? await Task.sleep(nanoseconds: 400_000_000)
+            }
+            if UserDefaults.standard.bool(forKey: "demoSettings") {
+                showSettings = true
+                try? await Task.sleep(nanoseconds: 500_000_000)
             }
             if UserDefaults.standard.bool(forKey: "demoSandbox") {
                 // hak testowy: wstaw po jednym obiekcie z natury i z robót ludzkich
