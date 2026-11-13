@@ -266,8 +266,9 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(onOpenSandbox: { showSandbox = true })
                 .onDisappear {
-                    // suwaki głośności działają od razu po zapisaniu
+                    // suwaki głośności i przełącznik haptyki działają od razu
                     SandboxAudio.shared.reloadSettings()
+                    Haptics.invalidateSettings()
                 }
         }
         // Piaskownica na PEŁNYM ekranie, nie w arkuszu: arkusz na iPadzie

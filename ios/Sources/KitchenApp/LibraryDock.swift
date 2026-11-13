@@ -870,9 +870,26 @@ private enum DockCategory: String, CaseIterable, Identifiable {
 /// Respektuje przełącznik „Haptyka" w Ustawieniach: ktoś może chcieć
 /// wibrację bez dźwięku (np. w słuchawkach) albo odwrotnie — ciszę bez
 /// wibracji na spotkaniu. Dlatego te dwa kanały są rozdzielone.
+@MainActor
 enum Haptics {
+    /// Cache przełącznika haptyki.
+    ///
+    /// `AppSettings.load()` dekoduje JSON z UserDefaults przy KAŻDYM wywołaniu.
+    /// Przy przesuwaniu palcem po kategoriach `tap()` leci kilkadziesiąt razy
+    /// na sekundę — dekodowanie w pętli gestu to realne jąkanie na iPadzie.
+    /// Dlatego czytamy raz i unieważniamy po zmianie ustawień.
+    private static var cachedEnabled: Bool?
+
+    /// Unieważnia cache — wołać po zamknięciu panelu Ustawień.
+    static func invalidateSettings() {
+        cachedEnabled = nil
+    }
+
     private static var enabled: Bool {
-        AppSettings.load().hapticsEnabled
+        if let cachedEnabled { return cachedEnabled }
+        let value = AppSettings.load().hapticsEnabled
+        cachedEnabled = value
+        return value
     }
 
     static func tap() {

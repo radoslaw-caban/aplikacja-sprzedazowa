@@ -102,44 +102,14 @@ struct SandboxView: View {
                     startPoint: .top, endPoint: .bottom
                 )
 
-                // siatka co 1 m, wyróżnione co 5 m
-                Canvas { ctx, size in
-                    let step = 1000 * pxPerMm      // 1 m
-                    let major = step * 5
-                    var i = 0
-                    var x = cx.truncatingRemainder(dividingBy: step)
-                    while x < size.width {
-                        var p = Path()
-                        p.move(to: CGPoint(x: x, y: 0))
-                        p.addLine(to: CGPoint(x: x, y: size.height))
-                        let isMajor = abs((x - cx).truncatingRemainder(dividingBy: major)) < 1
-                        ctx.stroke(p,
-                                   with: .color(.black.opacity(isMajor ? 0.12 : 0.05)),
-                                   lineWidth: isMajor ? 1 : 0.5)
-                        x += step
-                        i += 1
-                    }
-                    var y = cy.truncatingRemainder(dividingBy: step)
-                    while y < size.height {
-                        var p = Path()
-                        p.move(to: CGPoint(x: 0, y: y))
-                        p.addLine(to: CGPoint(x: size.width, y: y))
-                        let isMajor = abs((y - cy).truncatingRemainder(dividingBy: major)) < 1
-                        ctx.stroke(p,
-                                   with: .color(.black.opacity(isMajor ? 0.12 : 0.05)),
-                                   lineWidth: isMajor ? 1 : 0.5)
-                        y += step
-                    }
-                    // osie przez środek (punkt 0,0 piaskownicy)
-                    var ox = Path()
-                    ox.move(to: CGPoint(x: cx, y: 0))
-                    ox.addLine(to: CGPoint(x: cx, y: size.height))
-                    ctx.stroke(ox, with: .color(.black.opacity(0.18)), lineWidth: 1)
-                    var oy = Path()
-                    oy.move(to: CGPoint(x: 0, y: cy))
-                    oy.addLine(to: CGPoint(x: size.width, y: cy))
-                    ctx.stroke(oy, with: .color(.black.opacity(0.18)), lineWidth: 1)
-                }
+                // Siatka jako osobny, porównywalny widok: nie przerysowuje się
+                // przy ruchu kursora (patrz SandboxGrid).
+                SandboxGrid(
+                    size: geo.size,
+                    center: CGPoint(x: cx, y: cy),
+                    pxPerMm: pxPerMm,
+                    gridMM: 1000
+                )
 
                 // obiekty: mm → px, środek ekranu = (0,0)
                 ForEach(model.currentSandbox) { obj in
