@@ -56,6 +56,12 @@ struct ContentView: View {
     @State private var showTextures = false
     @State private var showSettings = false
     @State private var showSandbox = false
+    /// precyzja projektu (gęstość siatki 1 mm – 1 m)
+    @State private var precision: Precision = .mm10
+    /// ostatni pomiar „na oko"
+    @State private var lastMeasure: EyeMeasure?
+    /// parametry aktualnie używanego narzędzia — pokazywane w panelu precyzji
+    @State private var precisionToolParams: [(String, String)] = []
     /// hak diagnostyczny: obiekt uzbrojony w kursorze piaskownicy
     @State private var sandboxArmed: SandboxKind?
     @State private var showNewClient = false
@@ -115,6 +121,20 @@ struct ContentView: View {
         .overlay(alignment: .bottom) {
             if !locked {
                 bottomNavigation
+            }
+        }
+        // Precyzja projektu — mały panel w PRAWYM DOLNYM rogu.
+        // Ten sam parametr w projekcie wnętrza i w piaskownicy: gęstość siatki
+        // steruje precyzją wstawiania i dokładnością pomiaru „na oko".
+        .overlay(alignment: .bottomTrailing) {
+            if !locked {
+                PrecisionPanel(
+                    precision: $precision,
+                    measure: lastMeasure,
+                    toolParams: precisionToolParams
+                )
+                .padding(.trailing, 14)
+                .padding(.bottom, 74)   // nad dolnym paskiem nawigacji
             }
         }
         // JEDYNE WEJŚCIE do pomiaru i planu — kategorie, parametry, oferta.
