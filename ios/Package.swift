@@ -14,6 +14,10 @@ let package = Package(
         .executable(name: "KitchenChecks", targets: ["KitchenChecks"]),
         .executable(name: "FitDebug", targets: ["FitDebug"]),
         .executable(name: "RoomDiag", targets: ["RoomDiag"]),
+        // Moduł katalogu: samoistny, niepodpięty do aplikacji (rejestr, konwersja, legalność, marże)
+        .library(name: "CatalogCore", targets: ["CatalogCore"]),
+        .library(name: "CatalogUI", targets: ["CatalogUI"]),
+        .executable(name: "CatalogTool", targets: ["CatalogTool"]),
     ],
     targets: [
         .target(name: "KitchenCore"),
@@ -38,5 +42,9 @@ let package = Package(
             name: "KitchenCoreTests",
             dependencies: ["KitchenCore"]
         ),
+        .target(name: "CatalogCore"),
+        .target(name: "CatalogUI", dependencies: ["CatalogCore"]),
+        .executableTarget(name: "CatalogTool", dependencies: ["CatalogCore"]),
+        .testTarget(name: "CatalogCoreTests", dependencies: ["CatalogCore"]),
     ]
 )
