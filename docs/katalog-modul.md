@@ -110,12 +110,31 @@ i akceptacji bez uruchamiania aplikacji.
 ## Czego moduł jeszcze nie robi
 
 - nie jest podpięty do aplikacji (zgodnie z decyzją: nie przerywać pracy innego wątku),
-- brak UI do dodawania produktów (jest CLI; `CatalogUI` to na razie tylko kafelki),
+- aplikacja desktopowa jest, ale nie jest podpięta pod główną aplikację (osobny target),
 - brak dekodowania `gltf` (JSON) i `usdz`,
 - brak wersjonowania produktu (zmiana modelu nadpisuje wpis; historia jest w `audit.log`).
+
+## Aplikacja desktopowa (CatalogApp)
+
+```bash
+cd ios && swift run CatalogApp          # albo: open /tmp/KarpatiaCatalog.app
+swift run CatalogApp --selftest         # test dymny bez GUI
+```
+
+Lewa kolumna: produkty z kropką statusu (szkic / do zatwierdzenia / w bibliotece /
+odrzucony), filtr i wyszukiwanie. Środek: karta produktu — miniatura, logo
+producenta, wymiary z geometrii, **formularz legalności** (podstawa, ryzyko wzoru,
+dokument pochodzenia, notatka prawna) z listą blokad na żywo, **ceny i suwak marży**
+z przeliczanym detalem, lista zależności i przyciski „Zgłoś”, „Zatwierdź z marżą”,
+„Odrzuć…”. Górny pasek: dodawanie producenta (z logo i zgodą na znak).
+
+**Przeciągnięcie modelu do okna** (GLB/OBJ/STL) otwiera formularz nowego produktu:
+nazwa i SKU z nazwy pliku, wybór producenta i kategorii, cena zakupu — po dodaniu
+moduł sam konwertuje do GLB, liczy wymiary i renderuje miniaturę.
 
 ## Testy
 
 ```bash
 swift test --filter Catalog     # 22 testy: marże, blokady prawne, zależności, katalog, mesh
+swift run CatalogApp --selftest # 10 kontroli ścieżki produktu w samej aplikacji
 ```

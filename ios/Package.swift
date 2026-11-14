@@ -18,6 +18,7 @@ let package = Package(
         .library(name: "CatalogCore", targets: ["CatalogCore"]),
         .library(name: "CatalogUI", targets: ["CatalogUI"]),
         .executable(name: "CatalogTool", targets: ["CatalogTool"]),
+        .executable(name: "CatalogApp", targets: ["CatalogApp"]),
     ],
     targets: [
         .target(name: "KitchenCore"),
@@ -44,7 +45,9 @@ let package = Package(
         ),
         .target(name: "CatalogCore"),
         .target(name: "CatalogUI", dependencies: ["CatalogCore"]),
-        .executableTarget(name: "CatalogTool", dependencies: ["CatalogCore"]),
+        .target(name: "CatalogRender", dependencies: ["CatalogCore"]),
+        .executableTarget(name: "CatalogApp", dependencies: ["CatalogCore", "CatalogUI", "CatalogRender"]),
+        .executableTarget(name: "CatalogTool", dependencies: ["CatalogCore", "CatalogRender", "CatalogUI"]),
         .testTarget(name: "CatalogCoreTests", dependencies: ["CatalogCore"]),
     ]
 )

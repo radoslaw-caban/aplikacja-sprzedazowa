@@ -1,7 +1,8 @@
 import Foundation
 import CatalogCore
-import SceneKit
-import AppKit
+import CatalogRender
+import CatalogUI
+import SwiftUI
 
 // MARK: - pomocnicze
 
@@ -61,81 +62,6 @@ func slug(_ text: String) -> String {
     return String(allowed).split(separator: "-").joined(separator: "-")
 }
 
-// MARK: - miniatura (SceneKit, offscreen)
-
-func renderThumbnail(mesh: TriMesh, to url: URL, size: CGFloat = 512, background: NSColor = .clear) throws {
-    let scene = SCNScene()
-    scene.background.contents = background
-
-    var vertices = mesh.positions.map { SCNVector3($0.x, $0.y, $0.z) }
-    let indices = mesh.indices.map { Int32($0) }
-    let geometry = SCNGeometry(
-        sources: [SCNGeometrySource(vertices: vertices)],
-        elements: [SCNGeometryElement(indices: indices, primitiveType: .triangles)]
-    )
-
-    let material = SCNMaterial()
-    material.lightingModel = .physicallyBased
-    material.diffuse.contents = NSColor(calibratedWhite: 0.82, alpha: 1)
-    material.metalness.contents = 0.15
-    material.roughness.contents = 0.55
-    material.isDoubleSided = true
-    geometry.materials = [material]
-
-    let node = SCNNode(geometry: geometry)
-    scene.rootNode.addChildNode(node)
-
-    // obrys → kadr kamery
-    let b = mesh.bounds!
-    let center = SCNVector3(b.center.x, b.center.y, b.center.z)
-    let maxDim = max(b.size.x, max(b.size.y, b.size.z))
-    node.pivot = SCNMatrix4MakeTranslation(center.x, center.y, center.z)
-
-    let camera = SCNCamera()
-    camera.fieldOfView = 40
-    camera.zNear = 0.01
-    camera.zFar = 100
-    let cameraNode = SCNNode()
-    cameraNode.camera = camera
-    let distance = maxDim * 2.1
-    cameraNode.position = SCNVector3(distance * 0.72, distance * 0.55, distance * 0.9)
-    cameraNode.look(at: SCNVector3Zero, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, -1))
-    scene.rootNode.addChildNode(cameraNode)
-
-    // światła: główne + wypełniające
-    let key = SCNNode()
-    key.light = SCNLight()
-    key.light?.type = .directional
-    key.light?.intensity = 900
-    key.eulerAngles = SCNVector3(-0.9, 0.7, 0)
-    scene.rootNode.addChildNode(key)
-
-    let fill = SCNNode()
-    fill.light = SCNLight()
-    fill.light?.type = .directional
-    fill.light?.intensity = 380
-    fill.eulerAngles = SCNVector3(-0.4, -1.9, 0)
-    scene.rootNode.addChildNode(fill)
-
-    let ambient = SCNNode()
-    ambient.light = SCNLight()
-    ambient.light?.type = .ambient
-    ambient.light?.intensity = 260
-    scene.rootNode.addChildNode(ambient)
-
-    let renderer = SCNRenderer(device: MTLCreateSystemDefaultDevice(), options: nil)
-    renderer.scene = scene
-    renderer.pointOfView = cameraNode
-    let image = renderer.snapshot(atTime: 0, with: CGSize(width: size, height: size),
-                                  antialiasingMode: .multisampling4X)
-    guard let tiff = image.tiffRepresentation,
-          let rep = NSBitmapImageRep(data: tiff),
-          let png = rep.representation(using: .png, properties: [:]) else {
-        throw MeshError.corrupt("nie udało się wyrenderować miniatury")
-    }
-    try png.write(to: url)
-}
-
 // MARK: - komendy
 
 func printProduct(_ product: CatalogProduct, store: CatalogStore) {
@@ -164,18 +90,14 @@ func printProduct(_ product: CatalogProduct, store: CatalogStore) {
     }
 }
 
+@MainActor
 func createThumbnailIfPossible(store: CatalogStore, product: inout CatalogProduct) {
-    guard let asset = product.modelAsset else {
+    guard product.modelAsset != nil else {
         print("Brak modelu — nie ma z czego zrobić miniatury")
         return
     }
-    let url = store.assetURL(product, asset: asset)
     do {
-        let mesh = try MeshIO.load(url: url)
-        let saved = url.deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("thumb.png")
-        try renderThumbnail(mesh: mesh, to: saved)
-        product.thumbnail = "thumb.png"
+        let saved = try ThumbnailRenderer.renderThumbnail(for: &product, store: store)
         try store.save(product)
         print("Miniatura: \(saved.path)")
     } catch {
@@ -442,6 +364,27 @@ case "library":
 case "audit":
     let store = requireRoot()
     for line in store.auditLines(limit: 40) { print(line) }
+
+case "preview":
+    // Zrzut prawdziwego widoku kafelków (SwiftUI ImageRenderer) — do akceptacji bez GUI
+    let store = requireRoot()
+    guard let out = value("--out") else { print("Błąd: --out plik.png"); exit(2) }
+    let index = try store.rebuildLibrary()
+    let size = CGSize(width: CGFloat(Double(value("--width") ?? "1280") ?? 1280),
+                      height: CGFloat(Double(value("--height") ?? "820") ?? 820))
+    let view = CatalogTilesGrid(store: store, entries: index.entries, columns: 3)
+        .frame(width: size.width, height: size.height)
+        .background(Color(red: 0.055, green: 0.078, blue: 0.12))
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+    guard let image = renderer.nsImage,
+          let tiff = image.tiffRepresentation,
+          let rep = NSBitmapImageRep(data: tiff),
+          let png = rep.representation(using: .png, properties: [:]) else {
+        print("Nie udało się wyrenderować podglądu"); exit(1)
+    }
+    try png.write(to: URL(fileURLWithPath: out))
+    print("Podgląd kafelków: \(out)")
 
 case "tiles":
     let store = requireRoot()

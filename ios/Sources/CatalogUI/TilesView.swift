@@ -37,6 +37,30 @@ public struct CatalogTilesView: View {
     }
 }
 
+/// Ten sam układ kafelków, ale **bez ScrollView** — do renderowania offscreen
+/// (ImageRenderer nie rysuje zawartości ScrollView).
+public struct CatalogTilesGrid: View {
+    public let store: CatalogStore
+    public var entries: [CatalogStore.LibraryEntry]
+    public var columns: Int
+
+    public init(store: CatalogStore, entries: [CatalogStore.LibraryEntry], columns: Int = 3) {
+        self.store = store
+        self.entries = entries
+        self.columns = columns
+    }
+
+    public var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: columns),
+                  spacing: 16) {
+            ForEach(entries, id: \.id) { entry in
+                CatalogTile(store: store, entry: entry)
+            }
+        }
+        .padding(20)
+    }
+}
+
 public struct CatalogTile: View {
     public let store: CatalogStore
     public let entry: CatalogStore.LibraryEntry
